@@ -1,0 +1,67 @@
+# Build output
+/src/build/
+/src/gui/build/
+/build/
+/CMakeFiles/
+/CMakeCache.txt
+/compile_commands.json
+/CMakeUserPresets.json
+
+# Object files, libraries and binaries
+*.o
+*.obj
+*.a
+*.lib
+*.d
+*.so
+*.so.*
+*.dylib
+*.dll
+*.exe
+*.out
+*.pdb
+*.ilk
+*.idb
+*.exp
+
+# Logs and temporary files
+*.log
+*.tmp
+*.swp
+*~
+
+# Editor and IDE files
+.vscode/
+.idea/
+.cache/
+.DS_Store
+Thumbs.db
+
+# Local handoff notes, agent tooling, and editor state
+.agents/
+.codex/
+.claude/
+.cursor/
+.opencode/
+.continue/
+.aider*
+skills-lock.json
+HANDOFF.md
+/docs/HANDOFF.md
+handoff-*.md
+*.handoff.md
+*.tsbuildinfo
+
+# Local environment and release artifacts
+.env
+.env.*
+!.env.example
+/release/
+/.deps/
+*.AppImage
+*.deb
+*.rpm
+*.flatpak
+.flatpak-builder/
+/packaging/flatpak/build/
+/packaging/flatpak/repo/

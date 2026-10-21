@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=SauceFX
+GenericName=Sound Equalizer
+Comment=Sound EQ and audio enhancement for Linux
+Exec=SauceFX
+TryExec=SauceFX
+Icon=com.saucefx.SauceFX
+Terminal=false
+Categories=AudioVideo;Audio;Mixer;
+Keywords=audio;equalizer;eq;pipewire;sound;effects;preset;
+StartupNotify=true
+StartupWMClass=SauceFX

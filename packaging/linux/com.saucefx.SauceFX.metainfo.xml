@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>com.saucefx.SauceFX</id>
+  <name>SauceFX</name>
+  <summary>Sound EQ and audio enhancement for Linux</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>AGPL-3.0-or-later</project_license>
+  <description>
+    <p>
+      SauceFX is a native Linux sound equalizer and audio enhancement app.
+      It runs the open-source DfxDsp engine, routes system audio through a
+      PipeWire virtual sink, and provides a five-effect rack, a 31-band
+      graphic EQ with a live spectrum visualizer, factory and user presets,
+      dark and light themes, and session restore.
+    </p>
+    <p>Features include:</p>
+    <ul>
+      <li>Clarity, Ambience, Surround Sound, Dynamic Boost and Bass Boost effects</li>
+      <li>31-band graphic EQ with live spectrum visualizer</li>
+      <li>Factory preset library plus import/export and user presets</li>
+      <li>Native PipeWire virtual sink with automatic output routing</li>
+      <li>Close-to-background, single-instance restore and optional login autostart</li>
+    </ul>
+  </description>
+  <launchable type="desktop-id">com.saucefx.SauceFX.desktop</launchable>
+  <url type="homepage">https://github.com/sussykid01/saucefx</url>
+  <url type="bugtracker">https://github.com/sussykid01/saucefx/issues</url>
+  <developer id="com.saucefx">
+    <name>SauceFX</name>
+  </developer>
+  <categories>
+    <category>AudioVideo</category>
+    <category>Audio</category>
+  </categories>
+  <keywords>
+    <keyword>audio</keyword>
+    <keyword>equalizer</keyword>
+    <keyword>eq</keyword>
+    <keyword>pipewire</keyword>
+    <keyword>sound</keyword>
+    <keyword>effects</keyword>
+  </keywords>
+  <provides>
+    <binary>SauceFX</binary>
+  </provides>
+  <releases>
+    <release version="0.2.0" date="2026-10-21">
+      <description>
+        <p>First packaged release with Flatpak and RPM builds.</p>
+      </description>
+    </release>
+  </releases>
+  <content_rating type="oars-1.1"/>
+</component>

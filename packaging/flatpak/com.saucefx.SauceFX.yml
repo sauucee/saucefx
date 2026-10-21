@@ -1,0 +1,48 @@
+app-id: com.saucefx.SauceFX
+runtime: org.gnome.Platform
+runtime-version: '50'
+sdk: org.gnome.Sdk
+command: SauceFX
+
+finish-args:
+  - --share=ipc
+  - --socket=x11
+  - --socket=pulseaudio
+  - --device=dri
+  - --filesystem=xdg-run/pipewire-0
+  - --filesystem=xdg-download
+  - --filesystem=xdg-config/autostart:create
+  - --talk-name=org.freedesktop.portal.Desktop
+  - --talk-name=org.freedesktop.portal.Documents
+  - --talk-name=org.freedesktop.portal.FileChooser
+
+modules:
+  - name: saucefx
+    buildsystem: simple
+    build-commands:
+      - make -C src
+      - >
+        cmake -S src/gui -B build
+        -DCMAKE_BUILD_TYPE=Release
+        -DCMAKE_INSTALL_PREFIX=/app
+        -DJUCE_DIR=/run/build/saucefx/JUCE
+        -DSAUCEFX_WEB_DIST_DIR=/run/build/saucefx/frontend/dist
+      - cmake --build build --parallel "${FLATPAK_BUILDER_N_JOBS:-$(nproc)}"
+      - cmake --install build --component Runtime
+    sources:
+      - type: dir
+        path: ../..
+        skip:
+          - .git
+          - .flatpak-builder
+          - .deps
+          - build
+          - src/build
+          - src/gui/build
+          - frontend/node_modules
+          - release
+      - type: archive
+        url: https://github.com/juce-framework/JUCE/archive/refs/tags/9.0.4.tar.gz
+        sha256: e2bee25d5c776118aea550ad168a3dc9520c0669a79bd9f5a72b9f404ee1c40a
+        strip-components: 1
+        dest: JUCE

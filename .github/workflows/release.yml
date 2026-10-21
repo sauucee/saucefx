@@ -1,0 +1,109 @@
+name: Release packages
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  rpm:
+    name: Fedora RPM
+    runs-on: ubuntu-24.04
+    container: fedora:44
+    steps:
+      - name: Install checkout prerequisites
+        run: dnf install -y git tar gzip nodejs
+
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install build dependencies
+        run: |
+          dnf install -y \
+            cmake gcc-c++ make pkgconf-pkg-config \
+            pipewire-devel libX11-devel libXext-devel libXinerama-devel \
+            libXrandr-devel libXcursor-devel libXcomposite-devel \
+            freetype-devel fontconfig-devel mesa-libGL-devel \
+            webkit2gtk4.1-devel gtk3-devel libsoup3-devel \
+            nodejs npm rpm-build curl
+
+      - name: Build frontend
+        run: |
+          cd frontend
+          npm ci --no-audit --no-fund
+          npm run build
+
+      - name: Build RPM
+        run: packaging/rpm/build-rpm.sh
+
+      - name: Upload RPM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: saucefx-rpm
+          path: release/*.rpm
+          if-no-files-found: error
+
+  flatpak:
+    name: Flatpak bundle
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Flatpak tooling
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak flatpak-builder \
+            appstream desktop-file-utils
+          flatpak remote-add --user --if-not-exists flathub \
+            https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user -y --noninteractive flathub \
+            org.gnome.Platform//50 org.gnome.Sdk//50 \
+            org.freedesktop.Sdk//26.08
+
+      - name: Build frontend
+        run: |
+          cd frontend
+          npm ci --no-audit --no-fund
+          npm run build
+
+      - name: Build Flatpak
+        run: packaging/flatpak/build-flatpak.sh
+
+      - name: Upload Flatpak artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: saucefx-flatpak
+          path: release/*.flatpak
+          if-no-files-found: error
+
+  publish:
+    name: Publish GitHub release
+    needs: [rpm, flatpak]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Download packages
+        uses: actions/download-artifact@v4
+        with:
+          path: release
+          merge-multiple: true
+
+      - name: Publish release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release/*.rpm
+            release/*.flatpak
+          generate_release_notes: true
