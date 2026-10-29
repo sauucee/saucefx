@@ -160,10 +160,14 @@ void DfxDspPrivate::processTimer()
 	bool anything_changed = false;
 	int i_eq_changed = IS_FALSE;
 
-	if (update_from_registry_)
+	if (update_from_registry_.load(std::memory_order_acquire))
 	{
-		eqUpdateFromRegistry(&i_eq_changed);
-		update_from_registry_ = false;
+		std::lock_guard<std::mutex> lock(eq_control_mutex_);
+		if (update_from_registry_.load(std::memory_order_relaxed))
+		{
+			eqUpdateFromRegistry(&i_eq_changed);
+			update_from_registry_.store(false, std::memory_order_release);
+		}
 	}
 
 	if (i_eq_changed)

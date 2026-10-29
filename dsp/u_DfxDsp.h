@@ -19,6 +19,8 @@ You should have received a copy of the GNU Affero General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 */
 #pragma once
+#include <atomic>
+#include <mutex>
 #include <string>
 #include "AudioPassthru.h"
 #include "codedefs.h"
@@ -146,7 +148,11 @@ private:
 	struct dfxg_section_type dynamic_boost_;
 	struct dfxg_section_type bass_boost_;
 
-	bool update_from_registry_ = true;
+	/* The GUI thread updates EQ gains in memory and in the registry; the
+	 * audio thread polls the registry in processTimer(). Serialize both so
+	 * a poll cannot observe the in-between state and revert a fresh gain. */
+	std::mutex eq_control_mutex_;
+	std::atomic<bool> update_from_registry_{true};
 	int headphone_on_;
 	int music_mode_;     /* DFXP_MUSIC_MODE_MUSIC1, DFXP_MUSIC_MODE_MUSIC2, DFXP_MUSIC_MODE_SPEECH */
 

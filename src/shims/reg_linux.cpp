@@ -14,6 +14,7 @@
 #include "reg.h"
 #include "codedefs.h"
 
+#include <cstdio>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -22,7 +23,9 @@
 #include <vector>
 #include <fstream>
 #include <sstream>
+#include <mutex>
 #include <sys/stat.h>
+#include <unistd.h>
 
 namespace {
 
@@ -74,18 +77,45 @@ bool writeStore(const std::wstring &path, const std::vector<RegEntry> &entries)
 		std::string dir = sp.substr(0, slash);
 		mkdir(dir.c_str(), 0755);
 	}
-	std::ofstream out(sp, std::ios::trunc);
+
+	/* Write a sibling file and rename it over the real one. The rename is
+	 * atomic, so a reader (the DSP audio thread calls this via
+	 * eqUpdateFromRegistry()) sees either the old complete file or the new
+	 * complete file, never a truncated one. An in-place truncate/rewrite
+	 * used to let a concurrent read miss every band still to be written;
+	 * dfxpEqGetBandBoostCut_FromRegistry() treats a missing key as 0 dB and
+	 * then clobbers the live gains. */
+	std::string tmp = sp + ".tmp." + std::to_string((long)getpid());
+	std::ofstream out(tmp, std::ios::trunc);
 	if (!out.is_open())
 		return false;
 	for (const RegEntry &e : entries) {
 		out << std::string(e.key.begin(), e.key.end()) << '\t'
 		    << std::string(e.value.begin(), e.value.end()) << '\n';
 	}
-	return out.good();
+	out.flush();
+	bool written = out.good();
+	out.close();
+	if (!written || std::rename(tmp.c_str(), sp.c_str()) != 0) {
+		std::remove(tmp.c_str());
+		return false;
+	}
+	return true;
+}
+
+/* regCreateKey_Wide/regReadKey_Wide are called from both the GUI thread and
+ * the PipeWire audio thread, and each write is a read-modify-write of the
+ * whole file. Serialize the store so those threads cannot lose each other's
+ * updates. */
+std::mutex &storeMutex()
+{
+	static std::mutex mutex;
+	return mutex;
 }
 
 int upsertOne(int root, const std::wstring &key, const std::wstring &value)
 {
+	std::lock_guard<std::mutex> lock(storeMutex());
 	std::vector<RegEntry> entries;
 	std::wstring path = regFile();
 	readStore(path, &entries);
@@ -106,6 +136,7 @@ int upsertOne(int root, const std::wstring &key, const std::wstring &value)
 
 bool lookup(int root, const std::wstring &key, std::wstring *value)
 {
+	std::lock_guard<std::mutex> lock(storeMutex());
 	std::vector<RegEntry> entries;
 	readStore(regFile(), &entries);
 

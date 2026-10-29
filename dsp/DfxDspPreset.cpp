@@ -147,8 +147,10 @@ int DfxDspPrivate::getStateInfoFromVals(PT_HANDLE *hp_vals, bool b_include_eq)
 	if (hp_vals == NULL)
 		return(NOT_OKAY);
 
+	std::lock_guard<std::mutex> lock(eq_control_mutex_);
+
 	/* Temporarily make sure the update from registry timer is off. */
-	update_from_registry_ = false;
+	update_from_registry_.store(false, std::memory_order_release);
 
 	/* Get the vals file version */
 	if (valsGetFileVersion(hp_vals, &vals_file_version) != OKAY)
@@ -254,13 +256,13 @@ int DfxDspPrivate::getStateInfoFromVals(PT_HANDLE *hp_vals, bool b_include_eq)
 		/* Get the EQ settings from the preset */
 		if (getGraphicEqInfoFromVals(hp_vals) != OKAY)
 		{
-			update_from_registry_ = true;
+			update_from_registry_.store(true, std::memory_order_release);
 			return(NOT_OKAY);
 		}
 	}
 
 	/* Turn the update from registry back on if it was originally on */
-	update_from_registry_ = true;
+	update_from_registry_.store(true, std::memory_order_release);
 
 	return(OKAY);
 }

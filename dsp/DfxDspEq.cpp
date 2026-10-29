@@ -110,7 +110,8 @@ int DfxDspPrivate::resetEQ()
 {
 	int i_band_num;
 
-	update_from_registry_ = true;
+	std::lock_guard<std::mutex> lock(eq_control_mutex_);
+	update_from_registry_.store(true, std::memory_order_release);
 
 	for (i_band_num = 1; i_band_num <= DFXP_GRAPHIC_EQ_NUM_BANDS; i_band_num++)
 	{
@@ -334,7 +335,8 @@ int DfxDspPrivate::eqGetProcessingOn(int i_storage_type, int *ip_on)
 
 void DfxDspPrivate::eqOn(bool on)
 {
-	update_from_registry_ = true;
+	std::lock_guard<std::mutex> lock(eq_control_mutex_);
+	update_from_registry_.store(true, std::memory_order_release);
 
 	if (on)
 	{
@@ -451,7 +453,8 @@ void DfxDspPrivate::setNumBands(int num_bands)
 {
 	PT_HANDLE* graphic_eq_handle;
 
-	update_from_registry_ = true;
+	std::lock_guard<std::mutex> lock(eq_control_mutex_);
+	update_from_registry_.store(true, std::memory_order_release);
 
 	dfxpEqGetGraphicEqHdl(dfxp_handle_, &graphic_eq_handle);
 	GraphicEqSetNumBands(graphic_eq_handle, num_bands);
@@ -469,7 +472,8 @@ void DfxDspPrivate::setEqBandFrequency(int band_num, float freq)
 {
     PT_HANDLE* graphic_eq_handle;
 
-	update_from_registry_ = true;
+	std::lock_guard<std::mutex> lock(eq_control_mutex_);
+	update_from_registry_.store(true, std::memory_order_release);
 
     dfxpEqGetGraphicEqHdl(dfxp_handle_, &graphic_eq_handle);
 
@@ -503,7 +507,8 @@ float DfxDspPrivate::getEqBandBoostCut(int band_num)
 
 void DfxDspPrivate::setEqBandBoostCut(int band_num, float boost)
 {
-	update_from_registry_ = true;
+	std::lock_guard<std::mutex> lock(eq_control_mutex_);
+	update_from_registry_.store(true, std::memory_order_release);
 
 	dfxpEqSetBandBoostCut(dfxp_handle_, DFXP_STORAGE_TYPE_ALL, band_num + 1, boost);
 }
