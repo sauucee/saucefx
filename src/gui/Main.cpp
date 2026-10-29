@@ -304,6 +304,33 @@ juce::File presetLibraryDir()
 	return repoRoot().getChildFile("presets").getChildFile("Factsoft");
 }
 
+/* JUCE derives currentExecutableFile from dladdr(), which only reports the
+ * name used to start the process when a launcher resolves it through PATH.
+ * WebKitGTK re-executes that value in its browser child, so a bare name there
+ * kills the web UI unless the working directory happens to contain the
+ * binary (the Flatpak launcher is one such case). Resolve /proc/self/exe and
+ * switch to its directory when JUCE's path is not usable. */
+void ensureResolvableExecutablePath()
+{
+	auto executable = juce::File::getSpecialLocation(
+		juce::File::currentExecutableFile);
+	if (executable.existsAsFile())
+		return;
+
+	char target[4096];
+	auto len = ::readlink("/proc/self/exe", target, sizeof(target) - 1);
+	if (len <= 0)
+		return;
+	target[len] = '\0';
+
+	auto resolved = juce::File(juce::String::fromUTF8(target, (int)len));
+	if (!resolved.existsAsFile())
+		return;
+	if (resolved.getParentDirectory().setAsCurrentWorkingDirectory())
+		fprintf(stderr, "saucefx: resolved executable path: %s\n",
+			resolved.getFullPathName().toRawUTF8());
+}
+
 /* XDG state dir used for the app lock and GUI settings. */
 juce::File stateDir()
 {
@@ -4754,6 +4781,11 @@ public:
 		 * LC_NUMERIC at "C" so the .fac numeric formatting and
 		 * parsing always use a dot decimal separator. */
 		std::setlocale(LC_CTYPE, "");
+
+		/* WebKit's child re-exec needs an absolute executable path;
+		 * keep JUCE's currentExecutableFile resolvable when the
+		 * process was started by a bare command name. */
+		ensureResolvableExecutablePath();
 
 		/* Single-instance guard: flock the app lockfile for the
 		 * whole process lifetime. A second launch asks this
