@@ -35,8 +35,12 @@ modules:
         skip:
           - .git
           - .flatpak-builder
+          - .freebuff
+          - .opencode
           - .deps
           - build
+          - docs
+          - opencode.json
           - src/build
           - src/gui/build
           - frontend/node_modules
