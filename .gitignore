@@ -43,6 +43,7 @@ Thumbs.db
 .codex/
 .claude/
 .cursor/
+/.freebuff/
 .opencode/
 /opencode.json
 .continue/
