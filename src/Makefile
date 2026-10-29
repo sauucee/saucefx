@@ -77,7 +77,14 @@ $(EQ_REGISTRY_TEST): $(SRC_DIR)/harness/eqregistrytest.cpp $(LIB) | $(BIN)
 test-eq-registry: $(EQ_REGISTRY_TEST)
 	$(EQ_REGISTRY_TEST) $(EQ_RACE_ITERS)
 
-test: test-eq-registry
+# Sink lifecycle regressions: restart reaping (SIGKILL + relaunch) and
+# live-sibling preservation. Needs pactl, plus unprivileged user/PID
+# namespaces for the restart test; scripts exit 77 when unavailable.
+test: test-eq-registry rt
+	@bash $(SRC_DIR)/harness/sinkrestarttest.sh "$(abspath $(RT))"; \
+		rc=$$?; [ $$rc -eq 0 ] || [ $$rc -eq 77 ]
+	@bash $(SRC_DIR)/harness/sinklivesiblingtest.sh "$(abspath $(RT))"; \
+		rc=$$?; [ $$rc -eq 0 ] || [ $$rc -eq 77 ]
 
 # PipeWire bridge (library form + CLI). Needs
 # pipewire-devel installed.

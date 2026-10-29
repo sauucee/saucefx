@@ -128,7 +128,7 @@ struct FXPW {
 
 	char orig_default[96]; /* default sink to restore on exit */
 	int did_default;       /* switched the system default this run */
-	char instance_tag[32]; /* "fxpw-<pid>", disambiguates our sink */
+	char instance_tag[32]; /* "fxpw-<pid>-<starttime>", disambiguates our sink */
 
 	/* negotiated capture format */
 	int ch;
@@ -452,14 +452,49 @@ static char *get_default_sink(void)
  * frees a module that still carries our own tag (pulse module indexes
  * get REUSED - a naive unload once killed a live peer's sink).
  */
-static bool process_alive(long pid)
+/* Field 22 of /proc/<pid>/stat. Unlike the PID, it survives PID reuse,
+ * including Flatpak's PID namespace where every launch becomes PID 2. */
+static unsigned long long process_start_time(long pid)
+{
+	if (pid <= 0)
+		return 0;
+	char path[64];
+	char buf[1024];
+	snprintf(path, sizeof(path), "/proc/%ld/stat", pid);
+	FILE *f = fopen(path, "r");
+	if (f == NULL)
+		return 0;
+	size_t n = fread(buf, 1, sizeof(buf) - 1, f);
+	fclose(f);
+	buf[n] = '\0';
+	char *r = strrchr(buf, ')');
+	if (r == NULL)
+		return 0;
+	r++;
+	while (*r == ' ')
+		r++;
+	if (*r == '\0')
+		return 0;
+	r++; /* skip state; fields 4..22 follow */
+	unsigned long long value = 0;
+	for (int i = 0; i < 19; ++i) {
+		while (*r == ' ')
+			r++;
+		char *end = NULL;
+		value = strtoull(r, &end, 10);
+		if (end == r)
+			return 0;
+		r = end;
+	}
+	return value;
+}
+
+static bool process_alive(long pid, unsigned long long start_time)
 {
 	if (pid <= 0)
 		return false;
 	if (kill((pid_t)pid, 0) != 0 && errno != EPERM)
 		return false;              /* ESRCH: gone */
-	if (errno == EPERM)
-		return true;               /* alive, other user */
 
 	/* kill() also succeeds for unreaped zombies; /proc/<pid>/stat says
 	 * state 'Z' for those. */
@@ -478,16 +513,41 @@ static bool process_alive(long pid)
 	r++;
 	while (*r == ' ')
 		r++;
-	return *r != 'Z';
+	if (*r == 'Z')
+		return false;
+	if (start_time != 0) {
+		unsigned long long current = process_start_time(pid);
+		return current != 0 && current == start_time;
+	}
+	return true;
 }
 
-/* Parse "fxpw-<pid>" out of a module argument; -1 when untagged. */
+/* Parse "fxpw-<pid>[-<starttime>]" out of a module argument. */
 static long tag_pid_of(const char *args)
 {
 	const char *pat = strstr(args, "fxpw-");
 	if (pat == NULL)
 		return -1;
-	return strtol(pat + strlen("fxpw-"), NULL, 10);
+	pat += strlen("fxpw-");
+	char *end = NULL;
+	long pid = strtol(pat, &end, 10);
+	return end == pat ? -1 : pid;
+}
+
+static unsigned long long tag_start_of(const char *args)
+{
+	const char *pat = strstr(args, "fxpw-");
+	if (pat == NULL)
+		return 0;
+	pat += strlen("fxpw-");
+	char *end = NULL;
+	(void)strtol(pat, &end, 10);
+	if (end == pat || *end != '-')
+		return 0;
+	++end;
+	char *start_end = NULL;
+	unsigned long long start = strtoull(end, &start_end, 10);
+	return start_end == end ? 0 : start;
 }
 
 static long unload_stale_sinks(const char *sink_name, const char *our_tag_unused)
@@ -516,10 +576,16 @@ static long unload_stale_sinks(const char *sink_name, const char *our_tag_unused
 			continue;
 		}
 		long pid = tag_pid_of(line);
-		if (pid == (long)getpid())
-			continue;          /* this process, spawning below */
-		if (process_alive(pid))
+		unsigned long long started = tag_start_of(line);
+		if (started != 0 && process_alive(pid, started))
 			continue;          /* a live sibling instance */
+		if (started == 0 && pid == (long)getpid()) {
+			/* Pre-starttime tag in a PID namespace: every launch
+			 * reuses this PID, so the module is from a previous
+			 * incarnation even though /proc now shows it alive. */
+		} else if (started == 0 && process_alive(pid, 0)) {
+			continue;          /* a live sibling instance */
+		}
 		char cmd[96];
 		snprintf(cmd, sizeof(cmd), "pactl unload-module %ld", idx);
 		if (system(cmd) == 0)
@@ -804,8 +870,9 @@ extern "C" FXPW *fxpw_start(const char *sink_name, const wchar_t *preset_path,
 		if (err) snprintf(err, errsz, "out of memory");
 		return NULL;
 	}
-	snprintf(a->instance_tag, sizeof(a->instance_tag), "fxpw-%d",
-		 (int)getpid());
+	snprintf(a->instance_tag, sizeof(a->instance_tag),
+		 "fxpw-%d-%llu", (int)getpid(),
+		 process_start_time((long)getpid()));
 	ring_init(&a->ring);
 	snprintf(a->sink_name, sizeof(a->sink_name), "%s",
 		 sink_name != NULL ? sink_name : "SauceFX");
