@@ -11,8 +11,6 @@ application keeps the native engine, preset library and PipeWire bridge behind
 the scenes; the visible interface is rendered by WebKitGTK through JUCE's
 `WebBrowserComponent`.
 
-![SauceFX main window](docs/images/saucefx-main.png)
-
 SauceFX is an independent Linux application based on the FxSound project. The
 upstream Windows application, installer and build tooling are not included. The
 FxSound DSP engine and interface artwork/design retain their upstream
@@ -203,9 +201,6 @@ src/             SauceFX application source
 frontend/        React + Base UI interface (Vite, TypeScript)
   src/             components, bridge, styles and preset data
   dist/            production build copied to web/ by CMake (git ignored)
-docs/
-  ENGINEERING.md   FxSound DSP integration notes and field fixes
-  images/          documentation screenshots
 packaging/
   flatpak/         Flatpak manifest and bundle builder
   linux/           desktop entry and AppStream metadata
