@@ -100,8 +100,16 @@ int DfxDspPrivate::savePreset(std::wstring preset_name, std::wstring preset_file
 {
 	PT_HANDLE *vals_hdl;
 
-	if (createValsFromStateInfo(&preset_name[0], &vals_hdl) != OKAY)
-		return(NOT_OKAY);
+	/* valsSetGraphicEq() copies all bands one at a time. Take the same
+	 * control lock used by setters and registry polling so an immediate
+	 * save captures one coherent EQ state instead of a mixture of a slider
+	 * update and an audio-thread poll. The vals handle owns a deep copy, so
+	 * the slower file write can happen after releasing the lock. */
+	{
+		std::lock_guard<std::mutex> lock(eq_control_mutex_);
+		if (createValsFromStateInfo(&preset_name[0], &vals_hdl) != OKAY)
+			return(NOT_OKAY);
+	}
 
 	preset_name.append(L".fac");
 	if (valsSave(vals_hdl, &preset_file_full_path[0], &preset_name[0]) != OKAY)

@@ -162,7 +162,12 @@ void DfxDspPrivate::processTimer()
 
 	if (update_from_registry_.load(std::memory_order_acquire))
 	{
-		std::lock_guard<std::mutex> lock(eq_control_mutex_);
+		/* Never make the real-time audio callback wait for a GUI-side EQ
+		 * update or preset load. If control state is being changed, leave the
+		 * flag set and retry the registry poll on the next audio buffer. */
+		std::unique_lock<std::mutex> lock(eq_control_mutex_, std::try_to_lock);
+		if (!lock.owns_lock())
+			return;
 		if (update_from_registry_.load(std::memory_order_relaxed))
 		{
 			eqUpdateFromRegistry(&i_eq_changed);
@@ -559,4 +564,3 @@ void DfxDspPrivate::getSpectrumBandValues(float* rp_band_values, int i_array_siz
 {
     dfxpSpectrumGetBandValues(dfxp_handle_, rp_band_values, i_array_size);
 }
-

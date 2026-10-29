@@ -15,6 +15,8 @@ OBJDIR     := $(BUILD)/obj
 BIN        := $(BUILD)/bin
 LIB        := $(BUILD)/libdfxdsp_linux.a
 HARNESS    := $(BIN)/fxdspharness
+EQ_REGISTRY_TEST := $(BIN)/eqregistrytest
+EQ_RACE_ITERS ?= 250
 
 CC  := gcc
 CXX := g++
@@ -44,7 +46,7 @@ SRCS := $(shell cat $(SRC_DIR)/sources.txt)
 OBJS := $(patsubst %,$(OBJDIR)/%,$(patsubst %.cpp,%.o,$(patsubst %.c,%.o,$(SRCS))))
 SRCDEPS := $(addprefix $(ROOT)/,$(SRCS))
 
-.PHONY: all run clean
+.PHONY: all run test test-eq-registry clean
 
 all: $(HARNESS)
 
@@ -67,6 +69,15 @@ $(HARNESS): $(SRC_DIR)/harness/fxdspharness.cpp $(LIB) | $(BIN)
 
 run: $(HARNESS)
 	$(HARNESS) $(IN) $(OUT) $(PRESET)
+
+$(EQ_REGISTRY_TEST): $(SRC_DIR)/harness/eqregistrytest.cpp $(LIB) | $(BIN)
+	$(CXX) $(CXXFLAGS) -I$(DSP)/include -I$(DSP) -I$(SRC_DIR)/include \
+		-o $@ $< $(LIB) -pthread -lm
+
+test-eq-registry: $(EQ_REGISTRY_TEST)
+	$(EQ_REGISTRY_TEST) $(EQ_RACE_ITERS)
+
+test: test-eq-registry
 
 # PipeWire bridge (library form + CLI). Needs
 # pipewire-devel installed.

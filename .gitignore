@@ -38,11 +38,13 @@
 Thumbs.db
 
 # Local handoff notes, agent tooling, and editor state
+/docs/
 .agents/
 .codex/
 .claude/
 .cursor/
 .opencode/
+/opencode.json
 .continue/
 .aider*
 skills-lock.json
