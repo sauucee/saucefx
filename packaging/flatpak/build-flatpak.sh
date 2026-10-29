@@ -12,6 +12,17 @@ BUILD_DIR="$RELEASE_DIR/flatpak-build"
 REPO_DIR="$RELEASE_DIR/flatpak-repo"
 BUNDLE="$RELEASE_DIR/SauceFX-$VERSION-$ARCH.flatpak"
 
+# JUCE has several very large translation units. Building one per reported CPU
+# can exhaust memory on otherwise capable machines, so use a conservative
+# default while still allowing CI or developers to opt into more parallelism.
+if [ -z "${FLATPAK_BUILDER_N_JOBS:-}" ]; then
+    FLATPAK_BUILDER_N_JOBS=$(nproc)
+    if [ "$FLATPAK_BUILDER_N_JOBS" -gt 2 ]; then
+        FLATPAK_BUILDER_N_JOBS=2
+    fi
+    export FLATPAK_BUILDER_N_JOBS
+fi
+
 if [ -z "$VERSION" ]; then
     echo "error: could not read the SauceFX version from CMakeLists.txt" >&2
     exit 1
