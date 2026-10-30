@@ -47,17 +47,25 @@ folder is available for preset import and export.
 
 ### Fedora RPM
 
+Install the latest x86_64 release directly from GitHub with one command:
+
 ```sh
-sudo dnf install ./saucefx-0.2.0-1.fc44.x86_64.rpm
-SauceFX
+sudo dnf install https://github.com/sussykid01/saucefx/releases/latest/download/SauceFX-x86_64.rpm
 ```
+
+Alternatively, download `SauceFX-x86_64.rpm` from the latest release and open
+it in Software, or install the downloaded file with
+`sudo dnf install ./SauceFX-x86_64.rpm`.
 
 The RPM installs the app under `/usr/bin/SauceFX`, shared data under
 `/usr/share/saucefx`, and a launcher and AppStream metadata for the desktop.
-Install the matching PipeWire, WebKitGTK 4.1, GTK3, and X11 packages if your
-system does not already have them; `dnf` resolves these automatically.
+DNF resolves and installs all runtime dependencies automatically; users do not
+need any compiler, development headers, Node.js, or JUCE.
 
-## Requirements
+## Source build requirements
+
+These packages are only needed when building SauceFX from source. Flatpak and
+RPM users do not need to install them manually.
 
 - Linux with PipeWire and WirePlumber, plus the PipeWire Pulse server and
   `pactl` (Fedora: `pulseaudio-utils`) for the virtual sink.
@@ -79,7 +87,7 @@ sudo dnf install cmake gcc-c++ make pkg-config pipewire-devel \
   pulseaudio-utils pipewire-pulseaudio
 ```
 
-## Build
+## Build from source
 
 Build the DSP engine first:
 
@@ -103,7 +111,7 @@ The realtime CLI bridge is optional and can be built with:
 make -C src rt
 ```
 
-## Packaging
+## Packaging (maintainers)
 
 The packaging builds use the existing `frontend/dist` instead of running npm
 inside the sandbox. Build it once when needed:
@@ -137,10 +145,10 @@ On Fedora, install `rpm-build` and the development packages listed above, then:
 JUCE_DIR=/path/to/JUCE packaging/rpm/build-rpm.sh
 ```
 
-The script builds the native app, stages the install tree,
-and writes `release/saucefx-<version>-1*.rpm`. It also works inside a Fedora
-container. The RPM is a binary package generated from the staged tree; it is
-not a source RPM.
+The script builds the native app, stages the install tree, and writes both
+`release/SauceFX-<version>-<arch>.rpm` and the stable release asset
+`release/SauceFX-<arch>.rpm`. It also works inside a Fedora container. The RPM
+is a binary package generated from the staged tree; it is not a source RPM.
 
 Both package paths use `cmake --install --component Runtime`, so JUCE's
 headers, CMake package files and helper tools are not included in the

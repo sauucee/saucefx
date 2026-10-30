@@ -11,11 +11,10 @@ BuildArch:      %{_arch}
 Requires:       hicolor-icon-theme
 Requires:       /usr/bin/pactl
 Requires:       pipewire-pulseaudio
-# JUCE loads the browser backend with dlopen(), so these do not appear in
-# the automatically generated library dependencies.
+# JUCE loads the browser backend with dlopen(), so it does not appear in the
+# automatically generated library dependencies. WebKitGTK already resolves
+# its GTK3 and libsoup3 dependencies through DNF.
 Requires:       webkit2gtk4.1
-Requires:       gtk3
-Requires:       libsoup3
 
 %description
 SauceFX is a native Linux sound equalizer and audio enhancement app built

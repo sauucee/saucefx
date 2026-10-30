@@ -14,6 +14,15 @@ RPM_TOP="$RELEASE_DIR/rpmbuild"
 JUCE_URL="https://github.com/juce-framework/JUCE/archive/refs/tags/9.0.4.tar.gz"
 JUCE_SHA256="e2bee25d5c776118aea550ad168a3dc9520c0669a79bd9f5a72b9f404ee1c40a"
 
+# JUCE's large translation units can exhaust memory when every reported CPU
+# is used. Keep the default reliable and allow builders to opt into more jobs.
+if [ -z "${SAUCEFX_BUILD_JOBS:-}" ]; then
+    SAUCEFX_BUILD_JOBS=$(nproc)
+    if [ "$SAUCEFX_BUILD_JOBS" -gt 2 ]; then
+        SAUCEFX_BUILD_JOBS=2
+    fi
+fi
+
 if [ -z "$VERSION" ]; then
     echo "error: could not read the SauceFX version from CMakeLists.txt" >&2
     exit 1
@@ -67,7 +76,7 @@ cmake -S "$ROOT/src/gui" -B "$BUILD_DIR" \
     -DCMAKE_INSTALL_PREFIX=/usr \
     -DJUCE_DIR="$JUCE_DIR" \
     -DSAUCEFX_WEB_DIST_DIR="$ROOT/frontend/dist"
-cmake --build "$BUILD_DIR" --parallel "$(nproc)"
+cmake --build "$BUILD_DIR" --parallel "$SAUCEFX_BUILD_JOBS"
 
 echo "==> Staging install tree"
 rm -rf "$STAGE_DIR"
@@ -88,5 +97,19 @@ rpmbuild -bb \
     "$SPEC"
 
 mkdir -p "$RELEASE_DIR"
-find "$RPM_TOP/RPMS" -type f -name '*.rpm' -exec cp -f {} "$RELEASE_DIR/" \;
-echo "RPM package: $RELEASE_DIR/saucefx-$VERSION-1*.rpm"
+RPM_FILE=$(find "$RPM_TOP/RPMS" -type f -name '*.rpm' -print -quit)
+if [ -z "$RPM_FILE" ]; then
+    echo "error: rpmbuild did not produce an RPM" >&2
+    exit 1
+fi
+
+# Publish a readable versioned filename plus a stable filename used by the
+# GitHub /releases/latest download URL. The RPM's internal metadata still
+# carries the exact Fedora release and package version.
+VERSIONED_RPM="$RELEASE_DIR/SauceFX-$VERSION-$ARCH.rpm"
+LATEST_RPM="$RELEASE_DIR/SauceFX-$ARCH.rpm"
+install -m 0644 "$RPM_FILE" "$VERSIONED_RPM"
+install -m 0644 "$RPM_FILE" "$LATEST_RPM"
+
+echo "RPM package: $VERSIONED_RPM"
+echo "Stable release asset: $LATEST_RPM"
