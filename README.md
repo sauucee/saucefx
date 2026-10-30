@@ -51,7 +51,8 @@ folder is available for preset import and export.
 Install the latest x86_64 release directly from GitHub with one command:
 
 ```sh
-sudo dnf install https://github.com/sussykid01/saucefx/releases/latest/download/SauceFX-x86_64.rpm
+sudo dnf install --setopt=install_weak_deps=False \
+  https://github.com/sussykid01/saucefx/releases/latest/download/SauceFX-x86_64.rpm
 ```
 
 Alternatively, download `SauceFX-x86_64.rpm` from the latest release and open
@@ -61,7 +62,9 @@ it in Software, or install the downloaded file with
 The RPM installs the app under `/usr/bin/SauceFX`, shared data under
 `/usr/share/saucefx`, and a launcher and AppStream metadata for the desktop.
 DNF resolves and installs all runtime dependencies automatically; users do not
-need any compiler, development headers, Node.js, or JUCE.
+need any compiler, development headers, Node.js, or JUCE. Disabling weak
+dependencies avoids optional WebKit multimedia and device packages that
+SauceFX does not use.
 
 ## Source build requirements
 
