@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://sauucee.github.io/saucefx/sitemap.xml

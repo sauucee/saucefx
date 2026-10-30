@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120">
+<title>SauceFX</title>
+<rect width="120" height="120" rx="28" fill="#1E1E1E"/>
+<polygon points="55,14 65,14 68,29 52,29" fill="#FF9DB3"/>
+<polygon points="60,14 65,14 68,29 60,29" fill="#E880A0"/>
+<polygon points="47,29 73,29 73,38 47,38" fill="#FFB8C8"/>
+<path d="M37 52 L45 40 H75 L83 52 V94 L75 106 H45 L37 94 Z" fill="#F2486F"/>
+<polygon points="37,52 45,40 58,40 46,106 45,106 37,94" fill="#FF7A98"/>
+<polygon points="68,40 75,40 83,52 83,94 75,106 60,106" fill="#C42D55"/>
+<polyline points="43,76 50,62 58,88 66,62 74,88 80,76" fill="none" stroke="#1E1E1E" stroke-width="4.5" stroke-linejoin="miter" stroke-miterlimit="4"/>
+</svg>

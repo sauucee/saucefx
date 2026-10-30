@@ -1,0 +1,153 @@
+/* Hallmark · design-system: DESIGN.md (locked) · macrostructure: rack-unit one-page
+ * theme: SauceFX rack · dark #0a0a0b / soft light #e9e5dd paper · Figtree-only · Pulse accent (hue ~350)
+ * tone: technical · anchor hue: 350 · genre: atmospheric
+ */
+/* ============================================================================
+   SauceFX — the only theme file.
+
+   Direction: studio spec sheet. Near-black ink, warm paper for the light
+   theme, one pink-red signal colour, hairline rules and sharp corners. Every
+   colour, type step, radius and motion constant resolves here; components
+   never write a raw colour. Swap `data-theme` / `data-accent` on <html> and
+   the whole page repaints without a React render.
+   ========================================================================= */
+
+:root {
+  /* -- type ------------------------------------------------------------- */
+  --font-sans: 'Figtree Variable', 'Figtree', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: ui-monospace, 'SFMono-Regular', 'JetBrains Mono', Menlo, Consolas, monospace;
+
+  --step--2: clamp(0.64rem, 0.62rem + 0.1vw, 0.7rem);
+  --step--1: clamp(0.78rem, 0.75rem + 0.14vw, 0.86rem);
+  --step-0: clamp(0.96rem, 0.93rem + 0.18vw, 1.06rem);
+  --step-1: clamp(1.12rem, 1.05rem + 0.36vw, 1.35rem);
+  --step-2: clamp(1.4rem, 1.24rem + 0.8vw, 1.95rem);
+  --step-3: clamp(1.85rem, 1.45rem + 1.85vw, 3.1rem);
+  --step-4: clamp(2.5rem, 1.7rem + 3.9vw, 5.2rem);
+  --step-5: clamp(3.1rem, 1.7rem + 6.4vw, 7.6rem);
+  --step-display: clamp(3.4rem, 18vw, 17rem);
+
+  /* -- space / layout --------------------------------------------------- */
+  --gutter: clamp(1.1rem, 4.2vw, 4.25rem);
+  --measure: 54ch;
+  --shell: 1560px;
+  --section-y: clamp(4.75rem, 10.5vw, 10.5rem);
+  --radius: 2px;
+  --radius-lg: 4px;
+  --nav-h: 64px;
+
+  /* -- motion ----------------------------------------------------------- */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-inout: cubic-bezier(0.76, 0, 0.24, 1);
+  --dur-fast: 120ms;
+  --dur: 260ms;
+  --dur-slow: 620ms;
+
+  /* -- dark theme (brand default) --------------------------------------- */
+  --bg: #0a0a0b;
+  --bg-deep: #050506;
+  --surface: #0d0d0f;
+  --panel: #111113;
+  --panel-2: #18181a;
+  --ink: #f4f1ec;
+  --ink-soft: #cec9c1;
+  --muted: #928c83;
+  --line: rgba(244, 241, 236, 0.15);
+  --line-soft: rgba(244, 241, 236, 0.07);
+  --line-strong: rgba(244, 241, 236, 0.32);
+  --shadow: 0 60px 140px -60px rgba(0, 0, 0, 0.95);
+  --grain-opacity: 0.055;
+  --glow: color-mix(in oklab, var(--accent) 26%, transparent);
+  --glass: rgba(10, 10, 11, 0.82);
+  --window-bg: #08080a;
+  --window-chrome: #141416;
+  --on-accent: #14040a;
+
+  color-scheme: dark;
+}
+
+/* -- soft light theme ----------------------------------------------------- */
+[data-theme='light'] {
+  --bg: #e9e5dd;
+  --bg-deep: #ded9cf;
+  --surface: #f0ece4;
+  --panel: #f6f2ea;
+  --panel-2: #ebe6dc;
+  --ink: #141210;
+  --ink-soft: #3b3630;
+  --muted: #625b52;
+  --line: rgba(20, 18, 16, 0.17);
+  --line-soft: rgba(20, 18, 16, 0.08);
+  --line-strong: rgba(20, 18, 16, 0.38);
+  --shadow: 0 50px 120px -55px rgba(60, 45, 32, 0.45);
+  --grain-opacity: 0.03;
+  --glass: rgba(233, 229, 221, 0.86);
+  --window-bg: #f4f0e8;
+  --window-chrome: #e6e1d7;
+
+  color-scheme: light;
+}
+
+/* -- accent presets -------------------------------------------------------
+   The app ships six accents plus a custom colour; the nav picker mirrors the
+   six. Fills below are tuned to read as colour on both themes.
+   ---------------------------------------------------------------------- */
+:root {
+  --palette-pulse: #ff2e57;
+  --palette-pulse-2: #ff6a3d;
+  --palette-amber: #ffb020;
+  --palette-amber-2: #ff7a1a;
+  --palette-lime: #c2f03c;
+  --palette-lime-2: #64e08a;
+  --palette-mint: #2ee6a8;
+  --palette-mint-2: #35c9d8;
+  --palette-cyan: #38c6ff;
+  --palette-cyan-2: #6f8bff;
+  --palette-violet: #b08cff;
+  --palette-violet-2: #ff6bcb;
+}
+
+:root,
+[data-accent='pulse'] {
+  --accent: var(--palette-pulse);
+  --accent-2: var(--palette-pulse-2);
+}
+
+[data-accent='amber'] {
+  --accent: var(--palette-amber);
+  --accent-2: var(--palette-amber-2);
+}
+
+[data-accent='lime'] {
+  --accent: var(--palette-lime);
+  --accent-2: var(--palette-lime-2);
+}
+
+[data-accent='mint'] {
+  --accent: var(--palette-mint);
+  --accent-2: var(--palette-mint-2);
+}
+
+[data-accent='cyan'] {
+  --accent: var(--palette-cyan);
+  --accent-2: var(--palette-cyan-2);
+}
+
+[data-accent='violet'] {
+  --accent: var(--palette-violet);
+  --accent-2: var(--palette-violet-2);
+}
+
+:root,
+[data-theme] {
+  --accent-ink: #14040a;
+  --accent-soft: color-mix(in oklab, var(--accent) 12%, transparent);
+  --accent-line: color-mix(in oklab, var(--accent) 48%, transparent);
+  /* Accent used as a glyph: vivid on near-black, deepened on paper. */
+  --accent-text: var(--accent);
+}
+
+[data-theme='light'] {
+  --accent-ink: #14040a;
+  --accent-text: color-mix(in oklab, var(--accent) 44%, #1c0a10);
+}

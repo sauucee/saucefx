@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0a0a0b" />
+
+    <title>SauceFX — Sound EQ for Linux</title>
+    <meta
+      name="description"
+      content="SauceFX runs the open-source FxSound DSP engine natively on Linux, routes system audio through a PipeWire virtual sink, and gives you a 31-band EQ, a five-effect rack and a frameless desktop UI."
+    />
+    <!-- Assumes the GitHub Pages project URL; change all four URLs if the site
+         is served from a different domain. -->
+    <link rel="canonical" href="https://sauucee.github.io/saucefx/" />
+
+    <!-- Open Graph / social -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="SauceFX" />
+    <meta property="og:title" content="SauceFX — Sound EQ for Linux" />
+    <meta
+      property="og:description"
+      content="The FxSound DSP engine, native on Linux. Five-effect rack, 31-band EQ, PipeWire virtual sink, Flatpak and RPM."
+    />
+    <meta property="og:url" content="https://sauucee.github.io/saucefx/" />
+    <meta
+      property="og:image"
+      content="https://sauucee.github.io/saucefx/og-image.png"
+    />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="SauceFX wordmark above a dark audio rack interface." />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="SauceFX — Sound EQ for Linux" />
+    <meta
+      name="twitter:description"
+      content="The FxSound DSP engine, native on Linux. Five-effect rack, 31-band EQ, PipeWire virtual sink, Flatpak and RPM."
+    />
+    <meta
+      name="twitter:image"
+      content="https://sauucee.github.io/saucefx/og-image.png"
+    />
+
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
+    <link rel="preload" as="font" type="font/woff2" crossorigin
+      href="./fonts/figtree-latin-wght-normal.woff2" />
+
+    <script type="application/ld+json">
+      {
+        "@context": "https://schema.org",
+        "@type": "SoftwareApplication",
+        "name": "SauceFX",
+        "applicationCategory": "MultimediaApplication",
+        "operatingSystem": "Linux",
+        "description": "Sound EQ and audio enhancement for Linux, based on FxSound. 31-band graphic EQ, five-effect rack and a PipeWire virtual sink.",
+        "license": "https://www.gnu.org/licenses/agpl-3.0.html",
+        "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" }
+      }
+    </script>
+    <!-- Applies the stored theme before first paint so the page never flashes. -->
+    <script>
+      (function () {
+        try {
+          var raw = localStorage.getItem('saucefx-site:appearance');
+          var saved = raw ? JSON.parse(raw) : null;
+          var accents = ['pulse', 'amber', 'lime', 'mint', 'cyan', 'violet'];
+          var theme =
+            saved && (saved.theme === 'light' || saved.theme === 'dark') ? saved.theme : 'dark';
+          var accent =
+            saved && accents.indexOf(saved.accent) !== -1 ? saved.accent : 'pulse';
+          document.documentElement.dataset.theme = theme;
+          document.documentElement.dataset.accent = accent;
+          document.documentElement.style.background = theme === 'light' ? '#e9e5dd' : '#0a0a0b';
+        } catch (e) {
+          /* storage unavailable — keep the dark default */
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
