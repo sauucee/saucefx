@@ -248,7 +248,7 @@ full quit and relaunch (including login/reboot). It loads the saved `.fac`, then
 restores the live session snapshot from
 `~/.local/state/saucefx/preset-session.txt`, so unsaved slider and EQ tweaks
 survive without modifying the factory or imported preset file. If the saved
-preset is no longer available, startup falls back to **Music**.
+preset is no longer available, startup falls back to **Default**.
 
 ## Motion
 

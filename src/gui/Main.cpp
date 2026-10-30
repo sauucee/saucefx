@@ -3000,7 +3000,7 @@ public:
 		/* Restore the last selected preset plus the live effect/EQ
 		 * state. The state lives beside settings.txt, never inside
 		 * the user's .fac library. A missing/corrupt session falls
-		 * back to the original Music startup. */
+		 * back to the factory Default preset. */
 		auto savedSession = loadPresetSession();
 		int selectedId = 0;
 		juce::File selectedFile;
@@ -3021,7 +3021,7 @@ public:
 			/* first run, deleted preset, or invalid session */
 			selectedId = 1;
 			for (int i = 1; i <= presetBox.getNumItems(); i++) {
-				if (presetBox.getItemText(i - 1) == "Music") {
+				if (presetBox.getItemText(i - 1) == "Default") {
 					selectedId = i;
 					break;
 				}
