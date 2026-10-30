@@ -100,10 +100,16 @@ jobs:
           path: release
           merge-multiple: true
 
+      - name: Generate checksums
+        run: |
+          cd release
+          sha256sum *.rpm *.flatpak > SHA256SUMS
+
       - name: Publish release assets
         uses: softprops/action-gh-release@v2
         with:
           files: |
             release/*.rpm
             release/*.flatpak
+            release/SHA256SUMS
           generate_release_notes: true

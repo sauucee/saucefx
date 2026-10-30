@@ -86,7 +86,8 @@ On Fedora:
 ```sh
 sudo dnf install cmake gcc-c++ make pkg-config pipewire-devel \
   libX11-devel libXext-devel libXinerama-devel libXrandr-devel \
-  libXcursor-devel freetype-devel fontconfig-devel \
+  libXcursor-devel libXcomposite-devel mesa-libGL-devel \
+  freetype-devel fontconfig-devel \
   nodejs npm webkit2gtk4.1-devel gtk3-devel libsoup3-devel \
   pulseaudio-utils pipewire-pulseaudio
 ```
