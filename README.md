@@ -2,7 +2,8 @@
 
 # SauceFX
 
-**Sound EQ and audio enhancement for Linux, based on FxSound.**
+**Give Linux the sound it deserves — native PipeWire processing, a 31-band EQ,
+live spectrum, rich effects, presets, and a slick desktop UI.**
 
 SauceFX runs the open-source FxSound DSP engine (`DfxDsp`) natively on Linux,
 routes system audio through a PipeWire virtual sink, and presents a frameless
