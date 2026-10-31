@@ -3,7 +3,7 @@ set -euo pipefail
 
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 ROOT=$(cd -- "$SCRIPT_DIR/../.." && pwd)
-MANIFEST="$SCRIPT_DIR/com.saucefx.SauceFX.yml"
+MANIFEST="$SCRIPT_DIR/github-bundle.yml"
 VERSION=$(sed -n 's/^project(SauceFX VERSION \([^ ]*\).*/\1/p' \
     "$ROOT/src/gui/CMakeLists.txt" | head -n 1)
 ARCH=$(uname -m)
@@ -47,9 +47,9 @@ fi
 # means the system installation. If the SDK/runtime were installed per-user
 # (the common rootless setup), point the host lookups at the user installation.
 USER_FLATPAK_DIR="${FLATPAK_USER_DIR:-${XDG_DATA_HOME:-$HOME/.local/share}/flatpak}"
-if flatpak info --user org.gnome.Sdk//50 >/dev/null 2>&1 &&
-   flatpak info --user org.gnome.Platform//50 >/dev/null 2>&1 &&
-   ! flatpak info --system org.gnome.Sdk//50 >/dev/null 2>&1; then
+if flatpak info --user org.gnome.Sdk//51 >/dev/null 2>&1 &&
+   flatpak info --user org.gnome.Platform//51 >/dev/null 2>&1 &&
+   ! flatpak info --system org.gnome.Sdk//51 >/dev/null 2>&1; then
     export FLATPAK_SYSTEM_DIR="$USER_FLATPAK_DIR"
 fi
 
@@ -81,6 +81,6 @@ echo "==> Building Flatpak $VERSION for $ARCH"
 echo "==> Creating bundle"
 flatpak build-bundle --arch="$ARCH" \
     --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo \
-    "$REPO_DIR" "$BUNDLE" com.saucefx.SauceFX
+    "$REPO_DIR" "$BUNDLE" io.github.sauucee.SauceFX
 
 echo "Flatpak bundle: $BUNDLE"

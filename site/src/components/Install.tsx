@@ -10,7 +10,7 @@ import {
 } from '../content/site';
 
 const TABS = [
-  { id: 'flatpak', label: 'Flatpak', commands: FLATPAK_COMMANDS, note: 'Bundle ships the engine; the org.gnome.Platform//50 runtime is offered from Flathub if it is missing.' },
+  { id: 'flatpak', label: 'Flatpak', commands: FLATPAK_COMMANDS, note: 'Bundle ships the engine; the org.gnome.Platform//51 runtime is offered from Flathub if it is missing.' },
   { id: 'rpm', label: 'Fedora RPM', commands: RPM_COMMANDS, note: 'One command, latest release, straight from GitHub. DNF resolves every runtime dependency — no compiler, headers, Node.js or JUCE required.' },
 ] as const;
 

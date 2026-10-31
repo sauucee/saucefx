@@ -1,6 +1,8 @@
-app-id: com.saucefx.SauceFX
+# GitHub release bundle manifest. Flathub submissions use a separately
+# maintained manifest in the Flathub repository.
+app-id: io.github.sauucee.SauceFX
 runtime: org.gnome.Platform
-runtime-version: '50'
+runtime-version: '51'
 sdk: org.gnome.Sdk
 command: SauceFX
 
@@ -12,9 +14,6 @@ finish-args:
   - --filesystem=xdg-run/pipewire-0
   - --filesystem=xdg-download
   - --filesystem=xdg-config/autostart:create
-  - --talk-name=org.freedesktop.portal.Desktop
-  - --talk-name=org.freedesktop.portal.Documents
-  - --talk-name=org.freedesktop.portal.FileChooser
 
 modules:
   - name: saucefx
@@ -29,11 +28,13 @@ modules:
         -DSAUCEFX_WEB_DIST_DIR=/run/build/saucefx/frontend/dist
       - cmake --build build --parallel "${FLATPAK_BUILDER_N_JOBS:-$(nproc)}"
       - cmake --install build --component Runtime
+      - install -Dm0644 JUCE/LICENSE.md /app/share/licenses/$FLATPAK_ID/JUCE-LICENSE.md
     sources:
       - type: dir
         path: ../..
         skip:
           - .git
+          - .agents
           - .flatpak-builder
           - .freebuff
           - .opencode
@@ -41,6 +42,7 @@ modules:
           - build
           - docs
           - opencode.json
+          - site
           - src/build
           - src/gui/build
           - frontend/node_modules

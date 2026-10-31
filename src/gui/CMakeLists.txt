@@ -21,7 +21,7 @@
 
 cmake_minimum_required(VERSION 3.22)
 
-project(SauceFX VERSION 0.2.0 LANGUAGES C CXX)
+project(SauceFX VERSION 0.2.1 LANGUAGES C CXX)
 
 include(GNUInstallDirs)
 
@@ -115,7 +115,7 @@ add_subdirectory(${JUCE_DIR} JUCE-build)
 juce_add_gui_app(saucefxgui
     PRODUCT_NAME "SauceFX"
     COMPANY_NAME "saucefx"
-    BUNDLE_ID com.saucefx
+    BUNDLE_ID io.github.sauucee.SauceFX
     NEEDS_WEB_BROWSER TRUE
     # needs the desktop's clipboard/wm flags; defaults are fine
 )
@@ -133,6 +133,7 @@ target_compile_definitions(saucefxgui PRIVATE
     PT_DSP_BUILD=PT_DSP_DFX
     PT_NON_MFC
     NDEBUG
+    SAUCEFX_VERSION="${PROJECT_VERSION}"
     SAUCEFX_INSTALL_DATADIR="${CMAKE_INSTALL_FULL_DATADIR}/saucefx"
 )
 
@@ -180,33 +181,34 @@ install(DIRECTORY "${WEB_OUTPUT_DIR}/"
     COMPONENT Runtime)
 install(DIRECTORY "${REPO_ROOT}/assets/"
     DESTINATION "${CMAKE_INSTALL_DATADIR}/saucefx/assets"
-    COMPONENT Runtime)
+    COMPONENT Runtime
+    PATTERN "Screenshots" EXCLUDE)
 install(DIRECTORY "${REPO_ROOT}/presets/"
     DESTINATION "${CMAKE_INSTALL_DATADIR}/saucefx/presets"
     COMPONENT Runtime)
 
 install(FILES
-    "${REPO_ROOT}/packaging/linux/com.saucefx.SauceFX.desktop"
+    "${REPO_ROOT}/packaging/linux/io.github.sauucee.SauceFX.desktop"
     DESTINATION "${CMAKE_INSTALL_DATADIR}/applications"
     COMPONENT Runtime)
 install(FILES
-    "${REPO_ROOT}/packaging/linux/com.saucefx.SauceFX.metainfo.xml"
+    "${REPO_ROOT}/packaging/linux/io.github.sauucee.SauceFX.metainfo.xml"
     DESTINATION "${CMAKE_INSTALL_DATADIR}/metainfo"
     COMPONENT Runtime)
 install(FILES
     "${REPO_ROOT}/assets/Images/saucefx-logo.svg"
     DESTINATION "${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps"
-    RENAME "com.saucefx.SauceFX.svg"
+    RENAME "io.github.sauucee.SauceFX.svg"
     COMPONENT Runtime)
 install(FILES
     "${REPO_ROOT}/assets/Images/saucefx-logo-128.png"
     DESTINATION "${CMAKE_INSTALL_DATADIR}/icons/hicolor/128x128/apps"
-    RENAME "com.saucefx.SauceFX.png"
+    RENAME "io.github.sauucee.SauceFX.png"
     COMPONENT Runtime)
 install(FILES
     "${REPO_ROOT}/assets/Images/saucefx-logo-512.png"
     DESTINATION "${CMAKE_INSTALL_DATADIR}/icons/hicolor/512x512/apps"
-    RENAME "com.saucefx.SauceFX.png"
+    RENAME "io.github.sauucee.SauceFX.png"
     COMPONENT Runtime)
 
 install(FILES "${REPO_ROOT}/LICENSE"

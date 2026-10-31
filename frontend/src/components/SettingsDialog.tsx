@@ -223,7 +223,7 @@ export function SettingsDialog({
 
             <footer className="settings-footer">
               <div className="settings-version">
-                <span>SauceFX 0.2.0</span>
+                <span>SauceFX {__SAUCEFX_VERSION__}</span>
                 <span className="meta-dot" aria-hidden="true" />
                 <span>AGPL-3.0</span>
               </div>

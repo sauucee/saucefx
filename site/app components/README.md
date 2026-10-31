@@ -38,11 +38,16 @@ Ready-to-install packages are attached to tagged
 ### Flatpak
 
 ```sh
-flatpak install --user ./SauceFX-0.2.0-x86_64.flatpak
-flatpak run com.saucefx.SauceFX
+flatpak install --user ./SauceFX-0.2.1-x86_64.flatpak
+flatpak run io.github.sauucee.SauceFX
 ```
 
-The bundle uses the `org.gnome.Platform//50` runtime. Flatpak will offer to
+Version 0.2.1 changed the application ID to match the GitHub namespace. If
+upgrading from the 0.2.0 bundle, export any custom presets you want to keep,
+then remove the old ID with
+`flatpak uninstall --user com.saucefx.SauceFX` before installing 0.2.1.
+
+The bundle uses the `org.gnome.Platform//51` runtime. Flatpak will offer to
 install it from Flathub if it is not already present. The Flatpak has access to
 PipeWire, your audio output, and the usual desktop portals; the Downloads
 folder is available for preset import and export.
@@ -50,14 +55,14 @@ folder is available for preset import and export.
 ### Fedora RPM
 
 ```sh
-sudo dnf install ./saucefx-0.2.0-1.fc44.x86_64.rpm
-SauceFX
+sudo dnf install --setopt=install_weak_deps=False \
+  https://github.com/sauucee/saucefx/releases/latest/download/SauceFX-x86_64.rpm
 ```
 
 The RPM installs the app under `/usr/bin/SauceFX`, shared data under
 `/usr/share/saucefx`, and a launcher and AppStream metadata for the desktop.
-Install the matching PipeWire, WebKitGTK 4.1, GTK3, and X11 packages if your
-system does not already have them; `dnf` resolves these automatically.
+DNF resolves and installs all runtime dependencies automatically; users do not
+need any compiler, development headers, Node.js, or JUCE.
 
 ## Requirements
 
@@ -124,7 +129,7 @@ packaging/flatpak/build-flatpak.sh
 
 This writes `release/SauceFX-<version>-x86_64.flatpak`. Install it with
 `flatpak install --user release/SauceFX-*.flatpak`. The manifest uses
-`org.gnome.Platform//50` / `org.gnome.Sdk//50`; install those runtimes and
+`org.gnome.Platform//51` / `org.gnome.Sdk//51`; install those runtimes and
 `flatpak-builder` (or `org.flatpak.Builder`) first. The script supports both a
 host `flatpak-builder` and the Flatpak Builder app. If you install the SDK
 per-user, install `org.freedesktop.Sdk//26.08` in the user installation too;
@@ -258,18 +263,19 @@ SauceFX** when you want to stop the engine and exit completely.
 ## Autostart
 
 **Settings -> Start at login** controls the XDG autostart entry at
-`~/.config/autostart/saucefx.desktop`. It is enabled by default. Login starts
-SauceFX with `--autostart`, hidden in the background, so the engine and virtual
-sink are ready without opening a window. Launching SauceFX normally attaches
-and shows that same instance. The hidden login instance restores the same
-selected preset and live effect/EQ session as a normal launch.
+`~/.config/autostart/saucefx.desktop`. It is disabled by default and can be
+enabled explicitly in Settings. Login then starts SauceFX with `--autostart`,
+hidden in the background, so the engine and virtual sink are ready without
+opening a window. Launching SauceFX normally attaches and shows that same
+instance. The hidden login instance restores the same selected preset and live
+effect/EQ session as a normal launch.
 
 The last output choice is remembered: if **SauceFX** was selected before exit,
 the login instance routes the default output through the virtual sink again.
 The button can be turned off at any time; the entry is removed immediately.
 
 The Flatpak build keeps this behavior by writing the host autostart entry with
-`flatpak run com.saucefx.SauceFX --autostart`; the manifest grants access to
+`flatpak run io.github.sauucee.SauceFX --autostart`; the manifest grants access to
 `~/.config/autostart` for that purpose.
 
 ## License and attribution

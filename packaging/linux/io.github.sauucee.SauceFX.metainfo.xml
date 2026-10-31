@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!-- Copyright 2026 SauceFX contributors -->
 <component type="desktop-application">
-  <id>com.saucefx.SauceFX</id>
+  <id>io.github.sauucee.SauceFX</id>
   <name>SauceFX</name>
   <summary>Sound EQ and audio enhancement for Linux</summary>
   <metadata_license>CC0-1.0</metadata_license>
@@ -22,12 +23,17 @@
       <li>Close-to-background, single-instance restore and optional login autostart</li>
     </ul>
   </description>
-  <launchable type="desktop-id">com.saucefx.SauceFX.desktop</launchable>
-  <url type="homepage">https://github.com/sussykid01/saucefx</url>
-  <url type="bugtracker">https://github.com/sussykid01/saucefx/issues</url>
-  <developer id="com.saucefx">
+  <launchable type="desktop-id">io.github.sauucee.SauceFX.desktop</launchable>
+  <url type="homepage">https://github.com/sauucee/saucefx</url>
+  <url type="bugtracker">https://github.com/sauucee/saucefx/issues</url>
+  <url type="vcs-browser">https://github.com/sauucee/saucefx</url>
+  <developer id="io.github.sauucee">
     <name>SauceFX</name>
   </developer>
+  <branding>
+    <color type="primary" scheme_preference="light">#f2486f</color>
+    <color type="primary" scheme_preference="dark">#d93f63</color>
+  </branding>
   <categories>
     <category>AudioVideo</category>
     <category>Audio</category>
@@ -41,10 +47,32 @@
     <keyword>effects</keyword>
   </keywords>
   <provides>
+    <id>com.saucefx.SauceFX.desktop</id>
     <binary>SauceFX</binary>
   </provides>
+  <replaces>
+    <id>com.saucefx.SauceFX</id>
+  </replaces>
+  <screenshots>
+    <screenshot type="default">
+      <image>https://raw.githubusercontent.com/sauucee/saucefx/3a339e1eca0a19e37e30dbbb4bf696639576166c/assets/Screenshots/saucefx-main.png</image>
+      <caption>Effects, live spectrum and 31-band equalizer</caption>
+    </screenshot>
+  </screenshots>
+  <recommends>
+    <control>keyboard</control>
+    <control>pointing</control>
+  </recommends>
+  <requires>
+    <display_length compare="ge">768</display_length>
+  </requires>
   <releases>
-    <release version="0.2.0" date="2026-10-21">
+    <release version="0.2.1" date="2026-10-31">
+      <description>
+        <p>Improves startup defaults, theme consistency and Linux packaging.</p>
+      </description>
+    </release>
+    <release version="0.2.0" date="2026-10-30">
       <description>
         <p>First packaged release with Flatpak and RPM builds.</p>
       </description>

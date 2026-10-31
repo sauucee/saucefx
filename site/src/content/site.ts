@@ -7,7 +7,7 @@
 export const REPO_URL = 'https://github.com/sauucee/saucefx';
 export const RELEASES_URL = `${REPO_URL}/releases`;
 export const LICENSE_URL = 'https://www.gnu.org/licenses/agpl-3.0.html';
-export const VERSION = '0.2.0';
+export const VERSION = '0.2.1';
 
 export const EFFECTS = [
   'Clarity',
@@ -37,7 +37,7 @@ export const STATS = [
 
 export const FLATPAK_COMMANDS = [
   `flatpak install --user ./SauceFX-${VERSION}-x86_64.flatpak`,
-  'flatpak run com.saucefx.SauceFX',
+  'flatpak run io.github.sauucee.SauceFX',
 ];
 
 export const RPM_COMMANDS = [

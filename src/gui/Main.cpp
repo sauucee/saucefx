@@ -511,7 +511,7 @@ struct GuiSettings {
 	int themeMode = 0; /* 0 = dark, 1 = light */
 	bool customAccent = false;
 	uint32_t accent = 0xffe63462u;
-	bool autostart = true; /* new/old installs default to on */
+	bool autostart = false; /* new installs opt in from Settings */
 	bool outputRouted = false; /* restore last output choice */
 };
 
@@ -702,7 +702,7 @@ static const uint32_t fx_theme_colors_[NumThemeModes][NumColors] = {
 static int fx_theme_mode_ = ThemeDark;
 static bool fx_accent_custom_ = false;
 static uint32_t fx_accent_argb_ = 0xffe63462u;
-static bool fx_autostart_enabled_ = true;
+static bool fx_autostart_enabled_ = false;
 static bool fx_output_routed_ = false;
 
 static std::array<uint32_t, NumColors> fx_active_colors_ = [] {
@@ -3353,7 +3353,7 @@ public:
 								 : "dark");
 		state->setProperty("accent", webAccentHex());
 		state->setProperty("customAccent", fx_accent_custom_);
-		state->setProperty("version", "0.2.0");
+		state->setProperty("version", SAUCEFX_VERSION);
 		return juce::var(state);
 	}
 
@@ -4761,7 +4761,7 @@ public:
 	}
 	const juce::String getApplicationVersion() override
 	{
-		return "0.2.0";
+		return SAUCEFX_VERSION;
 	}
 	bool moreThanOneInstanceAllowed() override
 	{
