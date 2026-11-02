@@ -9,17 +9,18 @@ if [ "${2:-}" != --isolated ]; then
 fi
 
 WORK=$(mktemp -d "${TMPDIR:-/tmp}/saucefx-appimage-test.XXXXXX")
+RUN_DIR=$(mktemp -d "${TMPDIR:-/tmp}/sfx-run.XXXXXX")
 PIDS=()
 cleanup() {
     local result=$?
     if [ "$result" -ne 0 ]; then cat "$WORK"/*.log >&2 || true; fi
     for pid in "${PIDS[@]}"; do kill "$pid" 2>/dev/null || true; done
     for pid in "${PIDS[@]}"; do wait "$pid" 2>/dev/null || true; done
-    rm -rf -- "$WORK"
+    rm -rf -- "$WORK" "$RUN_DIR"
 }
 trap cleanup EXIT
 
-export XDG_RUNTIME_DIR="$WORK/run" XDG_CONFIG_HOME="$WORK/config"
+export XDG_RUNTIME_DIR="$RUN_DIR" XDG_CONFIG_HOME="$WORK/config"
 export XDG_STATE_HOME="$WORK/state" XDG_DATA_HOME="$WORK/data" XDG_CACHE_HOME="$WORK/cache"
 export HOME="$WORK/home" GIO_USE_VFS=local
 export PIPEWIRE_RUNTIME_DIR="$XDG_RUNTIME_DIR"
@@ -44,8 +45,21 @@ PIDS+=("$!")
 wireplumber >"$WORK/wireplumber.log" 2>&1 &
 PIDS+=("$!")
 for ((i=0; i<100; ++i)); do if pactl info >/dev/null 2>&1; then break; fi; sleep 0.05; done
-pactl load-module module-null-sink sink_name=AppImageTestOutput >/dev/null
-pactl set-default-sink AppImageTestOutput
+# A listening Pulse socket is not enough: WirePlumber must first grant the
+# manager access to factories/default metadata (slower on busy desktops).
+MODULE=
+for ((i=0; i<100; ++i)); do
+    if MODULE=$(env PULSE_PROP=media.category=Manager pactl load-module \
+        module-null-sink sink_name=AppImageTestOutput 2>"$WORK/setup.log"); then break; fi
+    sleep 0.1
+done
+test -n "$MODULE"
+for ((i=0; i<100; ++i)); do
+    if env PULSE_PROP=media.category=Manager pactl set-default-sink AppImageTestOutput \
+        2>"$WORK/setup.log"; then break; fi
+    sleep 0.1
+done
+test "$(pactl get-default-sink)" = AppImageTestOutput
 
 # Use a directory containing spaces, and launch from unrelated cwd.
 mkdir -p "$WORK/Portable App"
@@ -82,6 +96,7 @@ grep -q 'render target: AppImageTestOutput' "$WORK/app.log"
 grep -q 'capture negotiated: 2 ch' "$WORK/app.log"
 grep -q 'libwebkit2gtk-4.1' "/proc/$APP_PID/maps"
 grep 'libwebkit2gtk-4.1' "/proc/$APP_PID/maps" | grep -F "$APPDIR_TEST/" >/dev/null
+grep 'libpipewire-0.3.so' "/proc/$APP_PID/maps" | grep -F "$APPDIR_TEST/" >/dev/null
 grep -F "Exec=\"$IMAGE\" --autostart" "$XDG_CONFIG_HOME/autostart/saucefx.desktop"
 if grep -q 'WEBKIT_DISABLE_SANDBOX' "$APPDIR_TEST/AppRun"; then
     echo 'Browser sandbox must not be disabled' >&2; exit 1

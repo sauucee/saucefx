@@ -111,6 +111,11 @@ export DEPLOY_GTK_VERSION=3
 
 # Plugins can deploy more libraries; enforce the host-runtime exclusions.
 find "$APPDIR/usr/lib" -maxdepth 1 \( -name 'libstdc++*' -o -name 'libgcc_s*' \) -delete
+# linuxdeploy's default exclusion list omits PipeWire itself. Its private
+# modules are version-coupled, so never mix bundled modules with a host library.
+PW_LIBDIR=$(pkg-config --variable=libdir libpipewire-0.3)
+install -Dm0644 "$(readlink -f "$PW_LIBDIR/libpipewire-0.3.so.0")" \
+    "$APPDIR/usr/lib/libpipewire-0.3.so.0"
 cc -shared -fPIC -O2 -Wall -Wextra $(pkg-config --cflags gio-2.0) \
     "$SCRIPT_DIR/webkit-paths.c" -ldl \
     -o "$APPDIR/usr/lib/libsaucefx-webkit-paths.so"
