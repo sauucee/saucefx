@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+APPDIR=${APPDIR:-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)}
+export APPDIR
+
+# The host's GPU drivers and C library must remain in use. Application, GTK,
+# PipeWire and WebKit libraries are provided by the AppDir.
+export LD_LIBRARY_PATH="$APPDIR/usr/lib:$APPDIR/usr/lib/x86_64-linux-gnu:$APPDIR/usr/lib/pulseaudio${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+export PATH="$APPDIR/usr/bin:$PATH"
+export SAUCEFX_ROOT="$APPDIR/usr/share/saucefx"
+export PIPEWIRE_MODULE_DIR="$APPDIR/usr/lib/pipewire-0.3"
+export SPA_PLUGIN_DIR="$APPDIR/usr/lib/spa-0.2"
+export PIPEWIRE_CONFIG_DIR="$APPDIR/usr/share/pipewire"
+export XDG_DATA_DIRS="${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
+
+for hook in "$APPDIR"/apprun-hooks/*.sh; do
+    [ ! -f "$hook" ] || source "$hook"
+done
+
+# Avoid loading unrelated GTK modules from a different distro/GTK version.
+export GTK_MODULES=
+export GIO_MODULE_DIR="$APPDIR/usr/lib/gio/modules"
+export GIO_EXTRA_MODULES=
+export GST_PLUGIN_SYSTEM_PATH_1_0=
+
+if [ ! -x /usr/bin/bwrap ] || [ ! -x /usr/bin/xdg-dbus-proxy ]; then
+    echo "SauceFX needs bubblewrap and xdg-dbus-proxy for its browser sandbox." >&2
+    echo "Install these system packages, then run the AppImage again." >&2
+    exit 1
+fi
+
+# WebKit's distro build uses /usr-relative helper/resource paths. The packager
+# relocates only those paths (not sandbox executables), relative to this cwd.
+cd -- "$APPDIR/usr"
+exec "$APPDIR/usr/bin/SauceFX" "$@"

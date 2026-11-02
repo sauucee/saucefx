@@ -458,6 +458,20 @@ bool applyAutostartSetting(bool enabled)
 		icon = imagesDir()
 			       .getChildFile("saucefx-logo-512.png")
 			       .getFullPathName();
+		if (const char *image = getenv("APPIMAGE"); image != nullptr && image[0] != '\0') {
+			juce::File portable(juce::String::fromUTF8(image));
+			if (portable.existsAsFile()) {
+				/* A mounted AppImage path disappears at exit. Login must
+				 * launch the original portable file, not /tmp/.mount_*. */
+				auto path = portable.getFullPathName()
+					.replace("\"", "\\\"").replace("%", "%%");
+				execLine = "\"" + path + "\" --autostart";
+				auto savedIcon = dataDir().getChildFile("app-icon.png");
+				if (savedIcon.getParentDirectory().createDirectory() &&
+				    juce::File(icon).copyFileTo(savedIcon))
+					icon = savedIcon.getFullPathName();
+			}
+		}
 		icon = icon.replace("\"", "\\\"");
 	}
 
