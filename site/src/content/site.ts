@@ -7,7 +7,7 @@
 export const REPO_URL = 'https://github.com/sauucee/saucefx';
 export const RELEASES_URL = `${REPO_URL}/releases`;
 export const LICENSE_URL = 'https://www.gnu.org/licenses/agpl-3.0.html';
-export const VERSION = '0.2.1';
+export const VERSION = '0.2.2';
 
 export const EFFECTS = [
   'Clarity',
@@ -47,7 +47,7 @@ export const RPM_COMMANDS = [
 export const REQUIREMENTS = [
   'Linux with PipeWire and WirePlumber, plus the PipeWire Pulse server and pactl (Fedora: pulseaudio-utils) for the virtual sink.',
   'CMake 3.22+, a C++17 compiler, make, and pkg-config.',
-  'PipeWire development headers (pipewire-devel on Fedora).',
+  'PipeWire and PulseAudio client development headers (pipewire-devel and pulseaudio-libs-devel on Fedora).',
   'X11, Xext, Xrandr, Xinerama, Xcursor, FreeType and Fontconfig development headers.',
   'Node.js ^20.19.0 or >=22.12.0 together with npm.',
   'WebKitGTK 4.1, GTK3 and libsoup3 development headers.',
@@ -55,7 +55,7 @@ export const REQUIREMENTS = [
 ];
 
 export const FEDORA_SETUP = [
-  'sudo dnf install cmake gcc-c++ make pkg-config pipewire-devel \\',
+  'sudo dnf install cmake gcc-c++ make pkg-config pipewire-devel pulseaudio-libs-devel \\',
   '  libX11-devel libXext-devel libXinerama-devel libXrandr-devel \\',
   '  libXcursor-devel libXcomposite-devel mesa-libGL-devel \\',
   '  freetype-devel fontconfig-devel \\',

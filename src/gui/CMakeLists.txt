@@ -21,7 +21,7 @@
 
 cmake_minimum_required(VERSION 3.22)
 
-project(SauceFX VERSION 0.2.1 LANGUAGES C CXX)
+project(SauceFX VERSION 0.2.2 LANGUAGES C CXX)
 
 include(GNUInstallDirs)
 
@@ -52,6 +52,7 @@ endif()
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(PIPEWIRE REQUIRED IMPORTED_TARGET libpipewire-0.3)
+pkg_check_modules(PULSE REQUIRED IMPORTED_TARGET libpulse)
 find_package(X11 REQUIRED)
 
 set(WEB_DIR "${REPO_ROOT}/frontend")
@@ -124,6 +125,7 @@ add_dependencies(saucefxgui saucefx_web_ui)
 target_sources(saucefxgui PRIVATE
     Main.cpp
     ../pwbridge/fxpw.cpp
+    ../pwbridge/outputs.cpp
 )
 
 # Same preprocess state the DSP library was compiled with (its parameter
@@ -152,6 +154,7 @@ target_link_libraries(saucefxgui PRIVATE
     X11::Xext
     ${DSP_LIB}
     PkgConfig::PIPEWIRE
+    PkgConfig::PULSE
     pthread
 )
 

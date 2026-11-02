@@ -125,6 +125,8 @@ export function OutputSelect({ options, value, onChange }: OutputSelectProps) {
                   key={option.id}
                   value={option.id}
                   label={option.label}
+                  disabled={option.available === false}
+                  title={option.label}
                   className="select-item"
                 >
                   <span className="select-item-copy">

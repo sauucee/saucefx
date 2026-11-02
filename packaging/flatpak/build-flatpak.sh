@@ -73,6 +73,7 @@ mkdir -p "$RELEASE_DIR"
 
 echo "==> Building Flatpak $VERSION for $ARCH"
 "${BUILDER[@]}" \
+    --jobs="$FLATPAK_BUILDER_N_JOBS" \
     --force-clean \
     --repo="$REPO_DIR" \
     "$BUILD_DIR" \

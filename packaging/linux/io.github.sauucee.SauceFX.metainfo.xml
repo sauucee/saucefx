@@ -67,6 +67,13 @@
     <display_length compare="ge">768</display_length>
   </requires>
   <releases>
+    <release version="0.2.2" date="2026-11-02">
+      <description>
+        <p>Detect wired headphone ports, USB audio devices and Bluetooth headsets
+        in the output menu. Switch outputs live and recover after disconnects
+        while preserving effect and equalizer settings.</p>
+      </description>
+    </release>
     <release version="0.2.1" date="2026-10-31">
       <description>
         <p>Improves startup defaults, theme consistency and Linux packaging.</p>

@@ -18,6 +18,7 @@
 #include <dfxpDefs.h>
 
 #include "fxpw.h"
+#include "outputs.h"
 
 #include <math.h>
 #include <stdarg.h>
@@ -32,8 +33,12 @@
 #include <sys/types.h>
 
 #include <condition_variable>
+#include <atomic>
+#include <memory>
 #include <mutex>
+#include <new>
 #include <thread>
+#include <unordered_map>
 
 /* ------------------------------------------------------------------ */
 /* Ring buffer: capture -> render (stereo interleaved floats)          */
@@ -42,48 +47,55 @@
 
 struct ring {
 	float buf[RING_FRAMES * 2];
-	size_t rd;          /* read index, frames */
-	size_t wr;          /* write index, frames */
+	std::atomic<size_t> rd{0}; /* consumer owns rd; producer owns wr */
+	std::atomic<size_t> wr{0};
 };
 
 static void ring_init(struct ring *r)
 {
-	r->rd = r->wr = 0;
+	r->rd.store(0);
+	r->wr.store(0);
 }
 
 static size_t ring_avail(const struct ring *r)
 {
-	return (r->wr + RING_FRAMES - r->rd) % RING_FRAMES;
+	return (r->wr.load(std::memory_order_acquire) + RING_FRAMES -
+		r->rd.load(std::memory_order_acquire)) % RING_FRAMES;
 }
 
 static size_t ring_push(struct ring *r, const float *src, size_t frames)
 {
-	size_t free_frames = (r->rd + RING_FRAMES - 1 - r->wr) % RING_FRAMES;
+	size_t wr = r->wr.load(std::memory_order_relaxed);
+	size_t free_frames = (r->rd.load(std::memory_order_acquire) +
+		RING_FRAMES - 1 - wr) % RING_FRAMES;
 
 	if (frames > free_frames)
 		frames = free_frames;
 
 	for (size_t f = 0; f < frames; f++) {
-		r->buf[r->wr * 2 + 0] = *src++;
-		r->buf[r->wr * 2 + 1] = *src++;
-		r->wr = (r->wr + 1) % RING_FRAMES;
+		r->buf[wr * 2 + 0] = *src++;
+		r->buf[wr * 2 + 1] = *src++;
+		wr = (wr + 1) % RING_FRAMES;
 	}
+	r->wr.store(wr, std::memory_order_release);
 
 	return frames;
 }
 
 static size_t ring_pop(struct ring *r, float *dst, size_t frames)
 {
-	size_t avail = ring_avail(r);
+	size_t rd = r->rd.load(std::memory_order_relaxed);
+	size_t avail = (r->wr.load(std::memory_order_acquire) + RING_FRAMES - rd) % RING_FRAMES;
 
 	if (frames > avail)
 		frames = avail;
 
 	for (size_t f = 0; f < frames; f++) {
-		dst[f * 2 + 0] = r->buf[r->rd * 2 + 0];
-		dst[f * 2 + 1] = r->buf[r->rd * 2 + 1];
-		r->rd = (r->rd + 1) % RING_FRAMES;
+		dst[f * 2 + 0] = r->buf[rd * 2 + 0];
+		dst[f * 2 + 1] = r->buf[rd * 2 + 1];
+		rd = (rd + 1) % RING_FRAMES;
 	}
+	r->rd.store(rd, std::memory_order_release);
 
 	return frames;
 }
@@ -108,8 +120,8 @@ struct FXPW {
 	std::thread worker;
 	std::mutex mtx;
 	std::condition_variable cv;
-	bool ready;            /* reached ST_RUN */
-	bool failed;
+	std::atomic<bool> ready{false}; /* reached ST_RUN */
+	std::atomic<bool> failed{false};
 	char err_buf[128];
 
 	struct pw_stream *capture;
@@ -119,15 +131,21 @@ struct FXPW {
 
 	/* graph */
 	uint32_t sink_node_id;      /* SauceFX virtual sink */
-	uint32_t out_node_id;       /* explicit --out device (0 = unset) */
-	uint32_t real_sink_node_id; /* first real Audio/Sink != virtual sink */
-	char out_name[96];
 	char sink_name[48];
-	char real_sink_name[96];
+	std::unordered_map<uint32_t, std::string> output_nodes;
+	uint32_t render_node_id;
+	bool render_failed;
+	std::atomic<bool> has_render{false};
+	std::atomic<bool> flush_render{false};
+	std::unique_ptr<saucefx::OutputMonitor> outputs;
+	std::mutex output_mutex;
+	FXPWOutputState output_state{};
+	bool restore_pending;
+	double route_retry_ms;
+	double port_retry_ms;
+	double render_retry_ms;
 	long module_index;
 
-	char orig_default[96]; /* default sink to restore on exit */
-	int did_default;       /* switched the system default this run */
 	char instance_tag[32]; /* "fxpw-<pid>-<starttime>", disambiguates our sink */
 
 	/* negotiated capture format */
@@ -172,8 +190,11 @@ static void set_error(FXPW *a, const char *msg)
 	if (a->err_buf[0] == '\0')
 		snprintf(a->err_buf, sizeof(a->err_buf), "%s", msg);
 	a->failed = true;
+	a->state = FXPW_STATE_ERROR;
 	log_info(a, "FATAL: %s", msg);
-	pw_main_loop_quit(a->loop);
+	if (a->loop != nullptr)
+		pw_main_loop_quit(a->loop);
+	a->cv.notify_all();
 }
 
 /* ------------------------------------------------------------------ */
@@ -252,7 +273,8 @@ static void capture_process(void *data)
 	}
 
 	long long cap = frames;
-	size_t wrote = ring_push(&a->ring, src, (size_t)frames);
+	size_t wrote = a->has_render.load(std::memory_order_acquire)
+		? ring_push(&a->ring, src, (size_t)frames) : 0;
 	a->frames_captured += (long long)wrote;
 	a->frames_dropped += cap - (long long)wrote;
 
@@ -304,6 +326,11 @@ static void capture_param_changed(void *data, uint32_t id, const struct spa_pod 
 static void render_process(void *data)
 {
 	FXPW *a = (FXPW *)data;
+	/* Discard queued audio on a device change. A reconnect must never play
+	 * seconds of old audio accumulated while a headset was disconnected. */
+	if (a->flush_render.exchange(false, std::memory_order_acq_rel))
+		a->ring.rd.store(a->ring.wr.load(std::memory_order_acquire),
+				std::memory_order_release);
 	struct pw_buffer *b = pw_stream_dequeue_buffer(a->render);
 
 	if (b == NULL)
@@ -342,8 +369,19 @@ static void render_process(void *data)
 	pw_stream_queue_buffer(a->render, b);
 }
 
+static void render_state_changed(void *data, enum pw_stream_state,
+				 enum pw_stream_state state, const char *error)
+{
+	auto *a = static_cast<FXPW *>(data);
+	if (state == PW_STREAM_STATE_ERROR) {
+		a->render_failed = true;
+		log_info(a, "output stream unavailable: %s", error != nullptr ? error : "unknown error");
+	}
+}
+
 static const struct pw_stream_events render_events = {
 	PW_VERSION_STREAM_EVENTS,
+	.state_changed = render_state_changed,
 	.process = render_process,
 };
 
@@ -369,24 +407,10 @@ static void on_global(void *data, uint32_t id, uint32_t permissions,
 		log_info(a, "virtual sink node %u (%s)", id, name);
 	}
 
-	if (a->out_node_id == 0 && a->out_name[0] != '\0' &&
-	    strcmp(name, a->out_name) == 0) {
-		a->out_node_id = id;
-		log_info(a, "output node %u (%s)", id, name);
-	}
-
-	/* Remember the first real output device so the render stream can be
-	 * pinned to it. Without this the render stream connects to "the
-	 * default sink" - and as soon as routing makes the VIRTUAL sink the
-	 * default, the DSP output loops back into its own capture (silent
-	 * speakers, then saturating feedback = static once un-routed). */
-	if (a->real_sink_node_id == 0 && media_class != NULL &&
+	if (media_class != NULL &&
 	    strcmp(media_class, "Audio/Sink") == 0 &&
 	    strcmp(name, a->sink_name) != 0) {
-		a->real_sink_node_id = id;
-		snprintf(a->real_sink_name, sizeof(a->real_sink_name), "%s",
-			 name);
-		log_info(a, "real output node %u (%s)", id, name);
+		a->output_nodes[id] = name;
 	}
 }
 
@@ -403,11 +427,7 @@ static void on_global_remove(void *data, uint32_t id)
 		set_error(a, "virtual sink disappeared (module killed?)");
 		return;
 	}
-	if (a->out_node_id != 0 && id == a->out_node_id) {
-		a->out_node_id = 0;
-		log_info(a, "render target node disappeared; "
-			    "stream follows the current route");
-	}
+	a->output_nodes.erase(id);
 }
 
 static const struct pw_registry_events registry_events = {
@@ -418,31 +438,6 @@ static const struct pw_registry_events registry_events = {
 
 /* ------------------------------------------------------------------ */
 /* virtual sink lifecycle (pactl / pipewire-pulse)                     */
-
-static void set_default_sink(FXPW *a, const char *name)
-{
-	char cmd[160];
-
-	snprintf(cmd, sizeof(cmd), "pactl set-default-sink %s 2>/dev/null", name);
-	if (!system(cmd))
-		log_info(a, "default sink -> '%s'", name);
-}
-
-static char *get_default_sink(void)
-{
-	static char name[96];
-
-	FILE *p = popen("pactl get-default-sink", "r");
-	if (p == NULL)
-		return NULL;
-	if (fgets(name, sizeof(name), p) == NULL) {
-		pclose(p);
-		return NULL;
-	}
-	pclose(p);
-	name[strcspn(name, "\r\n")] = '\0';
-	return name;
-}
 
 /*
  * Our pulse module rows look like:
@@ -630,19 +625,134 @@ static int spawn_null_sink(FXPW *a)
 /* ------------------------------------------------------------------ */
 /* state machine (runs on the pw loop via timer)                       */
 
-static void connect_streams(FXPW *a)
+static const spa_pod *stream_format(spa_pod_builder &builder)
 {
-	uint8_t pod[1024];
-	struct spa_pod_builder b = SPA_POD_BUILDER_INIT(pod, sizeof(pod));
-	const struct spa_pod *params[1];
-	struct spa_audio_info_raw info;
-	spa_zero(info);
+	struct spa_audio_info_raw info{};
 	info.format = SPA_AUDIO_FORMAT_F32;
 	info.channels = 2;
 	info.rate = 0;
 	info.position[0] = SPA_AUDIO_CHANNEL_FL;
 	info.position[1] = SPA_AUDIO_CHANNEL_FR;
-	params[0] = spa_format_audio_raw_build(&b, SPA_PARAM_EnumFormat, &info);
+	return spa_format_audio_raw_build(&builder, SPA_PARAM_EnumFormat, &info);
+}
+
+static void disconnect_render(FXPW *a)
+{
+	a->has_render.store(false, std::memory_order_release);
+	if (a->render != nullptr) {
+		spa_hook_remove(&a->render_listener);
+		pw_stream_set_active(a->render, false);
+		pw_stream_destroy(a->render);
+		a->render = nullptr;
+	}
+	a->render_node_id = 0;
+}
+
+static void connect_render(FXPW *a, const std::string &name, uint32_t id)
+{
+	disconnect_render(a);
+	a->render_failed = false;
+	a->render_retry_ms = a->clock_ms + 1000.0;
+	/* The default is often our own virtual sink. Neither WirePlumber's
+	 * default changes nor unplugging a headset may send DSP output there. */
+	auto *props = pw_properties_new(
+		PW_KEY_MEDIA_TYPE, "Audio",
+		PW_KEY_MEDIA_CATEGORY, "Playback",
+		PW_KEY_NODE_NAME, "saucefx.render",
+		PW_KEY_TARGET_OBJECT, name.c_str(),
+		"node.dont-move", "true",
+		"node.dont-fallback", "true",
+		NULL);
+	a->render = pw_stream_new(a->core, "SauceFX - render", props);
+	if (a->render == nullptr)
+		return;
+	spa_zero(a->render_listener);
+	pw_stream_add_listener(a->render, &a->render_listener, &render_events, a);
+	uint8_t pod[1024];
+	spa_pod_builder builder = SPA_POD_BUILDER_INIT(pod, sizeof(pod));
+	const spa_pod *params[] = {stream_format(builder)};
+	a->flush_render.store(true, std::memory_order_release);
+	if (pw_stream_connect(a->render, PW_DIRECTION_OUTPUT, id,
+		static_cast<pw_stream_flags>(PW_STREAM_FLAG_AUTOCONNECT |
+			PW_STREAM_FLAG_MAP_BUFFERS | PW_STREAM_FLAG_RT_PROCESS),
+		params, 1) < 0) {
+		disconnect_render(a);
+		return;
+	}
+	a->render_node_id = id;
+	a->has_render.store(true, std::memory_order_release);
+	log_info(a, "render target: %s (node %u)", name.c_str(), id);
+}
+
+static void update_output(FXPW *a)
+{
+	if (a->capture == nullptr)
+		return;
+	auto snapshot = a->outputs->snapshot();
+	std::lock_guard<std::mutex> lock(a->output_mutex);
+	auto &state = a->output_state;
+	const auto *target = saucefx::chooseOutput(snapshot, state.preferred_name,
+						  state.preferred_port);
+	uint32_t id = 0;
+	if (target != nullptr)
+		for (const auto &node : a->output_nodes)
+			if (node.second == target->name) {
+				id = node.first;
+				break;
+			}
+	if (id == 0) {
+		if (a->render != nullptr)
+			log_info(a, "waiting for an available audio output");
+		disconnect_render(a);
+		state.active_name[0] = state.active_port[0] = '\0';
+	} else {
+		if (id != a->render_node_id || a->render_failed) {
+			if (!a->render_failed || a->clock_ms >= a->render_retry_ms)
+				connect_render(a, target->name, id);
+		}
+		if (a->render_node_id != 0) {
+			snprintf(state.active_name, sizeof(state.active_name), "%s", target->name.c_str());
+			snprintf(state.active_port, sizeof(state.active_port), "%s", target->activePort.c_str());
+		}
+		/* A remembered jack can return on the same ALSA sink, or after
+		 * a Bluetooth profile switch recreates its sink. */
+		std::string port;
+		if (target->name == state.preferred_name &&
+		    state.preferred_port[0] != '\0' && target->available(state.preferred_port))
+			port = state.preferred_port;
+		else if (!target->ports.empty() && !target->available(target->activePort)) {
+			const saucefx::OutputPort *best = nullptr;
+			for (const auto &p : target->ports)
+				if (p.available && (best == nullptr || p.priority > best->priority))
+					best = &p;
+			if (best != nullptr)
+				port = best->name;
+		}
+		if (!port.empty() && port != target->activePort && a->clock_ms >= a->port_retry_ms) {
+			a->outputs->requestPort(target->name, port);
+			a->port_retry_ms = a->clock_ms + 1000.0;
+		}
+	}
+	if (snapshot.connected && a->clock_ms >= a->route_retry_ms) {
+		if (state.routed && snapshot.defaultSink != a->sink_name) {
+			/* An OS headset/default change updates automaticSink. Keep
+			 * system streams going through the processor after retargeting. */
+			a->outputs->requestDefault(a->sink_name);
+			a->route_retry_ms = a->clock_ms + 1000.0;
+		} else if (!state.routed && a->restore_pending && target != nullptr) {
+			a->outputs->requestDefault(target->name);
+			a->route_retry_ms = a->clock_ms + 1000.0;
+			if (snapshot.defaultSink != a->sink_name)
+				a->restore_pending = false;
+		}
+	}
+}
+
+static void connect_streams(FXPW *a)
+{
+	uint8_t pod[1024];
+	spa_pod_builder builder = SPA_POD_BUILDER_INIT(pod, sizeof(pod));
+	const spa_pod *params[] = {stream_format(builder)};
 
 	/* Capture: pinned to the SauceFX sink's monitor. "node.dont-move"
 	 * keeps WirePlumber's default metadata ("target.node = -1" = follow
@@ -651,44 +761,21 @@ static void connect_streams(FXPW *a)
 	struct pw_properties *pc = pw_properties_new(
 		PW_KEY_MEDIA_TYPE, "Audio",
 		PW_KEY_MEDIA_CATEGORY, "Capture",
+		PW_KEY_NODE_NAME, "saucefx.capture",
 		PW_KEY_STREAM_CAPTURE_SINK, "true",
 		PW_KEY_TARGET_OBJECT, a->sink_name,
 		"node.dont-move", "true",
+		"node.dont-fallback", "true",
 		NULL);
 	a->capture = pw_stream_new(a->core, "SauceFX - capture", pc);
 
-	/* Render: pinned to a REAL output device (never the virtual sink,
-	 * and never "the default" - routing moves the default onto the
-	 * virtual sink, which must not drag the render stream with it).
-	 * "node.dont-move" = WirePlumber may not override a defined target
-	 * with its default-routing metadata. */
-	const char *ren_name = a->out_name[0] != '\0' ? a->out_name
-			     : a->real_sink_name[0] ? a->real_sink_name
-			     : NULL;
-	struct pw_properties *pr = pw_properties_new(
-		PW_KEY_MEDIA_TYPE, "Audio",
-		PW_KEY_MEDIA_CATEGORY, "Playback",
-		"node.dont-move", "true",
-		NULL);
-	if (ren_name != NULL)
-		pw_properties_set(pr, PW_KEY_TARGET_OBJECT, ren_name);
-	a->render = pw_stream_new(a->core, "SauceFX - render", pr);
-
-	/* NOTE on stream naming: WirePlumber's stream-properties state
-	 * replays previously saved volumes by media name. The old names
-	 * ("fxsound-render") carry a poisoned entry from the early
-	 * feedback-loop episode (0.19); unique display names keep user
-	 * volume intent working without ever matching stale entries. */
-
-	if (a->capture == NULL || a->render == NULL) {
+	if (a->capture == NULL) {
 		set_error(a, "pw_stream_new failed");
 		return;
 	}
 
 	spa_zero(a->capture_listener);
 	pw_stream_add_listener(a->capture, &a->capture_listener, &capture_events, a);
-	spa_zero(a->render_listener);
-	pw_stream_add_listener(a->render, &a->render_listener, &render_events, a);
 
 	if (pw_stream_connect(a->capture, PW_DIRECTION_INPUT, a->sink_node_id,
 			      (enum pw_stream_flags)(PW_STREAM_FLAG_AUTOCONNECT |
@@ -699,26 +786,9 @@ static void connect_streams(FXPW *a)
 		return;
 	}
 
-	/* Render to the pinned real device: --out, else the original default
-	 * when routing changed it, else the first real sink. PW_ID_ANY only
-	 * as a last resort (unset). */
-	uint32_t ren_target = a->out_node_id ? a->out_node_id
-			    : a->real_sink_node_id ? a->real_sink_node_id
-			    : PW_ID_ANY;
-	log_info(a, "render target: %s (node %u)",
-		 ren_name != NULL ? ren_name : "(unpinned default)", ren_target);
-	if (pw_stream_connect(a->render, PW_DIRECTION_OUTPUT, ren_target,
-			      (enum pw_stream_flags)(PW_STREAM_FLAG_AUTOCONNECT |
-						     PW_STREAM_FLAG_MAP_BUFFERS |
-						     PW_STREAM_FLAG_RT_PROCESS),
-			      params, 1) < 0) {
-		set_error(a, "render pw_stream_connect failed");
-		return;
-	}
-
 	a->state = FXPW_STATE_PREFILL;
 	a->clock_ms = 0.0;
-	log_info(a, "capture+render connected; prefilling %d frames...",
+	log_info(a, "capture connected; prefilling %d frames...",
 		 PREFILL_FRAMES);
 }
 
@@ -729,11 +799,6 @@ static void timer_tick(FXPW *a, uint64_t expirations)
 	switch (a->state) {
 	case FXPW_STATE_WAIT:
 		if (a->sink_node_id != 0) {
-			if (a->out_name[0] != '\0' && a->out_node_id == 0)
-				break;   /* still hunting the --out node */
-			if (a->out_name[0] == '\0' &&
-			    a->real_sink_node_id == 0)
-				break;   /* no real output seen yet */
 			a->state = FXPW_STATE_CONNECT;
 			connect_streams(a);
 		} else if (a->clock_ms > 5000.0) {
@@ -770,6 +835,8 @@ static void timer_tick(FXPW *a, uint64_t expirations)
 		}
 		break;
 	}
+	if (a->state != FXPW_STATE_ERROR)
+		update_output(a);
 }
 
 /* ------------------------------------------------------------------ */
@@ -818,11 +885,7 @@ static void bridge_thread_main(FXPW *a)
 		set_error(a, "pipeline stopped before running");
 
 out:
-	if (a->render) {
-		pw_stream_set_active(a->render, false);
-		pw_stream_destroy(a->render);
-		a->render = NULL;
-	}
+	disconnect_render(a);
 	if (a->capture) {
 		pw_stream_set_active(a->capture, false);
 		pw_stream_destroy(a->capture);
@@ -862,10 +925,9 @@ extern "C" FXPW *fxpw_start(const char *sink_name, const wchar_t *preset_path,
 {
 	FXPW *a;
 
-	/* Zero the plain-C parts first, then construct the C++ members on
-	 * top (same ordering rule the CLI used: DfxDsp must be constructed
-	 * after the memset, never wiped by it). */
-	a = (FXPW *)calloc(1, sizeof(FXPW));
+	/* Value-initialize the C fields and construct the C++ synchronization,
+	 * strings and device monitor normally. calloc cannot construct them. */
+	a = new (std::nothrow) FXPW{};
 	if (a == NULL) {
 		if (err) snprintf(err, errsz, "out of memory");
 		return NULL;
@@ -877,9 +939,10 @@ extern "C" FXPW *fxpw_start(const char *sink_name, const wchar_t *preset_path,
 	snprintf(a->sink_name, sizeof(a->sink_name), "%s",
 		 sink_name != NULL ? sink_name : "SauceFX");
 	if (out_name != NULL)
-		snprintf(a->out_name, sizeof(a->out_name), "%s", out_name);
+		snprintf(a->output_state.preferred_name, sizeof(a->output_state.preferred_name), "%s", out_name);
 	a->bypass = bypass != 0;
 	a->stats = stats != 0;
+	a->quiet = quiet != 0;
 	a->power_on = true;
 	a->state = FXPW_STATE_WAIT;
 	a->make_default = make_default != 0;
@@ -889,44 +952,23 @@ extern "C" FXPW *fxpw_start(const char *sink_name, const wchar_t *preset_path,
 		a->pending_preset = true;
 
 	a->dsp = new DfxDsp;
+	a->outputs = std::make_unique<saucefx::OutputMonitor>(a->sink_name);
+	std::string outputError;
+	if (!a->outputs->start(outputError)) {
+		if (err && errsz > 0)
+			snprintf(err, errsz, "%s", outputError.c_str());
+		delete a->dsp;
+		delete a;
+		return nullptr;
+	}
+	a->output_state.routed = a->outputs->snapshot().defaultSink == a->sink_name;
 
 	if (spawn_null_sink(a) != 0) {
 		if (err) snprintf(err, errsz,
 				  "failed to create virtual sink (is pipewire-pulse running?)");
 		delete a->dsp;
-		free(a);
+		delete a;
 		return NULL;
-	}
-
-	if (a->make_default) {
-		char *orig = get_default_sink();
-		if (orig != NULL) {
-			snprintf(a->orig_default, sizeof(a->orig_default), "%s", orig);
-			if (strcmp(a->orig_default, a->sink_name) != 0) {
-				a->did_default = 1;
-				set_default_sink(a, a->sink_name);
-				/* Pin the render stream to the ORIGINAL
-				 * device: it must not follow the new
-				 * default (which is the virtual sink). */
-				if (a->out_name[0] == '\0')
-					snprintf(a->out_name,
-						 sizeof(a->out_name), "%s",
-						 a->orig_default);
-			}
-		}
-	}
-
-	/* Always remember the starting default device as the restore
-	 * point for route-off (and for exit). If the default currently IS
-	 * our virtual sink (e.g. WirePlumber or a previous session left it
-	 * routed), this still records the truth captured before any of our
-	 * actions this session - the route toggle only ever touches
-	 * orig_default when it performs a fresh takeover. */
-	if (a->orig_default[0] == '\0') {
-		char *start_default = get_default_sink();
-		if (start_default != NULL)
-			snprintf(a->orig_default, sizeof(a->orig_default), "%s",
-				 start_default);
 	}
 
 	a->worker = std::thread(bridge_thread_main, a);
@@ -949,6 +991,12 @@ extern "C" FXPW *fxpw_start(const char *sink_name, const wchar_t *preset_path,
 		fxpw_stop(a);
 		return NULL;
 	}
+	if (a->make_default && fxpw_route_default(a, 1) != 0) {
+		if (err && errsz > 0)
+			snprintf(err, errsz, "cannot route system audio to SauceFX");
+		fxpw_stop(a);
+		return nullptr;
+	}
 
 	return a;
 }
@@ -962,6 +1010,12 @@ extern "C" void fxpw_stop(FXPW *h)
 		pw_main_loop_quit(h->loop);
 	if (h->worker.joinable())
 		h->worker.join();
+	/* Restore a still-connected device, not a stale Bluetooth sink name. */
+	auto snapshot = h->outputs->snapshot();
+	if (h->output_state.routed && snapshot.defaultSink == h->sink_name)
+		if (const auto *target = saucefx::chooseOutput(snapshot,
+			h->output_state.preferred_name, h->output_state.preferred_port))
+			h->outputs->setDefault(target->name);
 
 	if (h->module_index > 0) {
 		/* Only unload if the module row still carries OUR tag:
@@ -994,13 +1048,8 @@ extern "C" void fxpw_stop(FXPW *h)
 				 h->module_index);
 		}
 	}
-	if (h->did_default) {
-		set_default_sink(h, h->orig_default);
-		h->did_default = 0;
-	}
-
 	delete h->dsp;
-	free(h);
+	delete h;
 }
 
 extern "C" int fxpw_load_preset(FXPW *h, const wchar_t *path)
@@ -1129,39 +1178,20 @@ extern "C" int fxpw_route_default(FXPW *h, int on)
 {
 	if (h == NULL)
 		return -1;
-
-	if (on) {
-		char *cur = get_default_sink();
-		if (cur == NULL)
+	std::lock_guard<std::mutex> lock(h->output_mutex);
+	auto snapshot = h->outputs->snapshot();
+	if (on != 0) {
+		if (!h->outputs->setDefault(h->sink_name))
 			return -1;
-		if (strcmp(cur, h->sink_name) == 0) {
-			/* The default is already ours (leftover routing from
-			 * an earlier session, or the user's own doing).
-			 * Nothing to flip - but we ARE routed, so remember
-			 * the restore claim; otherwise toggle-off would be
-			 * a no-op and the system would stay on the virtual
-			 * sink forever. */
-			h->did_default = 1;
-			return 0;
-		}
-		/* Fresh takeover: the current default is the restore point. */
-		snprintf(h->orig_default, sizeof(h->orig_default), "%s", cur);
-		h->did_default = 1;
-		set_default_sink(h, h->sink_name);
-		return 0;
-	}
-
-	/* OFF: restore the real device default, unconditionally when this
-	 * session took it over, and additionally heal the leftover case
-	 * where the default quietly stayed on our virtual sink even though
-	 * this session never routed (start-of-session capture). */
-	if (h->did_default) {
-		set_default_sink(h, h->orig_default);
-		h->did_default = 0;
-	} else if (h->orig_default[0] != '\0') {
-		char *cur = get_default_sink();
-		if (cur != NULL && strcmp(cur, h->sink_name) == 0)
-			set_default_sink(h, h->orig_default);
+		h->output_state.routed = 1;
+		h->restore_pending = false;
+	} else {
+		const auto *target = saucefx::chooseOutput(snapshot,
+			h->output_state.preferred_name, h->output_state.preferred_port);
+		if (target != nullptr && !h->outputs->setDefault(target->name))
+			return -1;
+		h->output_state.routed = 0;
+		h->restore_pending = target == nullptr;
 	}
 	return 0;
 }
@@ -1170,8 +1200,75 @@ extern "C" int fxpw_is_routed_default(FXPW *h)
 {
 	if (h == NULL)
 		return 0;
-	char *cur = get_default_sink();
-	return (cur != NULL && strcmp(cur, h->sink_name) == 0) ? 1 : 0;
+	std::lock_guard<std::mutex> lock(h->output_mutex);
+	return h->output_state.routed;
+}
+
+extern "C" size_t fxpw_get_outputs(FXPW *h, FXPWOutput *outputs, size_t capacity)
+{
+	if (h == nullptr)
+		return 0;
+	auto snapshot = h->outputs->snapshot();
+	size_t count = 0;
+	for (const auto &device : snapshot.devices) {
+		auto add = [&](const saucefx::OutputPort *port) {
+			if (outputs != nullptr && count < capacity) {
+				auto &entry = outputs[count];
+				entry = {};
+				snprintf(entry.name, sizeof(entry.name), "%s", device.name.c_str());
+				snprintf(entry.description, sizeof(entry.description), "%s", device.description.c_str());
+				entry.available = snapshot.connected && (port == nullptr || port->available);
+				if (port != nullptr) {
+					snprintf(entry.port, sizeof(entry.port), "%s", port->name.c_str());
+					snprintf(entry.port_description, sizeof(entry.port_description), "%s", port->description.c_str());
+				}
+			}
+			++count;
+		};
+		if (device.ports.empty())
+			add(nullptr);
+		else
+			for (const auto &port : device.ports)
+				add(&port);
+	}
+	return count;
+}
+
+extern "C" void fxpw_get_output_state(FXPW *h, FXPWOutputState *state)
+{
+	if (state == nullptr)
+		return;
+	*state = {};
+	if (h == nullptr)
+		return;
+	std::lock_guard<std::mutex> lock(h->output_mutex);
+	*state = h->output_state;
+}
+
+extern "C" int fxpw_set_output(FXPW *h, const char *name, const char *port)
+{
+	if (h == nullptr)
+		return -1;
+	std::string wanted = name != nullptr ? name : "";
+	std::string wantedPort = port != nullptr ? port : "";
+	if (wanted == h->sink_name || wanted == "SauceFX" || wanted == "auto_null" ||
+	    wanted.find_first_of("\r\n") != std::string::npos ||
+	    wantedPort.find_first_of("\r\n") != std::string::npos ||
+	    wanted.size() >= sizeof(h->output_state.preferred_name) ||
+	    wantedPort.size() >= sizeof(h->output_state.preferred_port))
+		return -1;
+	if (wanted.empty())
+		wantedPort.clear();
+	std::lock_guard<std::mutex> lock(h->output_mutex);
+	auto snapshot = h->outputs->snapshot();
+	for (const auto &device : snapshot.devices)
+		if (device.name == wanted && !wantedPort.empty() &&
+		    device.available(wantedPort) && device.activePort != wantedPort)
+			if (!h->outputs->setPort(wanted, wantedPort))
+				return -1;
+	snprintf(h->output_state.preferred_name, sizeof(h->output_state.preferred_name), "%s", wanted.c_str());
+	snprintf(h->output_state.preferred_port, sizeof(h->output_state.preferred_port), "%s", wantedPort.c_str());
+	return 0;
 }
 
 extern "C" void fxpw_get_spectrum(FXPW *h, float *bands, int count)

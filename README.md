@@ -37,14 +37,14 @@ Ready-to-install packages are attached to tagged
 ### Flatpak
 
 ```sh
-flatpak install --user ./SauceFX-0.2.1-x86_64.flatpak
+flatpak install --user ./SauceFX-0.2.2-x86_64.flatpak
 flatpak run io.github.sauucee.SauceFX
 ```
 
 Version 0.2.1 changed the application ID to match the GitHub namespace. If
 upgrading from the 0.2.0 bundle, export any custom presets you want to keep,
 then remove the old ID with
-`flatpak uninstall --user com.saucefx.SauceFX` before installing 0.2.1.
+`flatpak uninstall --user com.saucefx.SauceFX` before installing 0.2.1 or later.
 
 The bundle uses the `org.gnome.Platform//51` runtime. Flatpak will offer to
 install it from Flathub if it is not already present. The Flatpak has access to
@@ -79,7 +79,9 @@ RPM users do not need to install them manually.
 - Linux with PipeWire and WirePlumber, plus the PipeWire Pulse server and
   `pactl` (Fedora: `pulseaudio-utils`) for the virtual sink.
 - CMake 3.22+, a C++17 compiler, `make`, and `pkg-config`.
-- PipeWire development headers (`pipewire-devel` on Fedora).
+- PipeWire and PulseAudio client development headers (`pipewire-devel` and
+  `pulseaudio-libs-devel` on Fedora). The client connects to pipewire-pulse for
+  device discovery; it does not replace PipeWire with a PulseAudio daemon.
 - X11, Xext, Xrandr, Xinerama, Xcursor, FreeType and Fontconfig development
   headers.
 - Node.js `^20.19.0` or `>=22.12.0` together with npm.
@@ -89,7 +91,7 @@ RPM users do not need to install them manually.
 On Fedora:
 
 ```sh
-sudo dnf install cmake gcc-c++ make pkg-config pipewire-devel \
+sudo dnf install cmake gcc-c++ make pkg-config pipewire-devel pulseaudio-libs-devel \
   libX11-devel libXext-devel libXinerama-devel libXrandr-devel \
   libXcursor-devel libXcomposite-devel mesa-libGL-devel \
   freetype-devel fontconfig-devel \
@@ -112,7 +114,7 @@ sibling path (`../deps/JUCE`), the `JUCE_DIR` argument can be omitted:
 
 ```sh
 cmake -S src/gui -B src/gui/build -DJUCE_DIR=/path/to/JUCE
-cmake --build src/gui/build -j
+cmake --build src/gui/build -j2
 ```
 
 The realtime CLI bridge is optional and can be built with:
@@ -120,6 +122,13 @@ The realtime CLI bridge is optional and can be built with:
 ```sh
 make -C src rt
 ```
+
+Run the native regressions with `make -C src -j2 test`. Output hot-plug tests
+start a private PipeWire/Pulse server and WirePlumber session; they require
+`python3` and `dbus-run-session` and do not change the desktop's audio routing.
+The frontend device-menu regression runs with `npm --prefix frontend test`
+after installing its test browser once with
+`cd frontend && npx playwright install chromium`.
 
 ## Packaging (maintainers)
 
@@ -184,6 +193,25 @@ packages place them in `/usr/share/saucefx` (RPM) or `/app/share/saucefx`
 
 Play audio into the `SauceFX` virtual sink, or use the output list in the app to
 route system audio into it.
+
+### Audio outputs and headsets
+
+The **Output** menu lists the devices and ports reported by PipeWire, including
+analog **Headphones**, USB audio interfaces and connected Bluetooth headsets.
+Wired headphones commonly share the built-in sound card's sink and appear as a
+separate port. Unavailable ports are marked **Not connected**.
+
+- **Automatic (SauceFX)** processes system audio and follows physical output
+  changes, including newly connected USB/Bluetooth devices.
+- Selecting a named device processes audio through that output and remembers
+  the choice. If it disconnects, SauceFX temporarily uses another available
+  output and returns to the selected device when it reconnects.
+- **System audio** restores unprocessed output. The power switch can also
+  bypass the effects while keeping the selected routing.
+
+Device changes refresh the menu without restarting the app or resetting EQ and
+effects. Pair and connect wireless headsets in the desktop's Bluetooth settings
+first; SauceFX lists outputs provided by Linux rather than pairing devices.
 
 ### Frontend development
 

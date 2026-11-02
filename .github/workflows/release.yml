@@ -25,7 +25,7 @@ jobs:
         run: |
           dnf install -y \
             cmake gcc-c++ make pkgconf-pkg-config \
-            pipewire-devel libX11-devel libXext-devel libXinerama-devel \
+            pipewire-devel pulseaudio-libs-devel libX11-devel libXext-devel libXinerama-devel \
             libXrandr-devel libXcursor-devel libXcomposite-devel \
             freetype-devel fontconfig-devel mesa-libGL-devel \
             webkit2gtk4.1-devel gtk3-devel libsoup3-devel \

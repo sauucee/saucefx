@@ -237,18 +237,19 @@ export interface OutputOption {
   id: string
   label: string
   detail: string
+  available?: boolean
 }
 
 export const OUTPUTS: OutputOption[] = [
   {
     id: 'system',
     label: 'System audio',
-    detail: 'Default output device',
+    detail: 'Unprocessed system output',
   },
   {
     id: 'saucefx',
-    label: 'SauceFX',
-    detail: 'Virtual output device',
+    label: 'Automatic (SauceFX)',
+    detail: 'Follows connected audio devices',
   },
 ]
 

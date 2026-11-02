@@ -11,9 +11,11 @@ import {
   hasHost,
   hostCommand,
   initialHostValue,
+  onNativeOutputs,
   onNativeState,
   onNativeToast,
   type NativeState,
+  type NativeOutputs,
 } from './bridge'
 import {
   ACCENT_STORAGE_KEY,
@@ -25,6 +27,7 @@ import {
   accentIdFor,
   getAccent,
   type AccentId,
+  type OutputOption,
   type Preset,
   type PresetOption,
   type ThemeMode,
@@ -166,6 +169,7 @@ function App() {
   const [accentHex, setAccentHex] = useState<string>(loadAccentHex)
   const [power, setPower] = useState(true)
   const [output, setOutput] = useState('system')
+  const [outputOptions, setOutputOptions] = useState<OutputOption[]>(OUTPUTS)
   const [previewCustomPresets, setPreviewCustomPresets] = useState<Preset[]>(
     loadCustomPresets,
   )
@@ -228,6 +232,22 @@ function App() {
   useEffect(() => {
     if (!hasHost()) return
 
+    const receiveOutputs = (state: NativeOutputs) => {
+      if (Array.isArray(state.outputs)) {
+        const options = state.outputs.filter(
+          (option): option is OutputOption =>
+            option !== null &&
+            typeof option === 'object' &&
+            typeof option.id === 'string' && option.id.length > 0 &&
+            typeof option.label === 'string' &&
+            typeof option.detail === 'string',
+        )
+        if (options.length > 0) setOutputOptions(options)
+      }
+      setOutput(typeof state.output === 'string' && state.output.length > 0
+        ? state.output : 'system')
+    }
+
     const unsubscribeState = onNativeState((state: NativeState) => {
       const nextPresets = presetOptionsFrom(state.presets)
       if (nextPresets) setNativePresets(nextPresets)
@@ -235,7 +255,7 @@ function App() {
       const nextEffects = numberArray(state.effects, 5)
       const nextEq = numberArray(state.eq, 31)
       setPower(Boolean(state.power))
-      setOutput(state.output === 'saucefx' ? 'saucefx' : 'system')
+      receiveOutputs(state)
       setPresetId(
         typeof state.presetId === 'string' && state.presetId.length > 0
           ? state.presetId
@@ -255,6 +275,10 @@ function App() {
       )
     })
 
+    // Device/port hot-plug updates are independent of the sound settings.
+    // Replacing the full native state here would clear unsaved EQ edits.
+    const unsubscribeOutputs = onNativeOutputs(receiveOutputs)
+
     const unsubscribeToast = onNativeToast((message) => {
       if (typeof message === 'string' && message.length > 0) showToast(message)
     })
@@ -263,6 +287,7 @@ function App() {
 
     return () => {
       unsubscribeState()
+      unsubscribeOutputs()
       unsubscribeToast()
     }
   }, [])
@@ -451,7 +476,7 @@ function App() {
             disabled={!power}
             onChange={handlePresetChange}
           />
-          <OutputSelect options={OUTPUTS} value={output} onChange={handleOutputChange} />
+          <OutputSelect options={outputOptions} value={output} onChange={handleOutputChange} />
         </section>
 
         <Spectrum power={power} accentRgb={accentRgb} />

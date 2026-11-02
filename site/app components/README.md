@@ -38,14 +38,14 @@ Ready-to-install packages are attached to tagged
 ### Flatpak
 
 ```sh
-flatpak install --user ./SauceFX-0.2.1-x86_64.flatpak
+flatpak install --user ./SauceFX-0.2.2-x86_64.flatpak
 flatpak run io.github.sauucee.SauceFX
 ```
 
 Version 0.2.1 changed the application ID to match the GitHub namespace. If
 upgrading from the 0.2.0 bundle, export any custom presets you want to keep,
 then remove the old ID with
-`flatpak uninstall --user com.saucefx.SauceFX` before installing 0.2.1.
+`flatpak uninstall --user com.saucefx.SauceFX` before installing 0.2.1 or later.
 
 The bundle uses the `org.gnome.Platform//51` runtime. Flatpak will offer to
 install it from Flathub if it is not already present. The Flatpak has access to
@@ -69,7 +69,8 @@ need any compiler, development headers, Node.js, or JUCE.
 - Linux with PipeWire and WirePlumber, plus the PipeWire Pulse server and
   `pactl` (Fedora: `pulseaudio-utils`) for the virtual sink.
 - CMake 3.22+, a C++17 compiler, `make`, and `pkg-config`.
-- PipeWire development headers (`pipewire-devel` on Fedora).
+- PipeWire and PulseAudio client development headers (`pipewire-devel` and
+  `pulseaudio-libs-devel` on Fedora).
 - X11, Xext, Xrandr, Xinerama, Xcursor, FreeType and Fontconfig development
   headers.
 - Node.js `^20.19.0` or `>=22.12.0` together with npm.
@@ -79,7 +80,7 @@ need any compiler, development headers, Node.js, or JUCE.
 On Fedora:
 
 ```sh
-sudo dnf install cmake gcc-c++ make pkg-config pipewire-devel \
+sudo dnf install cmake gcc-c++ make pkg-config pipewire-devel pulseaudio-libs-devel \
   libX11-devel libXext-devel libXinerama-devel libXrandr-devel \
   libXcursor-devel freetype-devel fontconfig-devel \
   nodejs npm webkit2gtk4.1-devel gtk3-devel libsoup3-devel \

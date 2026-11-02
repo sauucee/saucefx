@@ -507,12 +507,17 @@ juce::Array<juce::File> findPresets()
 
 /* ---- persisted GUI settings (theme + custom accent + startup) ---- */
 
+static juce::String fx_output_device_;
+static juce::String fx_output_port_;
+
 struct GuiSettings {
 	int themeMode = 0; /* 0 = dark, 1 = light */
 	bool customAccent = false;
 	uint32_t accent = 0xffe63462u;
 	bool autostart = false; /* new installs opt in from Settings */
 	bool outputRouted = false; /* restore last output choice */
+	juce::String outputDevice;
+	juce::String outputPort;
 };
 
 GuiSettings loadGuiSettings()
@@ -551,6 +556,10 @@ GuiSettings loadGuiSettings()
 			auto v = line.fromFirstOccurrenceOf("=", false, false)
 					 .trim();
 			s.outputRouted = v.equalsIgnoreCase("saucefx");
+		} else if (line.startsWith("output-device=")) {
+			s.outputDevice = line.fromFirstOccurrenceOf("=", false, false);
+		} else if (line.startsWith("output-port=")) {
+			s.outputPort = line.fromFirstOccurrenceOf("=", false, false);
 		}
 	}
 	return s;
@@ -573,6 +582,8 @@ void saveGuiSettings(int themeMode, bool customAccent, uint32_t accent,
 	text << "autostart=" << (autostart ? "on" : "off") << "\n";
 	text << "output=" << (outputRouted ? "saucefx" : "system")
 	     << "\n";
+	text << "output-device=" << fx_output_device_ << "\n"
+	     << "output-port=" << fx_output_port_ << "\n";
 	settingsFile().replaceWithText(text, false, false, "\n");
 }
 
@@ -3060,17 +3071,12 @@ public:
 		}
 		addAndMakeVisible(presetBox);
 
-		/* output list (530,32,470,40) - the Windows playback
-		 * device selector; "SauceFX" = route system audio into
-		 * the virtual sink (exact fxpw routing semantics) */
+		/* Physical sinks and their wired/Bluetooth ports are discovered
+		 * by the bridge and refreshed while the app is running. */
 		outputBox.setJustificationType(
 			juce::Justification::centredLeft);
 		outputBox.setWantsKeyboardFocus(true);
-		outputBox.addItem("System audio", systemItemId);
-		outputBox.addItem("SauceFX", fxSoundItemId);
-		bool routed = fxpw_is_routed_default(engine) != 0;
-		outputBox.setSelectedId(routed ? fxSoundItemId : systemItemId,
-					juce::dontSendNotification);
+		refreshOutputs();
 		outputBox.addListener(this);
 		addAndMakeVisible(outputBox);
 
@@ -3290,10 +3296,10 @@ public:
 	juce::var createWebState()
 	{
 		auto *state = new juce::DynamicObject();
-		const bool routed = fxpw_is_routed_default(engine) != 0;
 		state->setProperty("power", fxpw_get_power(engine) != 0);
-		state->setProperty("output",
-				   routed ? "saucefx" : "system");
+		auto outputs = createWebOutputs();
+		state->setProperty("output", outputs["output"]);
+		state->setProperty("outputs", outputs["outputs"]);
 
 		juce::Array<juce::var> presets;
 		int selectedId = presetBox.getSelectedId();
@@ -3357,9 +3363,7 @@ public:
 		return juce::var(state);
 	}
 
-	/* Theme/accent/login changes should not persist a stale output choice
-	 * if the system default was changed outside the app while it was
-	 * running. Routing changes save themselves immediately. */
+	/* Persist processing mode separately from the remembered physical device. */
 	void saveWebSettings()
 	{
 		fx_output_routed_ = fxpw_is_routed_default(engine) != 0;
@@ -3395,24 +3399,43 @@ public:
 
 	void webSetOutput(const juce::String &id)
 	{
-		const bool wantRoute = id == "saucefx";
-		const bool current = fxpw_is_routed_default(engine) != 0;
-		if (wantRoute == current)
+		refreshOutputs();
+		auto choice = std::find_if(outputChoices_.begin(), outputChoices_.end(),
+			[&](const auto &item) { return item.id == id && item.available; });
+		if (choice == outputChoices_.end()) {
+			if (onWebNotification)
+				onWebNotification("That audio output is no longer connected.", true);
 			return;
-
-		if (fxpw_route_default(engine, wantRoute ? 1 : 0) == 0) {
-			fx_output_routed_ = wantRoute;
-			outputBox.setSelectedId(
-				wantRoute ? fxSoundItemId : systemItemId,
-				juce::dontSendNotification);
-			saveGuiSettings(fx_theme_mode_, fx_accent_custom_,
-					fx_accent_argb_,
-					fx_autostart_enabled_,
-					fx_output_routed_);
-		} else if (onWebNotification) {
-			onWebNotification("Could not change audio output.",
-					  true);
 		}
+		const auto selected = *choice;
+		FXPWOutputState previous{};
+		fxpw_get_output_state(engine, &previous);
+		int rc = 0;
+		if (id == "system") {
+			rc = fxpw_route_default(engine, 0);
+		} else {
+			rc = fxpw_set_output(engine, selected.name.toRawUTF8(), selected.port.toRawUTF8());
+			if (rc == 0)
+				rc = fxpw_route_default(engine, 1);
+		}
+		if (rc == 0) {
+			if (id != "system") {
+				fx_output_device_ = selected.name;
+				fx_output_port_ = selected.port;
+			}
+			saveWebSettings();
+		} else {
+			fxpw_set_output(engine, previous.preferred_name, previous.preferred_port);
+			if (onWebNotification)
+				onWebNotification("Could not change audio output.", true);
+		}
+		refreshOutputs();
+	}
+
+	juce::var createWebOutputs()
+	{
+		refreshOutputs();
+		return outputState_;
 	}
 
 	void webSetEffect(int index, double value)
@@ -3568,8 +3591,13 @@ private:
 	bool sessionDirty_ = false;
 	double sessionDirtyAtMs_ = 0.0;
 	juce::ComboBox outputBox;
-	const int systemItemId = 1;
-	const int fxSoundItemId = 2;
+	struct OutputChoice {
+		juce::String id, label, detail, name, port;
+		bool available = true;
+	};
+	std::vector<OutputChoice> outputChoices_;
+	juce::var outputState_;
+	juce::String outputJson_;
 	FxEffects audioControls;
 	FxEqualizer equalizer;
 	FxVisualizer meter;
@@ -3577,6 +3605,93 @@ private:
 	std::unique_ptr<FxSettingsOverlay> settings;
 	std::unique_ptr<juce::FileChooser> importChooser;
 	std::unique_ptr<juce::FileChooser> exportChooser;
+
+	static juce::String outputId(const juce::String &name, const juce::String &port)
+	{
+		return "device:" + juce::Base64::toBase64(name) + ":" + juce::Base64::toBase64(port);
+	}
+
+	void refreshOutputs()
+	{
+		std::vector<FXPWOutput> devices(fxpw_get_outputs(engine, nullptr, 0) + 4);
+		const auto count = fxpw_get_outputs(engine, devices.data(), devices.size());
+		devices.resize(std::min(count, devices.size()));
+		FXPWOutputState state{};
+		fxpw_get_output_state(engine, &state);
+		juce::String activeLabel;
+		juce::String preferredPort = juce::String::fromUTF8(state.preferred_port);
+		for (const auto &device : devices) {
+			if (strcmp(device.name, state.active_name) != 0 ||
+			    (device.port[0] != '\0' && strcmp(device.port, state.active_port) != 0))
+				continue;
+			activeLabel = juce::String::fromUTF8(device.description);
+			if (device.port_description[0] != '\0')
+				activeLabel = juce::String::fromUTF8(device.port_description) + " — " + activeLabel;
+			if (preferredPort.isEmpty() && strcmp(device.name, state.preferred_name) == 0)
+				preferredPort = juce::String::fromUTF8(device.port);
+		}
+		if (activeLabel.isEmpty())
+			activeLabel = state.active_name[0] != '\0'
+				? juce::String::fromUTF8(state.active_name) : "Waiting for an audio device";
+
+		std::vector<OutputChoice> choices{
+			{"system", "System audio", "Unprocessed system output", {}, {}, true},
+			{"saucefx", "Automatic (SauceFX)", activeLabel, {}, {}, true},
+		};
+		for (const auto &device : devices) {
+			auto name = juce::String::fromUTF8(device.name);
+			auto port = juce::String::fromUTF8(device.port);
+			auto label = juce::String::fromUTF8(device.description);
+			if (device.port_description[0] != '\0')
+				label = juce::String::fromUTF8(device.port_description) + " — " + label;
+			choices.push_back({outputId(name, port), label,
+				device.available ? "Processed by SauceFX" : "Not connected",
+				name, port, device.available != 0});
+		}
+		juce::String selected = state.routed ? "saucefx" : "system";
+		if (state.routed && state.preferred_name[0] != '\0') {
+			auto name = juce::String::fromUTF8(state.preferred_name);
+			selected = outputId(name, preferredPort);
+			auto preferred = std::find_if(choices.begin(), choices.end(),
+				[&](const auto &choice) { return choice.id == selected; });
+			if (preferred == choices.end()) {
+				auto previous = std::find_if(outputChoices_.begin(), outputChoices_.end(),
+					[&](const auto &choice) { return choice.id == selected; });
+				choices.push_back({selected,
+					previous != outputChoices_.end() ? previous->label : name,
+					"Disconnected · " + activeLabel, name, preferredPort, false});
+			} else if (!preferred->available)
+				preferred->detail = "Disconnected · " + activeLabel;
+		}
+		auto *object = new juce::DynamicObject();
+		object->setProperty("output", selected);
+		juce::Array<juce::var> options;
+		for (const auto &choice : choices) {
+			auto *entry = new juce::DynamicObject();
+			entry->setProperty("id", choice.id);
+			entry->setProperty("label", choice.label);
+			entry->setProperty("detail", choice.detail);
+			entry->setProperty("available", choice.available);
+			options.add(juce::var(entry));
+		}
+		object->setProperty("outputs", options);
+		juce::var next(object);
+		auto json = juce::JSON::toString(next, true);
+		if (json == outputJson_)
+			return;
+		outputJson_ = json;
+		outputState_ = next;
+		outputChoices_ = std::move(choices);
+		outputBox.clear(juce::dontSendNotification);
+		for (size_t i = 0; i < outputChoices_.size(); ++i) {
+			const auto &choice = outputChoices_[i];
+			int id = static_cast<int>(i) + 1;
+			outputBox.addItem(choice.label, id);
+			outputBox.setItemEnabled(id, choice.available);
+			if (choice.id == selected)
+				outputBox.setSelectedId(id, juce::dontSendNotification);
+		}
+	}
 
 	/* ---- preset library ---- */
 
@@ -3988,33 +4103,9 @@ private:
 
 		if (box == &outputBox) {
 			int ident = box->getSelectedId();
-			bool wantRoute = (ident == fxSoundItemId);
-			bool current = fxpw_is_routed_default(engine) != 0;
-			if (wantRoute != current) {
-				int rc = fxpw_route_default(
-					engine, wantRoute ? 1 : 0);
-				if (rc == 0) {
-					fx_output_routed_ = wantRoute;
-					saveGuiSettings(
-						fx_theme_mode_,
-						fx_accent_custom_,
-						fx_accent_argb_,
-						fx_autostart_enabled_,
-						fx_output_routed_);
-					logStatus(wantRoute
-							  ? "routed to SauceFX"
-							  : "system audio restored");
-				} else {
-					/* keep the combo honest if the
-					 * default-sink change failed */
-					outputBox.setSelectedId(
-						current ? fxSoundItemId
-							: systemItemId,
-						juce::dontSendNotification);
-					fprintf(stderr,
-						"saucefx: could not change "
-						"output routing\n");
-				}
+			if (ident > 0 && static_cast<size_t>(ident) <= outputChoices_.size()) {
+				auto id = outputChoices_[static_cast<size_t>(ident - 1)].id;
+				webSetOutput(id);
 			}
 			return;
 		}
@@ -4090,8 +4181,10 @@ private:
 			savePresetSessionNow();
 
 		static int tick = 0;
-		if ((tick++ % 8) == 0)
+		if ((tick++ % 8) == 0) {
 			logStatus(juce::String());
+			refreshOutputs();
+		}
 	}
 
 	JUCE_DECLARE_NON_COPYABLE(SauceFXPanel)
@@ -4208,6 +4301,7 @@ public:
 	void refreshState()
 	{
 		pushState();
+		pushOutputs();
 		pushSpectrum();
 	}
 
@@ -4233,6 +4327,7 @@ private:
       });
     },
     onState: subscribe('saucefxState'),
+    onOutputs: subscribe('saucefxOutputs'),
     onSpectrum: subscribe('saucefxSpectrum'),
     onToast: subscribe('saucefxToast')
   };
@@ -4361,7 +4456,7 @@ private:
 			pushState();
 		} else if (type == "output") {
 			panel.webSetOutput(stringValue(property(payload, "id")));
-			pushState();
+			pushOutputs(true);
 		} else if (type == "effect") {
 			panel.webSetEffect(
 				(int)doubleValue(property(payload, "index")),
@@ -4425,6 +4520,20 @@ private:
 						     values);
 	}
 
+	void pushOutputs(bool force = false)
+	{
+		if (!ready || !isShowing() || browser == nullptr)
+			return;
+		auto state = panel.createWebOutputs();
+		auto json = juce::JSON::toString(state, true);
+		if (!force && json == lastOutputs_)
+			return;
+		lastOutputs_ = json;
+		/* Device notifications must not reset the web UI's EQ/effect
+		 * baselines or discard unsaved edits. */
+		browser->emitEventIfBrowserIsVisible("saucefxOutputs", state);
+	}
+
 	void pushToast(const juce::String &message)
 	{
 		if (!ready || !isShowing() || browser == nullptr ||
@@ -4433,13 +4542,20 @@ private:
 		browser->emitEventIfBrowserIsVisible("saucefxToast", message);
 	}
 
-	void timerCallback() override { pushSpectrum(); }
+	void timerCallback() override
+	{
+		pushSpectrum();
+		if (++outputTicks_ % 15 == 0)
+			pushOutputs();
+	}
 
 	SauceFXPanel &panel;
 	juce::File root;
 	std::unique_ptr<juce::WebBrowserComponent> browser;
 	juce::Label errorLabel;
 	bool ready = false;
+	int outputTicks_ = 0;
+	juce::String lastOutputs_;
 };
 
 /* ================================================================== */
@@ -4841,6 +4957,8 @@ public:
 		auto guiSettings = loadGuiSettings();
 		fx_autostart_enabled_ = guiSettings.autostart;
 		fx_output_routed_ = guiSettings.outputRouted;
+		fx_output_device_ = guiSettings.outputDevice;
+		fx_output_port_ = guiSettings.outputPort;
 
 		/* keep the XDG entry in sync with the setting even if it
 		 * was deleted, disabled from outside, or the binary moved */
@@ -4864,7 +4982,7 @@ public:
 		juce::LookAndFeel::setDefaultLookAndFeel(look.get());
 
 		engine = fxpw_start(
-			"SauceFX", nullptr, nullptr,
+			"SauceFX", nullptr, fx_output_device_.toRawUTF8(),
 			/* make_default */ 0, /* bypass */ 0,
 			/* stats */ 0, /* quiet */ 0, err, sizeof(err));
 
@@ -4882,6 +5000,7 @@ public:
 		 * so the combo reflects the real default sink. With
 		 * autostart this is what makes a hidden launch actually
 		 * process system audio after login. */
+		fxpw_set_output(engine, fx_output_device_.toRawUTF8(), fx_output_port_.toRawUTF8());
 		if (guiSettings.outputRouted &&
 		    fxpw_route_default(engine, 1) != 0)
 			fprintf(stderr,

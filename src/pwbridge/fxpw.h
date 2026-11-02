@@ -7,7 +7,7 @@
  *
  * Threading: fxpw_start() runs the PipeWire loop (and the processAudio
  * callbacks) on its own worker thread. The fxpw_* control calls are meant
- * to be made from the caller's GUI thread WITHOUT locks, exactly like the
+ * to be made from the caller's GUI thread, exactly like the
  * Windows app (FxController mutates DfxDsp from the message thread while
  * AudioPassthru processes concurrently). Do not call fxpw_* concurrently
  * from two threads; do not call fxpw_stop twice.
@@ -64,6 +64,32 @@ int fxpw_save_preset(FXPW *h, const wchar_t *name, const wchar_t *dir);
  * the previous default on on=0). Returns 0 ok. */
 int fxpw_route_default(FXPW *h, int on);
 int fxpw_is_routed_default(FXPW *h);
+
+/* Live physical outputs. Analog jacks are ports of one sink; USB/Bluetooth
+ * devices usually have their own sink. Names, not transient numeric IDs, are
+ * used for saved selections. Entries with available=0 may be shown disabled. */
+typedef struct {
+	char name[512];
+	char description[512];
+	char port[256];
+	char port_description[512];
+	int available;
+} FXPWOutput;
+
+typedef struct {
+	char preferred_name[512]; /* empty means automatic */
+	char preferred_port[256];
+	char active_name[512];
+	char active_port[256];
+	int routed;
+} FXPWOutputState;
+
+/* Returns total entry count; copies at most capacity entries to outputs. */
+size_t fxpw_get_outputs(FXPW *h, FXPWOutput *outputs, size_t capacity);
+void fxpw_get_output_state(FXPW *h, FXPWOutputState *state);
+/* Empty name selects automatic output. A saved, currently missing device is
+ * remembered while another connected device is used until it returns. */
+int fxpw_set_output(FXPW *h, const char *name, const char *port);
 
 /* Spectrum analyzer values from the engine (per band), like the GUI
  * visualizer on Windows. bands gets 'count' floats (linear magnitude). */

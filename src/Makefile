@@ -46,7 +46,7 @@ SRCS := $(shell cat $(SRC_DIR)/sources.txt)
 OBJS := $(patsubst %,$(OBJDIR)/%,$(patsubst %.cpp,%.o,$(patsubst %.c,%.o,$(SRCS))))
 SRCDEPS := $(addprefix $(ROOT)/,$(SRCS))
 
-.PHONY: all run test test-eq-registry clean
+.PHONY: all run test test-eq-registry test-output-routing rt clean
 
 all: $(HARNESS)
 
@@ -80,27 +80,28 @@ test-eq-registry: $(EQ_REGISTRY_TEST)
 # Sink lifecycle regressions: restart reaping (SIGKILL + relaunch) and
 # live-sibling preservation. Needs pactl, plus unprivileged user/PID
 # namespaces for the restart test; scripts exit 77 when unavailable.
-test: test-eq-registry rt
+test: test-eq-registry rt test-output-routing
 	@bash $(SRC_DIR)/harness/sinkrestarttest.sh "$(abspath $(RT))"; \
 		rc=$$?; [ $$rc -eq 0 ] || [ $$rc -eq 77 ]
 	@bash $(SRC_DIR)/harness/sinklivesiblingtest.sh "$(abspath $(RT))"; \
 		rc=$$?; [ $$rc -eq 0 ] || [ $$rc -eq 77 ]
 
 # PipeWire bridge (library form + CLI). Needs
-# pipewire-devel installed.
-PW_CFLAGS := $(shell pkg-config --cflags libpipewire-0.3 2>/dev/null)
-PW_LIBS   := $(shell pkg-config --libs libpipewire-0.3 2>/dev/null)
+# pipewire-devel and pulseaudio-libs-devel installed.
+PW_CFLAGS := $(shell pkg-config --cflags libpipewire-0.3 libpulse 2>/dev/null)
+PW_LIBS   := $(shell pkg-config --libs libpipewire-0.3 libpulse 2>/dev/null)
 RT        := $(BIN)/saucefxrt
 PWDIR     := $(SRC_DIR)/pwbridge
 PWBRIDGE_LIB := $(BUILD)/libfxpw.a
+OUTPUT_ROUTING_TEST := $(BIN)/outputroutingtest
 PW_DFLAGS := -I$(PWDIR) -I$(DSP)/include -I$(DSP)/ptutil/include -I$(DSP) -I$(SRC_DIR)/include
 
 rt: $(RT)
 
-$(BUILD)/libfxpw.a: $(BUILD)/pwbridge/fxpw.o
+$(BUILD)/libfxpw.a: $(BUILD)/pwbridge/fxpw.o $(BUILD)/pwbridge/outputs.o
 	ar rcs $@ $^
 
-$(BUILD)/pwbridge/fxpw.o: $(PWDIR)/fxpw.cpp $(PWDIR)/fxpw.h $(LIB)
+$(BUILD)/pwbridge/%.o: $(PWDIR)/%.cpp $(PWDIR)/fxpw.h $(PWDIR)/outputs.h $(LIB)
 	@mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) $(DEFINES) $(PW_DFLAGS) $(PW_CFLAGS) \
 		-c -o $@ $< $(PW_LIBS)
@@ -109,6 +110,14 @@ $(RT): $(PWDIR)/saucefxrt.cpp $(PWBRIDGE_LIB) | $(BIN)
 	@mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) $(PW_DFLAGS) $(PW_CFLAGS) -o $@ $< \
 		$(PWBRIDGE_LIB) $(LIB) $(PW_LIBS) -lpthread -lm
+
+$(OUTPUT_ROUTING_TEST): $(SRC_DIR)/harness/outputroutingtest.cpp $(PWDIR)/outputs.h $(PWBRIDGE_LIB) | $(BIN)
+	$(CXX) $(CXXFLAGS) $(PW_DFLAGS) $(PW_CFLAGS) -o $@ $< \
+		$(PWBRIDGE_LIB) $(LIB) $(PW_LIBS) -lpthread -lm
+
+test-output-routing: $(OUTPUT_ROUTING_TEST)
+	@bash $(SRC_DIR)/harness/outputroutingtest.sh "$(abspath $(OUTPUT_ROUTING_TEST))"; \
+		rc=$$?; [ $$rc -eq 0 ] || [ $$rc -eq 77 ]
 
 -include $(wildcard $(OBJDIR)/*/*.d) $(wildcard $(OBJDIR)/*.d)
 

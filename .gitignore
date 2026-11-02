@@ -27,6 +27,7 @@
 # Logs and temporary files
 *.log
 *.tmp
+__pycache__/
 *.swp
 *~
 

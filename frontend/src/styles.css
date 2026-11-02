@@ -559,7 +559,19 @@ html[data-theme='light'] .select-popup {
 }
 
 .select-popup-compact {
-  width: min(240px, var(--anchor-width));
+  width: min(420px, var(--anchor-width));
+}
+
+.select-popup-compact .select-item-copy {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+}
+
+.select-popup-compact .select-item-detail {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .select-popup[data-starting-style],
@@ -600,6 +612,11 @@ html[data-theme='light'] .select-popup {
 .select-item[data-highlighted] {
   background: var(--surface-hover);
   color: var(--text);
+}
+
+.select-item[data-disabled] {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .select-item[data-selected] {

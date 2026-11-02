@@ -1,4 +1,4 @@
-import type { PresetOption, ThemeMode } from './data'
+import type { OutputOption, PresetOption, ThemeMode } from './data'
 
 export type HostCommand =
   | 'ready'
@@ -19,9 +19,13 @@ export type HostCommand =
   | 'quit'
   | 'drag'
 
-export interface NativeState {
-  power: boolean
+export interface NativeOutputs {
   output: string
+  outputs?: OutputOption[]
+}
+
+export interface NativeState extends NativeOutputs {
+  power: boolean
   presetId: string
   presets: PresetOption[]
   effects: number[]
@@ -38,6 +42,7 @@ type Unsubscribe = () => void
 interface SauceFXHost {
   command(type: HostCommand, payload?: unknown): void
   onState(listener: (state: NativeState) => void): Unsubscribe
+  onOutputs?(listener: (state: NativeOutputs) => void): Unsubscribe
   onSpectrum(listener: (bands: number[]) => void): Unsubscribe
   onToast(listener: (message: string) => void): Unsubscribe
 }
@@ -75,6 +80,14 @@ export function onNativeState(listener: (state: NativeState) => void): Unsubscri
 export function onNativeSpectrum(listener: (bands: number[]) => void): Unsubscribe {
   try {
     return window.saucefxHost?.onSpectrum(listener) ?? (() => {})
+  } catch {
+    return () => {}
+  }
+}
+
+export function onNativeOutputs(listener: (state: NativeOutputs) => void): Unsubscribe {
+  try {
+    return window.saucefxHost?.onOutputs?.(listener) ?? (() => {})
   } catch {
     return () => {}
   }
