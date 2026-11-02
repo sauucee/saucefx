@@ -54,6 +54,19 @@ mkdir -p "$WORK/Portable App"
 APPDIR_TEST="$WORK/Portable App/squashfs-root"
 mkdir -p "$XDG_STATE_HOME/saucefx"
 printf 'theme=dark\nautostart=on\noutput=saucefx\n' > "$XDG_STATE_HOME/saucefx/settings.txt"
+python3 - "$XDG_STATE_HOME/saucefx/preset-session.txt" <<'PY'
+import sys
+from pathlib import Path
+frequencies = [20, 25, 31.5, 40, 50, 63, 80, 100, 125, 160, 200, 250, 315, 400,
+    500, 630, 800, 1000, 1250, 1600, 2000, 2500, 3150, 4000, 5000, 6300, 8000,
+    10000, 12500, 16000, 20000]
+lines = ['version=1', 'preset=/tmp/old-AppImage-mount/usr/share/saucefx/presets/Factsoft/Default.fac',
+    'factory-preset=Default.fac', 'power=1', 'bands=31']
+lines += [f'effect{i}=0' for i in range(5)]
+for i, frequency in enumerate(frequencies):
+    lines += [f'eq{i}freq={frequency}', f'eq{i}gain={3 if i == 17 else 0}']
+Path(sys.argv[1]).write_text('\n'.join(lines) + '\n')
+PY
 cd "$WORK"
 APPIMAGE="$IMAGE" "$APPDIR_TEST/AppRun" >"$WORK/app.log" 2>&1 &
 APP_PID=$!
@@ -65,6 +78,7 @@ for ((i=0; i<300; ++i)); do
 done
 grep -q 'web interface ready' "$WORK/app.log"
 grep -q "startup preset 'Default' \[ok\]" "$WORK/app.log"
+grep -q 'session restored' "$WORK/app.log"
 grep -q 'render target: AppImageTestOutput' "$WORK/app.log"
 grep -q 'libwebkit2gtk-4.1' "/proc/$APP_PID/maps"
 grep 'libwebkit2gtk-4.1' "/proc/$APP_PID/maps" | grep -F "$APPDIR_TEST/" >/dev/null
@@ -72,4 +86,4 @@ grep -F "Exec=\"$IMAGE\" --autostart" "$XDG_CONFIG_HOME/autostart/saucefx.deskto
 if grep -q 'WEBKIT_DISABLE_SANDBOX' "$APPDIR_TEST/AppRun"; then
     echo 'Browser sandbox must not be disabled' >&2; exit 1
 fi
-echo "PASS: AppImage starts from a relocated directory, renders its UI, processes audio, and preserves its autostart path"
+echo "PASS: AppImage starts from a relocated directory, restores its preset session, renders its UI, processes audio, and preserves its autostart path"

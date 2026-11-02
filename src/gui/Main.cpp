@@ -622,6 +622,7 @@ PresetSession loadPresetSession()
 		return s;
 
 	int version = 0;
+	juce::String factoryPreset;
 	int effectsSeen = 0;
 	bool effectSeen[5] = {};
 	int eqFreqSeen = 0;
@@ -640,6 +641,8 @@ PresetSession loadPresetSession()
 			s.presetPath =
 				line.fromFirstOccurrenceOf("=", false, false)
 					.trim();
+		} else if (line.startsWith("factory-preset=")) {
+			factoryPreset = line.fromFirstOccurrenceOf("=", false, false).trim();
 		} else if (line.startsWith("power=")) {
 			auto v = line.fromFirstOccurrenceOf("=", false, false)
 					 .trim();
@@ -680,8 +683,18 @@ PresetSession loadPresetSession()
 
 	if (version == 1 && effectsSeen == 5 && s.eqBands >= 1 &&
 	    s.eqBands <= 32 && eqFreqSeen >= s.eqBands &&
-	    eqGainSeen >= s.eqBands)
+			eqGainSeen >= s.eqBands)
 		s.valid = true;
+
+	/* AppImage mount directories change on every launch. Retain the legacy
+	 * absolute path for older versions, but resolve factory presets by their
+	 * stable file name when the additional field is present. */
+	if (s.valid && factoryPreset.isNotEmpty() &&
+	    !factoryPreset.containsAnyOf("/\\") && factoryPreset.endsWithIgnoreCase(".fac")) {
+		auto factoryFile = presetLibraryDir().getChildFile(factoryPreset);
+		if (factoryFile.existsAsFile())
+			s.presetPath = factoryFile.getFullPathName();
+	}
 
 	return s;
 }
@@ -3218,6 +3231,9 @@ public:
 		text << "version=1\n";
 		if (currentPresetPath_.isNotEmpty())
 			text << "preset=" << currentPresetPath_ << "\n";
+		juce::File currentPreset(currentPresetPath_);
+		if (currentPreset.getParentDirectory() == presetLibraryDir())
+			text << "factory-preset=" << currentPreset.getFileName() << "\n";
 		text << "power=" << (fxpw_get_power(engine) ? "1" : "0")
 		     << "\n";
 		for (int e = 0; e < 5; e++)

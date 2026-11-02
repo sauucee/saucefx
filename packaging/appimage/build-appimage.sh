@@ -50,6 +50,8 @@ printf '%s  %s\n' 617aa77314d57c8b8e4fae9c3f0b35af7b30d5529cb69e98f64f92510ed98a
     "$TOOLS/runtime-x86_64" | sha256sum -c -
 curl -fL --retry 3 -o "$TOOLS/runtime-LICENSE" \
     https://raw.githubusercontent.com/AppImage/type2-runtime/fedfad51acc2860b2916a1eef32ba4a500ff31ef/LICENSE
+curl -fL --retry 3 -o "$TOOLS/gtk-plugin-LICENSE" \
+    https://raw.githubusercontent.com/linuxdeploy/linuxdeploy-plugin-gtk/7a3fbc31a9e5075073ff8790f26effbac5f84453/LICENSE.txt
 chmod +x "$TOOLS"/*.AppImage "$TOOLS/linuxdeploy-plugin-gtk.sh"
 
 if [ -z "${JUCE_DIR:-}" ]; then
@@ -83,6 +85,7 @@ DESTDIR="$APPDIR" cmake --install "$BUILD_DIR" --component Runtime
 ln -s ../share/saucefx/web "$APPDIR/usr/bin/web"
 install -Dm0644 "$JUCE_DIR/LICENSE.md" "$APPDIR/usr/share/licenses/saucefx/JUCE-LICENSE.md"
 install -Dm0644 "$TOOLS/runtime-LICENSE" "$APPDIR/usr/share/licenses/saucefx/AppImage-runtime-LICENSE"
+install -Dm0644 "$TOOLS/gtk-plugin-LICENSE" "$APPDIR/usr/share/licenses/saucefx/GTK-plugin-LICENSE"
 install -Dm0755 /usr/bin/pactl "$APPDIR/usr/bin/pactl"
 
 LIBDIR=$(pkg-config --variable=libdir webkit2gtk-4.1)
@@ -114,7 +117,10 @@ python3 "$SCRIPT_DIR/relocate-webkit.py" "${WEBKIT_LIBS[@]}"
 python3 "$SCRIPT_DIR/collect-licenses.py" "$APPDIR"
 
 IMAGE="$RELEASE_DIR/SauceFX-$VERSION-$ARCH.AppImage"
+TEMP_IMAGE="$IMAGE.part"
 "$TOOLS/appimagetool-x86_64.AppImage" --runtime-file "$TOOLS/runtime-x86_64" \
-    --comp gzip "$APPDIR" "$IMAGE"
+    --no-appstream --comp zstd --mksquashfs-opt=-processors --mksquashfs-opt="$JOBS" \
+    --mksquashfs-opt=-mem --mksquashfs-opt=256M "$APPDIR" "$TEMP_IMAGE"
+mv -f -- "$TEMP_IMAGE" "$IMAGE"
 chmod +x "$IMAGE"
 echo "AppImage: $IMAGE"
