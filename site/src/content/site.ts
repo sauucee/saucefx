@@ -7,7 +7,7 @@
 export const REPO_URL = 'https://github.com/sauucee/saucefx';
 export const RELEASES_URL = `${REPO_URL}/releases`;
 export const LICENSE_URL = 'https://www.gnu.org/licenses/agpl-3.0.html';
-export const VERSION = '0.2.2';
+export const VERSION = '0.2.3';
 
 export const EFFECTS = [
   'Clarity',

@@ -67,6 +67,13 @@
     <display_length compare="ge">768</display_length>
   </requires>
   <releases>
+    <release version="0.2.3" date="2026-11-02">
+      <description>
+        <p>Use familiar output device names, show the device used by automatic
+        switching, and separate disconnected devices from playback without
+        effects.</p>
+      </description>
+    </release>
     <release version="0.2.2" date="2026-11-02">
       <description>
         <p>Detect wired headphone ports, USB audio devices and Bluetooth headsets

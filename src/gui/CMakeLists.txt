@@ -21,7 +21,7 @@
 
 cmake_minimum_required(VERSION 3.22)
 
-project(SauceFX VERSION 0.2.2 LANGUAGES C CXX)
+project(SauceFX VERSION 0.2.3 LANGUAGES C CXX)
 
 include(GNUInstallDirs)
 

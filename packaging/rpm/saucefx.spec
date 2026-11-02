@@ -2,7 +2,7 @@
 %global _hardened_build 0
 
 Name:           saucefx
-Version:        0.2.2
+Version:        0.2.3
 Release:        1%{?dist}
 Summary:        Sound EQ and audio enhancement for Linux
 License:        AGPL-3.0-or-later
@@ -47,6 +47,9 @@ gtk-update-icon-cache -q -t -f %{_datadir}/icons/hicolor 2>/dev/null || :
 %doc %{_datadir}/doc/saucefx/README.md
 
 %changelog
+* Mon Nov 02 2026 SauceFX <sauucee@users.noreply.github.com> - 0.2.3-1
+- Simplify audio output names and explain automatic and direct playback choices.
+
 * Mon Nov 02 2026 SauceFX <sauucee@users.noreply.github.com> - 0.2.2-1
 - Discover physical audio outputs and recover routing after device changes.
 

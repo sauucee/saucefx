@@ -37,7 +37,7 @@ Ready-to-install packages are attached to tagged
 ### Flatpak
 
 ```sh
-flatpak install --user ./SauceFX-0.2.2-x86_64.flatpak
+flatpak install --user ./SauceFX-0.2.3-x86_64.flatpak
 flatpak run io.github.sauucee.SauceFX
 ```
 
@@ -197,17 +197,19 @@ route system audio into it.
 ### Audio outputs and headsets
 
 The **Output** menu lists the devices and ports reported by PipeWire, including
-analog **Headphones**, USB audio interfaces and connected Bluetooth headsets.
+**Speakers**, wired **Headphones**, USB audio interfaces and connected Bluetooth headsets.
 Wired headphones commonly share the built-in sound card's sink and appear as a
 separate port. Unavailable ports are marked **Not connected**.
 
-- **Automatic (SauceFX)** processes system audio and follows physical output
-  changes, including newly connected USB/Bluetooth devices.
+- **Automatic** processes system audio and follows physical output
+  changes, including newly connected USB/Bluetooth devices. Its description
+  shows which device is currently in use.
 - Selecting a named device processes audio through that output and remembers
   the choice. If it disconnects, SauceFX temporarily uses another available
   output and returns to the selected device when it reconnects.
-- **System audio** restores unprocessed output. The power switch can also
-  bypass the effects while keeping the selected routing.
+- **Direct playback**, under **Without effects**, uses the system output
+  without SauceFX effects. The power switch can also bypass the effects while
+  keeping the selected routing.
 
 Device changes refresh the menu without restarting the app or resetting EQ and
 effects. Pair and connect wireless headsets in the desktop's Bluetooth settings
