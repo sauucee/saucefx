@@ -28,6 +28,7 @@ with tempfile.TemporaryDirectory(prefix="saucefx-appimage-") as temp:
         str(injected / "libwebkit2gtkinjectedbundle.so")], check=True)
     program = Path(temp) / "check.c"
     program.write_text(r'''
+#define _GNU_SOURCE
 #include <gio/gio.h>
 #include <dlfcn.h>
 #include <stdio.h>
