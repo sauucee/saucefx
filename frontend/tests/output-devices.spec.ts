@@ -12,7 +12,7 @@ const initialState: NativeState = {
   power: true, output: 'saucefx', outputs,
   presetId: 'default', presets: [{ id: 'default', name: 'Default', group: 'factory' }],
   effects: [0, 0, 0, 0, 0], eq: Array(31).fill(0), autostart: false,
-  theme: 'dark', accent: '#f2486f', customAccent: false, version: '0.2.3',
+  theme: 'dark', accent: '#f2486f', customAccent: false, version: '0.2.4',
 }
 
 test.beforeEach(async ({ page }) => {

@@ -23,9 +23,8 @@ export XDG_RUNTIME_DIR="$WORK/run" XDG_CONFIG_HOME="$WORK/config"
 export XDG_STATE_HOME="$WORK/state" XDG_DATA_HOME="$WORK/data" XDG_CACHE_HOME="$WORK/cache"
 export HOME="$WORK/home" GIO_USE_VFS=local
 export PIPEWIRE_RUNTIME_DIR="$XDG_RUNTIME_DIR"
-export PULSE_RUNTIME_PATH="$XDG_RUNTIME_DIR/pulse"
-export PULSE_SERVER="unix:$PULSE_RUNTIME_PATH/native"
-unset APPDIR APPIMAGE APPIMAGE_EXTRACT_AND_RUN FXSOUND_REG_FILE PIPEWIRE_REMOTE
+export PULSE_SERVER="unix:$XDG_RUNTIME_DIR/pulse/native"
+unset APPDIR APPIMAGE APPIMAGE_EXTRACT_AND_RUN FXSOUND_REG_FILE PIPEWIRE_REMOTE PULSE_RUNTIME_PATH
 mkdir -p "$XDG_RUNTIME_DIR" "$HOME" "$XDG_CONFIG_HOME/wireplumber/wireplumber.conf.d"
 chmod 700 "$XDG_RUNTIME_DIR"
 cat > "$XDG_CONFIG_HOME/wireplumber/wireplumber.conf.d/90-isolated.conf" <<'EOF'
@@ -80,6 +79,7 @@ grep -q 'web interface ready' "$WORK/app.log"
 grep -q "startup preset 'Default' \[ok\]" "$WORK/app.log"
 grep -q 'session restored' "$WORK/app.log"
 grep -q 'render target: AppImageTestOutput' "$WORK/app.log"
+grep -q 'capture negotiated: 2 ch' "$WORK/app.log"
 grep -q 'libwebkit2gtk-4.1' "/proc/$APP_PID/maps"
 grep 'libwebkit2gtk-4.1' "/proc/$APP_PID/maps" | grep -F "$APPDIR_TEST/" >/dev/null
 grep -F "Exec=\"$IMAGE\" --autostart" "$XDG_CONFIG_HOME/autostart/saucefx.desktop"

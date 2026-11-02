@@ -38,7 +38,7 @@ Ready-to-install packages are attached to tagged
 ### Flatpak
 
 ```sh
-flatpak install --user ./SauceFX-0.2.3-x86_64.flatpak
+flatpak install --user ./SauceFX-0.2.4-x86_64.flatpak
 flatpak run io.github.sauucee.SauceFX
 ```
 

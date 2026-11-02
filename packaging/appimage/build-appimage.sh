@@ -111,9 +111,9 @@ export DEPLOY_GTK_VERSION=3
 
 # Plugins can deploy more libraries; enforce the host-runtime exclusions.
 find "$APPDIR/usr/lib" -maxdepth 1 \( -name 'libstdc++*' -o -name 'libgcc_s*' \) -delete
-mapfile -d '' WEBKIT_LIBS < <(find "$APPDIR/usr/lib" -type f -name 'libwebkit2gtk-4.1.so*' -print0)
-test "${#WEBKIT_LIBS[@]}" -gt 0
-python3 "$SCRIPT_DIR/relocate-webkit.py" "${WEBKIT_LIBS[@]}"
+cc -shared -fPIC -O2 -Wall -Wextra $(pkg-config --cflags gio-2.0) \
+    "$SCRIPT_DIR/webkit-paths.c" -ldl \
+    -o "$APPDIR/usr/lib/libsaucefx-webkit-paths.so"
 python3 "$SCRIPT_DIR/collect-licenses.py" "$APPDIR"
 
 IMAGE="$RELEASE_DIR/SauceFX-$VERSION-$ARCH.AppImage"

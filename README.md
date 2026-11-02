@@ -37,7 +37,7 @@ Ready-to-install packages are attached to tagged
 ### Flatpak
 
 ```sh
-flatpak install --user ./SauceFX-0.2.3-x86_64.flatpak
+flatpak install --user ./SauceFX-0.2.4-x86_64.flatpak
 flatpak run io.github.sauucee.SauceFX
 ```
 
@@ -70,6 +70,28 @@ DNF resolves and installs all runtime dependencies automatically; users do not
 need any compiler, development headers, Node.js, or JUCE. Disabling weak
 dependencies avoids optional WebKit multimedia and device packages that
 SauceFX does not use.
+
+### AppImage
+
+Download `SauceFX-0.2.4-x86_64.AppImage` from the release page, make it
+executable, and run it. No Flatpak or RPM installation is needed:
+
+```sh
+chmod +x SauceFX-0.2.4-x86_64.AppImage
+./SauceFX-0.2.4-x86_64.AppImage
+```
+
+The image includes the app, interface, presets, GTK/WebKit and audio client
+libraries. It uses the host's PipeWire, WirePlumber and pipewire-pulse audio
+services, X11/XWayland and graphics drivers. The system must have glibc 2.35+
+and a GCC 11-or-newer C++ runtime. WebKit's sandbox also requires the system
+`bubblewrap` and `xdg-dbus-proxy` packages and working user namespaces.
+
+If FUSE mounting is unavailable, use
+`./SauceFX-0.2.4-x86_64.AppImage --appimage-extract-and-run`.
+Keep the file in a permanent location before enabling login startup. Treat the
+AppImage as an alternative to an installed copy, not a second instance to run
+alongside the Flatpak or RPM.
 
 ## Source build requirements
 
@@ -173,8 +195,21 @@ Both package paths use `cmake --install --component Runtime`, so JUCE's
 headers, CMake package files and helper tools are not included in the
 application package.
 
-Pushing a `v*` tag runs `.github/workflows/release.yml`, builds both packages,
+Pushing a `v*` tag runs `.github/workflows/release.yml`, builds the release packages,
 and attaches them to the GitHub release for that tag.
+
+### AppImage build
+
+Build in the Ubuntu x86_64 environment described in
+[`packaging/appimage/README.md`](packaging/appimage/README.md):
+
+```sh
+SAUCEFX_BUILD_JOBS=1 packaging/appimage/build-appimage.sh
+```
+
+The output is `release/SauceFX-<version>-x86_64.AppImage`. Release CI builds
+all three formats and includes them in `SHA256SUMS`; its AppImage startup test
+runs on an isolated audio server and virtual display.
 
 ## Run
 
@@ -250,6 +285,7 @@ frontend/        React + Base UI interface (Vite, TypeScript)
   src/             components, bridge, styles and preset data
   dist/            production build copied to web/ by CMake (git ignored)
 packaging/
+  appimage/        portable AppImage builder and isolated startup checks
   flatpak/         Flatpak manifest and bundle builder
   linux/           desktop entry and AppStream metadata
   rpm/             staged binary RPM spec and builder

@@ -23,6 +23,7 @@ export GTK_MODULES=
 export GIO_MODULE_DIR="$APPDIR/usr/lib/gio/modules"
 export GIO_EXTRA_MODULES=
 export GST_PLUGIN_SYSTEM_PATH_1_0=
+export LD_PRELOAD="libsaucefx-webkit-paths.so${LD_PRELOAD:+:$LD_PRELOAD}"
 
 if [ ! -x /usr/bin/bwrap ] || [ ! -x /usr/bin/xdg-dbus-proxy ]; then
     echo "SauceFX needs bubblewrap and xdg-dbus-proxy for its browser sandbox." >&2
@@ -30,7 +31,7 @@ if [ ! -x /usr/bin/bwrap ] || [ ! -x /usr/bin/xdg-dbus-proxy ]; then
     exit 1
 fi
 
-# WebKit's distro build uses /usr-relative helper/resource paths. The packager
-# relocates only those paths (not sandbox executables), relative to this cwd.
+# The loader shim relocates WebKit's private helper paths without changing
+# system library paths or disabling the browser sandbox.
 cd -- "$APPDIR/usr"
 exec "$APPDIR/usr/bin/SauceFX" "$@"

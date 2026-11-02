@@ -683,7 +683,7 @@ PresetSession loadPresetSession()
 
 	if (version == 1 && effectsSeen == 5 && s.eqBands >= 1 &&
 	    s.eqBands <= 32 && eqFreqSeen >= s.eqBands &&
-			eqGainSeen >= s.eqBands)
+	    eqGainSeen >= s.eqBands)
 		s.valid = true;
 
 	/* AppImage mount directories change on every launch. Retain the legacy

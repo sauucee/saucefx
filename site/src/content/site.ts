@@ -7,7 +7,7 @@
 export const REPO_URL = 'https://github.com/sauucee/saucefx';
 export const RELEASES_URL = `${REPO_URL}/releases`;
 export const LICENSE_URL = 'https://www.gnu.org/licenses/agpl-3.0.html';
-export const VERSION = '0.2.3';
+export const VERSION = '0.2.4';
 
 export const EFFECTS = [
   'Clarity',
@@ -32,7 +32,7 @@ export const STATS = [
   { value: 5, label: 'effects in the rack', detail: 'Clarity to Bass Boost' },
   { value: 31, label: 'EQ bands', detail: 'graphic, with live spectrum' },
   { value: 6, label: 'accent presets', detail: 'or a custom colour' },
-  { value: 2, label: 'install formats', detail: 'Flatpak and Fedora RPM' },
+  { value: 3, label: 'install formats', detail: 'Flatpak, Fedora RPM and AppImage' },
 ] as const;
 
 export const FLATPAK_COMMANDS = [
