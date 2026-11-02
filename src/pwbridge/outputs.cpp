@@ -288,7 +288,19 @@ bool OutputMonitor::start(std::string &error)
 		error = "cannot create output device monitor";
 		return false;
 	}
-	s.context = pa_context_new(pa_threaded_mainloop_get_api(s.loop), "SauceFX outputs");
+	/* WirePlumber gives Flatpak playback clients read/execute access only.
+	 * This connection manages defaults and jack ports, so declare its actual
+	 * role just like other audio-control applications. Audio streams use
+	 * their own capture/playback connection. */
+	auto *properties = pa_proplist_new();
+	if (properties == nullptr) {
+		error = "cannot create output manager properties";
+		return false;
+	}
+	pa_proplist_sets(properties, "media.category", "Manager");
+	s.context = pa_context_new_with_proplist(pa_threaded_mainloop_get_api(s.loop),
+		"SauceFX outputs", properties);
+	pa_proplist_free(properties);
 	if (s.context == nullptr) {
 		error = "cannot create PulseAudio client";
 		return false;

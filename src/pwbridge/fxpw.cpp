@@ -1181,14 +1181,15 @@ extern "C" int fxpw_route_default(FXPW *h, int on)
 	std::lock_guard<std::mutex> lock(h->output_mutex);
 	auto snapshot = h->outputs->snapshot();
 	if (on != 0) {
-		if (!h->outputs->setDefault(h->sink_name))
+		if (snapshot.defaultSink != h->sink_name && !h->outputs->setDefault(h->sink_name))
 			return -1;
 		h->output_state.routed = 1;
 		h->restore_pending = false;
 	} else {
 		const auto *target = saucefx::chooseOutput(snapshot,
 			h->output_state.preferred_name, h->output_state.preferred_port);
-		if (target != nullptr && !h->outputs->setDefault(target->name))
+		if (target != nullptr && snapshot.defaultSink != target->name &&
+		    !h->outputs->setDefault(target->name))
 			return -1;
 		h->output_state.routed = 0;
 		h->restore_pending = target == nullptr;

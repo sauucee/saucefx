@@ -22,7 +22,9 @@ static void require(bool condition, const std::string &message)
 
 static std::string capture(const std::string &command)
 {
-	FILE *pipe = popen(command.c_str(), "r");
+	/* Fixture setup/teardown is privileged; the bridge must independently
+	 * declare its manager role on its own connection. */
+	FILE *pipe = popen(("env PULSE_PROP=media.category=Manager " + command).c_str(), "r");
 	require(pipe != nullptr, "cannot run " + command);
 	std::string result;
 	char line[512];
@@ -120,6 +122,9 @@ int main()
 		auto first = addSink("Test_First", 2000);
 		auto second = addSink("Test_Default", 1000);
 		capture("pactl set-default-sink Test_Default");
+		require(system("pactl --client-name='SauceFX outputs' set-default-sink Test_First >/dev/null 2>&1") != 0,
+			"test server must deny default changes to a non-manager client");
+		puts("PASS: sandbox-style restrictions reject non-manager output control");
 		char error[256]{};
 		using Engine = std::unique_ptr<FXPW, decltype(&fxpw_stop)>;
 		Engine engine(fxpw_start("SauceFXDeviceTest", nullptr, nullptr,

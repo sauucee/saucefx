@@ -60,8 +60,8 @@ int fxpw_preset_name(FXPW *h, const wchar_t *path, char *out, size_t outsz);
  * (The engine appends the .fac suffix itself.) Returns 0 ok. */
 int fxpw_save_preset(FXPW *h, const wchar_t *name, const wchar_t *dir);
 
-/* Route the system default output into the virtual sink (on=1, restore
- * the previous default on on=0). Returns 0 ok. */
+/* Route the system default output into the virtual sink (on=1), or restore
+ * the selected available physical output (on=0). Returns 0 ok. */
 int fxpw_route_default(FXPW *h, int on);
 int fxpw_is_routed_default(FXPW *h);
 

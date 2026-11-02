@@ -37,7 +37,7 @@ export PULSE_SERVER="unix:$PULSE_RUNTIME_PATH/native"
 export FXSOUND_REG_FILE="$WORK/registry.txt"
 export SAUCEFX_TEST_ISOLATED=1
 export GIO_USE_VFS=local
-unset PIPEWIRE_REMOTE PIPEWIRE_CONFIG_DIR WIREPLUMBER_CONFIG_DIR
+unset PIPEWIRE_REMOTE PIPEWIRE_CONFIG_DIR WIREPLUMBER_CONFIG_DIR PULSE_PROP
 mkdir -p "$XDG_RUNTIME_DIR" "$XDG_CONFIG_HOME/wireplumber/wireplumber.conf.d"
 chmod 700 "$XDG_RUNTIME_DIR"
 cat > "$XDG_CONFIG_HOME/wireplumber/wireplumber.conf.d/90-isolated.conf" <<'EOF'
@@ -48,6 +48,14 @@ wireplumber.profiles = {
     monitor.v4l2 = disabled
     monitor.libcamera = disabled
   }
+}
+EOF
+
+# Have the private Pulse socket apply its real Flatpak access policy to clients.
+mkdir -p "$XDG_CONFIG_HOME/pipewire/pipewire-pulse.conf.d"
+cat > "$XDG_CONFIG_HOME/pipewire/pipewire-pulse.conf.d/90-isolated.conf" <<'EOF'
+override.pulse.properties = {
+  server.address = [ { address = "unix:native", client.access = "flatpak" } ]
 }
 EOF
 
