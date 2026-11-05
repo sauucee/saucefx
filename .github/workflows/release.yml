@@ -137,6 +137,9 @@ jobs:
       - name: Build AppImage
         run: packaging/appimage/build-appimage.sh
 
+      - name: Test native audio buffering
+        run: make -C src -j2 test-audio-latency
+
       - name: Smoke-test portable AppImage
         run: packaging/appimage/smoke-test.sh release/SauceFX-*-x86_64.AppImage
 

@@ -12,6 +12,7 @@
 #include <pipewire/pipewire.h>
 #include <spa/param/audio/format-utils.h>
 #include <spa/param/props.h>
+#include <spa/node/io.h>
 #include <spa/utils/result.h>
 
 #include <DfxDsp.h>
@@ -100,9 +101,23 @@ static size_t ring_pop(struct ring *r, float *dst, size_t frames)
 	return frames;
 }
 
+/* Consumer only: keep recent audio after a scheduling stall. The producer
+ * must never advance rd (doing so races a consumer reading those samples). */
+static size_t ring_trim(struct ring *r, size_t keep)
+{
+	size_t rd = r->rd.load(std::memory_order_relaxed);
+	size_t avail = (r->wr.load(std::memory_order_acquire) + RING_FRAMES - rd) % RING_FRAMES;
+	if (avail <= keep)
+		return 0;
+	size_t dropped = avail - keep;
+	r->rd.store((rd + dropped) % RING_FRAMES, std::memory_order_release);
+	return dropped;
+}
+
 /* ------------------------------------------------------------------ */
 
-#define PREFILL_FRAMES 4096
+/* Request a ~5 ms graph quantum, without forcing the desktop's clock/rate. */
+#define STREAM_LATENCY "256/48000"
 
 struct FXPW {
 	/* pw objects (loop thread only) */
@@ -128,6 +143,8 @@ struct FXPW {
 	struct spa_hook capture_listener;
 	struct pw_stream *render;
 	struct spa_hook render_listener;
+	std::atomic<const spa_io_rate_match *> render_rate_match{nullptr};
+	std::atomic<const spa_io_position *> render_position{nullptr};
 
 	/* graph */
 	uint32_t sink_node_id;      /* SauceFX virtual sink */
@@ -164,9 +181,9 @@ struct FXPW {
 	std::wstring pending_preset_path;
 
 	struct ring ring;
-	long long frames_captured;
-	long long frames_dropped;
-	long long underruns;
+	std::atomic<long long> frames_captured{0};
+	std::atomic<long long> frames_dropped{0};
+	std::atomic<long long> underruns{0};
 	double stats_ms;
 
 	bool quiet;
@@ -277,6 +294,10 @@ static void capture_process(void *data)
 		? ring_push(&a->ring, src, (size_t)frames) : 0;
 	a->frames_captured += (long long)wrote;
 	a->frames_dropped += cap - (long long)wrote;
+	/* If the output stalls longer than the ring capacity, even its newest
+	 * samples are stale. Drop the whole queue on the next render callback. */
+	if (a->has_render.load(std::memory_order_acquire) && wrote < (size_t)frames)
+		a->flush_render.store(true, std::memory_order_release);
 
 	if (a->stats && frames > 0 && (a->cap_buffers++ % 100) == 0) {
 		double sum = 0;
@@ -323,14 +344,44 @@ static void capture_param_changed(void *data, uint32_t id, const struct spa_pod 
 /* ------------------------------------------------------------------ */
 /* render stream: ring -> real output device                           */
 
+static void render_io_changed(void *data, uint32_t id, void *area, uint32_t size)
+{
+	auto *a = static_cast<FXPW *>(data);
+	if (id == SPA_IO_RateMatch)
+		a->render_rate_match.store(size >= sizeof(spa_io_rate_match)
+			? static_cast<const spa_io_rate_match *>(area) : nullptr,
+			std::memory_order_release);
+	else if (id == SPA_IO_Position)
+		a->render_position.store(size >= sizeof(spa_io_position)
+			? static_cast<const spa_io_position *>(area) : nullptr,
+			std::memory_order_release);
+}
+
+static uint64_t render_frame_request(FXPW *a, const pw_buffer *buffer)
+{
+#if PW_CHECK_VERSION(0, 3, 50)
+	if (buffer->requested > 0)
+		return buffer->requested;
+#endif
+	/* Ubuntu 22.04's PipeWire predates pw_buffer::requested. Its adapter
+	 * exposes the same frame demand through SPA_IO_RateMatch instead. */
+	const auto *match = a->render_rate_match.load(std::memory_order_acquire);
+	if (match != nullptr && match->size > 0)
+		return match->size;
+	const auto *position = a->render_position.load(std::memory_order_acquire);
+	if (position != nullptr && position->clock.rate.denom > 0 && a->rate > 0)
+		return (uint64_t)ceil((double)position->clock.duration * a->rate *
+			position->clock.rate.num / position->clock.rate.denom);
+	return 0;
+}
+
 static void render_process(void *data)
 {
 	FXPW *a = (FXPW *)data;
 	/* Discard queued audio on a device change. A reconnect must never play
 	 * seconds of old audio accumulated while a headset was disconnected. */
 	if (a->flush_render.exchange(false, std::memory_order_acq_rel))
-		a->ring.rd.store(a->ring.wr.load(std::memory_order_acquire),
-				std::memory_order_release);
+		a->frames_dropped += (long long)ring_trim(&a->ring, 0);
 	struct pw_buffer *b = pw_stream_dequeue_buffer(a->render);
 
 	if (b == NULL)
@@ -340,18 +391,31 @@ static void render_process(void *data)
 
 	if (d->data == NULL) {
 		d->chunk->size = 0;
+		b->size = 0;
 		pw_stream_queue_buffer(a->render, b);
 		return;
 	}
 
 	const int nch = a->ch > 0 ? a->ch : 2;
 	long frames = (long)d->maxsize / (long)(sizeof(float) * nch);
+	/* maxsize is allocation capacity, not the current graph quantum. Filling
+	 * it can queue many cycles of audio (or silence) in PipeWire's adapter. */
+	const uint64_t requested = render_frame_request(a, b);
+	if (requested > 0 && requested < (uint64_t)frames)
+		frames = (long)requested;
 
 	if (frames <= 0) {
 		d->chunk->size = 0;
+		b->size = 0;
 		pw_stream_queue_buffer(a->render, b);
 		return;
 	}
+
+	/* Allow two cycles for capture/render callback ordering. A transient
+	 * stall must not become permanent lip-sync drift: resume from the newest
+	 * cycle rather than replaying hundreds of milliseconds of old audio. */
+	if (ring_avail(&a->ring) > (size_t)frames * 2)
+		a->frames_dropped += (long long)ring_trim(&a->ring, (size_t)frames);
 
 	size_t size_bytes = (size_t)frames * sizeof(float) * nch;
 	size_t got = ring_pop(&a->ring, (float *)d->data, (size_t)frames);
@@ -365,6 +429,7 @@ static void render_process(void *data)
 	d->chunk->offset = 0;
 	d->chunk->size = (uint32_t)size_bytes;
 	d->chunk->stride = sizeof(float) * nch;
+	b->size = (uint64_t)frames;
 
 	pw_stream_queue_buffer(a->render, b);
 }
@@ -373,6 +438,8 @@ static void render_state_changed(void *data, enum pw_stream_state,
 				 enum pw_stream_state state, const char *error)
 {
 	auto *a = static_cast<FXPW *>(data);
+	if (state == PW_STREAM_STATE_PAUSED)
+		a->flush_render.store(true, std::memory_order_release);
 	if (state == PW_STREAM_STATE_ERROR) {
 		a->render_failed = true;
 		log_info(a, "output stream unavailable: %s", error != nullptr ? error : "unknown error");
@@ -382,6 +449,7 @@ static void render_state_changed(void *data, enum pw_stream_state,
 static const struct pw_stream_events render_events = {
 	PW_VERSION_STREAM_EVENTS,
 	.state_changed = render_state_changed,
+	.io_changed = render_io_changed,
 	.process = render_process,
 };
 
@@ -645,6 +713,8 @@ static void disconnect_render(FXPW *a)
 		pw_stream_destroy(a->render);
 		a->render = nullptr;
 	}
+	a->render_rate_match.store(nullptr, std::memory_order_release);
+	a->render_position.store(nullptr, std::memory_order_release);
 	a->render_node_id = 0;
 }
 
@@ -659,6 +729,7 @@ static void connect_render(FXPW *a, const std::string &name, uint32_t id)
 		PW_KEY_MEDIA_TYPE, "Audio",
 		PW_KEY_MEDIA_CATEGORY, "Playback",
 		PW_KEY_NODE_NAME, "saucefx.render",
+		PW_KEY_NODE_LATENCY, STREAM_LATENCY,
 		PW_KEY_TARGET_OBJECT, name.c_str(),
 		"node.dont-move", "true",
 		"node.dont-fallback", "true",
@@ -762,6 +833,7 @@ static void connect_streams(FXPW *a)
 		PW_KEY_MEDIA_TYPE, "Audio",
 		PW_KEY_MEDIA_CATEGORY, "Capture",
 		PW_KEY_NODE_NAME, "saucefx.capture",
+		PW_KEY_NODE_LATENCY, STREAM_LATENCY,
 		PW_KEY_STREAM_CAPTURE_SINK, "true",
 		PW_KEY_TARGET_OBJECT, a->sink_name,
 		"node.dont-move", "true",
@@ -788,8 +860,7 @@ static void connect_streams(FXPW *a)
 
 	a->state = FXPW_STATE_PREFILL;
 	a->clock_ms = 0.0;
-	log_info(a, "capture connected; prefilling %d frames...",
-		 PREFILL_FRAMES);
+	log_info(a, "capture connected; waiting for format negotiation...");
 }
 
 static void timer_tick(FXPW *a, uint64_t expirations)
@@ -807,7 +878,9 @@ static void timer_tick(FXPW *a, uint64_t expirations)
 		break;
 
 	case FXPW_STATE_PREFILL:
-		if (ring_avail(&a->ring) >= PREFILL_FRAMES || a->clock_ms > 2000.0) {
+		/* Retain the public startup state code, but do not build an audio
+		 * prefill. Capture intentionally drops audio until an output exists. */
+		if (a->rate > 0 || a->clock_ms > 2000.0) {
 			a->state = FXPW_STATE_RUN;
 			a->stats_ms = a->clock_ms;
 			{
@@ -815,8 +888,7 @@ static void timer_tick(FXPW *a, uint64_t expirations)
 				a->ready = true;
 			}
 			a->cv.notify_all();
-			log_info(a, "started (prefilled %zu frames)",
-				 ring_avail(&a->ring));
+			log_info(a, "started (no audio prefill)");
 			log_info(a,
 				 "ready. Play audio into sink '%s' to hear it "
 				 "DSP-processed.", a->sink_name);
@@ -830,7 +902,7 @@ static void timer_tick(FXPW *a, uint64_t expirations)
 				 "underruns %lld, ring %zu fr)",
 				 a->frames_captured /
 				 (double)(a->rate > 0 ? a->rate : 48000),
-				 a->frames_dropped, a->underruns,
+				 a->frames_dropped.load(), a->underruns.load(),
 				 ring_avail(&a->ring));
 		}
 		break;

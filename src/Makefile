@@ -46,7 +46,7 @@ SRCS := $(shell cat $(SRC_DIR)/sources.txt)
 OBJS := $(patsubst %,$(OBJDIR)/%,$(patsubst %.cpp,%.o,$(patsubst %.c,%.o,$(SRCS))))
 SRCDEPS := $(addprefix $(ROOT)/,$(SRCS))
 
-.PHONY: all run test test-eq-registry test-output-routing rt clean
+.PHONY: all run test test-eq-registry test-audio-latency test-output-routing rt clean
 
 all: $(HARNESS)
 
@@ -80,7 +80,7 @@ test-eq-registry: $(EQ_REGISTRY_TEST)
 # Sink lifecycle regressions: restart reaping (SIGKILL + relaunch) and
 # live-sibling preservation. Needs pactl, plus unprivileged user/PID
 # namespaces for the restart test; scripts exit 77 when unavailable.
-test: test-eq-registry rt test-output-routing
+test: test-eq-registry test-audio-latency rt test-output-routing
 	@bash $(SRC_DIR)/harness/sinkrestarttest.sh "$(abspath $(RT))"; \
 		rc=$$?; [ $$rc -eq 0 ] || [ $$rc -eq 77 ]
 	@bash $(SRC_DIR)/harness/sinklivesiblingtest.sh "$(abspath $(RT))"; \
@@ -94,6 +94,7 @@ RT        := $(BIN)/saucefxrt
 PWDIR     := $(SRC_DIR)/pwbridge
 PWBRIDGE_LIB := $(BUILD)/libfxpw.a
 OUTPUT_ROUTING_TEST := $(BIN)/outputroutingtest
+AUDIO_LATENCY_TEST := $(BIN)/audiolatencytest
 PW_DFLAGS := -I$(PWDIR) -I$(DSP)/include -I$(DSP)/ptutil/include -I$(DSP) -I$(SRC_DIR)/include
 
 rt: $(RT)
@@ -118,6 +119,13 @@ $(OUTPUT_ROUTING_TEST): $(SRC_DIR)/harness/outputroutingtest.cpp $(PWDIR)/output
 test-output-routing: $(OUTPUT_ROUTING_TEST)
 	@bash $(SRC_DIR)/harness/outputroutingtest.sh "$(abspath $(OUTPUT_ROUTING_TEST))"; \
 		rc=$$?; [ $$rc -eq 0 ] || [ $$rc -eq 77 ]
+
+$(AUDIO_LATENCY_TEST): $(SRC_DIR)/harness/audiolatencytest.cpp $(PWDIR)/fxpw.cpp $(PWDIR)/fxpw.h $(PWBRIDGE_LIB) | $(BIN)
+	$(CXX) $(CXXFLAGS) $(DEFINES) $(PW_DFLAGS) $(PW_CFLAGS) -o $@ $< \
+		$(PWBRIDGE_LIB) $(LIB) $(PW_LIBS) -lpthread -lm
+
+test-audio-latency: $(AUDIO_LATENCY_TEST)
+	$(AUDIO_LATENCY_TEST)
 
 -include $(wildcard $(OBJDIR)/*/*.d) $(wildcard $(OBJDIR)/*.d)
 

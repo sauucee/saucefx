@@ -151,6 +151,9 @@ start a private PipeWire/Pulse server and WirePlumber session; they require
 The frontend device-menu regression runs with `npm --prefix frontend test`
 after installing its test browser once with
 `cd frontend && npx playwright install chromium`.
+The audio-buffer regression can also be run on its own with
+`make -C src test-audio-latency`; it simulates intermittent stalls and pause
+without connecting to the desktop audio server.
 
 ## Packaging (maintainers)
 
