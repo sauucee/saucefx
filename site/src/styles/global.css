@@ -2363,3 +2363,83 @@ a {
   display: none;
 }
 
+/* ============================================================
+   Frames (v2) — the rack as a scroll-scrubbed film
+   ============================================================ */
+
+.frames {
+  background: var(--bg);
+  border-block: 1px solid var(--line);
+}
+.frames__pin {
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: clamp(2rem, 6vh, 4rem);
+  padding-inline: var(--gutter);
+  max-width: 1560px;
+  margin-inline: auto;
+}
+.frames__head {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+}
+.frames__scrub {
+  --scrub: 0;
+  position: relative;
+  flex: 1;
+  height: 1px;
+  background: var(--line);
+}
+.frames__scrub::after {
+  content: '';
+  position: absolute;
+  inset-block: -3px;
+  left: 0;
+  width: calc(var(--scrub) * 100%);
+  background: var(--accent);
+}
+.frames__stage {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 60svh;
+}
+.frames__slide {
+  position: absolute;
+  display: grid;
+  gap: 0.75rem;
+  justify-items: start;
+  opacity: 0; /* the timeline raises each frame; first frame is CSS-visible so
+                   reduced motion still sees the full rack. */
+  max-width: 62ch;
+}
+.frames__slide:first-child {
+  opacity: 1;
+}
+.frames__plot {
+  width: clamp(14rem, 34vw, 30rem);
+  height: auto;
+  margin-bottom: 0.5rem;
+}
+.frames__plot path {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2.5;
+  vector-effect: non-scaling-stroke;
+}
+.frames__title {
+  font-size: var(--step-4);
+  font-weight: 860;
+  letter-spacing: -0.03em;
+  line-height: 0.9;
+}
+.frames__note {
+  color: var(--ink-soft);
+}
+.frames__index {
+  color: var(--muted);
+}
+

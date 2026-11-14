@@ -32,6 +32,18 @@ await page.waitForTimeout(3600); // preloader is ~2.5s
 const preloaderGone = (await page.locator('.pre').count()) === 0;
 preloaderGone ? pass('preloader unmounts') : fail('preloader unmounts', 'still in DOM');
 
+/* --- v2: signal field --- */
+const sig1 = await page.evaluate(() => window.__signal?.frames ?? 0);
+await page.waitForTimeout(600);
+const sig2 = await page.evaluate(() => window.__signal?.frames ?? 0);
+sig2 > sig1
+  ? pass('signal field animates', `${sig1} -> ${sig2}`)
+  : fail('signal field animates', `${sig1} -> ${sig2}`);
+const canvases = await page.locator('.signal-field canvas').count();
+canvases >= 1
+  ? pass('hero mounts WebGL signal field', `canvases=${canvases}`)
+  : fail('hero mounts WebGL signal field', `canvases=${canvases}`);
+
 const heroBox = await page.locator('#hero-title').boundingBox();
 const winBox = await page.locator('.hero__window').boundingBox();
 if (!heroBox || !winBox) fail('hero layers', 'missing box');
@@ -69,21 +81,31 @@ await page.waitForTimeout(2000);
 const statValue = await page.locator('[data-count]').first().textContent();
 statValue === '05' ? pass('stat counters land on real values', statValue) : fail('stat counters', `got ${statValue}`);
 
-/* pinned rack steps */
+/* pinned frames film (v2: replaces the rack steps) — the pin runs for
+   +=400% of the viewport (Frames.tsx), so scrub 55% of that distance */
 await page.evaluate(() => window.scrollTo(0, 0));
 await page.waitForTimeout(400);
-const rack = page.locator('#rack');
-const rackTop = await page.evaluate(() => {
-  const el = document.querySelector('#rack');
+const framesTop = await page.evaluate(() => {
+  const el = document.querySelector('#frames');
   return el ? el.getBoundingClientRect().top + window.scrollY : -1;
 });
-const rackHeight = await page.evaluate(() => document.querySelector('#rack')?.offsetHeight ?? 0);
-await page.evaluate((y) => window.scrollTo(0, y), rackTop + rackHeight * 0.55);
+const framesHeight = await page.evaluate(() => document.querySelector('#frames')?.offsetHeight ?? 0);
+const FRAMES_PIN_VIEWPORTS = 4; // keep in sync with end: '+=400%' in Frames.tsx
+await page.evaluate(
+  (y) => window.scrollTo(0, y),
+  framesTop + framesHeight * FRAMES_PIN_VIEWPORTS * 0.55,
+);
 await page.waitForTimeout(900);
-const rackTitle = await page.locator('#rack .rack__title').first().textContent();
-rackTitle && rackTitle !== 'Clarity'
-  ? pass('rack advances with scroll', rackTitle)
-  : fail('rack advances with scroll', `title ${rackTitle}`);
+const framesTitleEl = page.locator('#frames .frames__slide.is-active .frames__title').first();
+const framesTitle = (await framesTitleEl.count()) ? await framesTitleEl.textContent() : null;
+framesTitle && framesTitle !== 'Clarity'
+  ? pass('frames film advances with scroll', framesTitle)
+  : fail('frames film advances with scroll', `title ${framesTitle}`);
+const counterEl = page.locator('#frames .frames__head .label').first();
+const frameCounter = (await counterEl.count()) ? await counterEl.textContent() : null;
+frameCounter && /frame 0[2-5]\/05/i.test(frameCounter.replace(/\s+/g, ' '))
+  ? pass('frames counter advances', frameCounter)
+  : fail('frames counter advances', frameCounter ?? 'none');
 
 /* EQ drag */
 await page.locator('#playground').scrollIntoViewIfNeeded();
@@ -182,6 +204,10 @@ const reducedHeroOpacity = await reduced.evaluate(
 reducedPreloader === 0 && Number(reducedHeroOpacity) > 0.9
   ? pass('reduced motion: no curtain, hero visible')
   : fail('reduced motion', `preloader=${reducedPreloader} opacity=${reducedHeroOpacity}`);
+const reducedSig = await reduced.evaluate(() => window.__signal?.frames ?? 0);
+reducedSig === 0
+  ? pass('reduced motion: signal driver idle')
+  : fail('reduced motion: signal driver idle', `frames=${reducedSig}`);
 await reduced.screenshot({ path: `${OUT}/reduced-hero.png` });
 await reducedContext.close();
 

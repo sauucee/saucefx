@@ -5,7 +5,7 @@ import { Preloader, shouldPlayPreloader } from './components/Preloader';
 import { Hero } from './components/Hero';
 import { Stats } from './components/Stats';
 import { Marquee } from './components/Marquee';
-import { Rack } from './components/Rack';
+import { Frames } from './components/Frames';
 import { EqPlayground } from './components/EqPlayground';
 import { FeatureRail } from './components/FeatureRail';
 import { Install } from './components/Install';
@@ -58,7 +58,7 @@ export default function App() {
         <Hero ready={ready} />
         <Stats />
         <Marquee />
-        <Rack />
+        <Frames />
         <EqPlayground />
         <FeatureRail />
         <Install />
