@@ -10,6 +10,7 @@
     "preview": "vite preview",
     "typecheck": "tsc -b --noEmit",
     "verify": "node scripts/verify.mjs",
+    "test": "node scripts/run-unit.mjs",
     "og": "node scripts/og.mjs"
   },
   "dependencies": {
