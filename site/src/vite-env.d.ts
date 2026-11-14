@@ -1,9 +1,8 @@
 /// <reference types="vite/client" />
 
-declare global {
-  interface Window {
-    /** Debug/QA frame counter used by scripts/verify.mjs. */
-    __signal?: { frames: number };
-  }
+// Debug/QA frame counter used by scripts/verify.mjs (global script file —
+// interface merging here augments Window without making this a module).
+interface Window {
+  __signal?: { frames: number };
 }
 

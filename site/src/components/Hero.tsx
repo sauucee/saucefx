@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import { useGSAP } from '@gsap/react';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
@@ -6,13 +6,19 @@ import { ArrowDown, ArrowUpRight, Github, Move } from 'lucide-react';
 import { AppScreenshot } from './AppScreenshot';
 import { Spectrum } from './Spectrum';
 import { REPO_URL, VERSION } from '../content/site';
-import { prefersReducedMotion } from '../lib/usePrefersReducedMotion';
+import { prefersReducedMotion, usePrefersReducedMotion } from '../lib/usePrefersReducedMotion';
+import { webglSupported } from '../lib/webgl';
+
+const SignalFieldLazy = lazy(() => import('../three/SignalField'));
 
 gsap.registerPlugin(ScrollTrigger);
 
 export function Hero({ ready }: { ready: boolean }) {
   const section = useRef<HTMLElement>(null);
   const stage = useRef<HTMLDivElement>(null);
+  const reduced = usePrefersReducedMotion();
+  const [canWebGL] = useState(() => webglSupported());
+  const signal = !reduced && canWebGL;
   const word = useRef<HTMLHeadingElement>(null);
   const wordLayer = useRef<HTMLDivElement>(null);
   const windowLayer = useRef<HTMLDivElement>(null);
@@ -177,7 +183,21 @@ export function Hero({ ready }: { ready: boolean }) {
   }, [ready]);
 
   return (
-    <section id="top" className="hero" ref={section} aria-labelledby="hero-title">
+    <section
+      id="top"
+      className={`hero${signal ? ' hero--signal' : ''}`}
+      ref={section}
+      aria-labelledby="hero-title"
+    >
+      {signal && (
+        <>
+          <Suspense fallback={null}>
+            <SignalFieldLazy rootRef={section} />
+          </Suspense>
+          <div className="hero__scrim" aria-hidden="true" />
+          <div className="hero__floor-fade" aria-hidden="true" />
+        </>
+      )}
       <div className="hero__rules" aria-hidden="true">
         {Array.from({ length: 5 }, (_, i) => (
           <span key={i} />
