@@ -20,15 +20,14 @@ function useMotionOff(): boolean {
   return off;
 }
 
-function useVisible<T extends HTMLElement>(ref: React.RefObject<T | null>) {
-  const [visible, setVisible] = useState(true);
+function useVisible() {
+  // Fixed backdrop — alive whenever the document is visible.
+  const [visible, setVisible] = useState(!document.hidden);
   useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const io = new IntersectionObserver(([entry]) => setVisible(entry.isIntersecting));
-    io.observe(el);
-    return () => io.disconnect();
-  }, [ref]);
+    const onVis = () => setVisible(!document.hidden);
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+  }, []);
   return visible;
 }
 
@@ -261,7 +260,7 @@ function SignalScene({ metal, isLight }: { metal: string; isLight: boolean }) {
       for (let i = 0; i < BANDS; i++) {
         const n = i / (BANDS - 1);
         const v = engine.bands[i];
-        const h = 0.03 + v * 0.85;
+        const h = 0.015 + v * 0.9;
         dummy.position.set((n - 0.5) * 9.8, -2.72 + h / 2, -1.2);
         dummy.scale.set(1, h, 1);
         dummy.updateMatrix();
@@ -314,12 +313,8 @@ function isLightColor(hex: string): boolean {
   return (c.r + c.g + c.b) / 3 > 0.5;
 }
 
-export default function SignalField({
-  rootRef,
-}: {
-  rootRef: React.RefObject<HTMLElement | null>;
-}) {
-  const visible = useVisible(rootRef);
+export default function SignalField() {
+  const visible = useVisible();
   const motionPaused = useMotionOff();
   const metal = useTokenColor('--bg-deep', '#050506');
   const small = typeof matchMedia !== 'undefined' && matchMedia('(max-width: 767px)').matches;

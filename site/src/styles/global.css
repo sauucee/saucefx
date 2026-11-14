@@ -2326,10 +2326,9 @@ a {
    The Signal (v2) — hero canvas layering
    ============================================================ */
 
-/* Full-bleed canvas behind the hero; the shader is opaque, so the
-   hairline rules and glow are lifted above it when it is mounted. */
-.hero .signal-field {
-  position: absolute;
+/* Full-page fixed backdrop: one continuous void behind every chapter. */
+.signal-field {
+  position: fixed;
   inset: 0;
   z-index: 0;
   pointer-events: none;
@@ -2399,8 +2398,442 @@ a {
 }
 
 /* ============================================================
-   Frames (v2) — the rack as a scroll-scrubbed film
+   THE CHAIN — the new page: a chaptered signal narrative
    ============================================================ */
+
+main {
+  position: relative;
+  z-index: 1;
+}
+
+/* --- chapter 1: overture --- */
+.overture {
+  position: relative;
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding-bottom: clamp(1.5rem, 4vh, 3rem);
+}
+.overture__mid {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 1.1rem;
+  text-align: center;
+}
+.overture__kick {
+  color: var(--muted);
+}
+.overture__word {
+  font-size: clamp(3.2rem, 19.2vw, 18.5rem);
+  font-weight: 800;
+  line-height: 0.72;
+  letter-spacing: -0.055em;
+  white-space: nowrap;
+  color: var(--ink);
+  text-transform: uppercase;
+}
+.overture__sub {
+  color: var(--muted);
+}
+.overture__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.overture__cue {
+  width: 1px;
+  height: 44px;
+  background: linear-gradient(var(--accent), transparent);
+  animation: cue-drop 1.6s ease-in-out infinite;
+}
+@keyframes cue-drop {
+  0% { transform: scaleY(0); transform-origin: top; }
+  45% { transform: scaleY(1); transform-origin: top; }
+  55% { transform: scaleY(1); transform-origin: bottom; }
+  100% { transform: scaleY(0); transform-origin: bottom; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .overture__cue { animation: none; }
+}
+
+/* --- chapter 2: the claim (pinned) --- */
+.claim {
+  position: relative;
+}
+.claim__pin {
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(1.5rem, 4vh, 2.5rem);
+  text-align: center;
+}
+.claim__pre {
+  color: var(--muted);
+}
+.claim__stage {
+  position: relative;
+  display: grid;
+  place-items: center;
+}
+.claim__line {
+  grid-area: 1 / 1;
+  font-size: clamp(2.6rem, 9.5vw, 9rem);
+  font-weight: 860;
+  letter-spacing: -0.04em;
+  line-height: 0.9;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.claim__word--flat {
+  position: relative;
+  color: var(--ink);
+}
+.claim__strike {
+  position: absolute;
+  inset: -12% -6%;
+  width: 112%;
+  height: 124%;
+  overflow: visible;
+}
+.claim__strike line {
+  stroke: var(--accent);
+  stroke-width: clamp(3px, 0.7vw, 9px);
+  vector-effect: non-scaling-stroke;
+  stroke-linecap: round;
+}
+.claim__word--alive {
+  color: var(--accent-text);
+}
+.claim__gain {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.claim__gain span {
+  color: var(--accent-text);
+}
+
+/* --- chapter 3: the engine --- */
+.engine {
+  position: relative;
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding-top: clamp(3rem, 8vh, 6rem);
+}
+.engine__head {
+  color: var(--muted);
+  margin-bottom: clamp(2rem, 6vh, 4rem);
+}
+.engine__copy {
+  max-width: 62ch;
+  margin-bottom: clamp(2.5rem, 7vh, 5rem);
+}
+.engine__title {
+  font-size: clamp(2.2rem, 5.6vw, 4.6rem);
+  font-weight: 860;
+  letter-spacing: -0.035em;
+  line-height: 0.94;
+}
+.engine__title em {
+  font-style: normal;
+  color: var(--accent-text);
+}
+.engine__body {
+  color: var(--ink-soft);
+  margin-block: 1.1rem 1.4rem;
+  max-width: 58ch;
+}
+.engine__window {
+  width: min(96vw, 1180px, 86svh);
+  margin-inline: auto;
+  translate: 0 12%;
+  padding-bottom: 2rem;
+}
+.engine__readouts {
+  margin-bottom: 1rem;
+}
+
+/* --- chapter 4: the chain (horizontal) --- */
+.chain {
+  position: relative;
+}
+.chain__pin {
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: clamp(1.5rem, 4vh, 3rem);
+  overflow: hidden;
+}
+.chain__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.chain__viewport {
+  position: relative;
+}
+.chain__cable {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 120px;
+  translate: 0 -50%;
+  width: 100%;
+  overflow: visible;
+}
+.chain__cable path {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1.5;
+  stroke-dasharray: 1;
+  opacity: 0.85;
+}
+.chain__track {
+  position: relative;
+  display: flex;
+  width: max-content;
+  gap: clamp(3rem, 8vw, 8rem);
+  padding-inline: var(--gutter);
+}
+.chain__module {
+  position: relative;
+  width: min(72vw, 460px);
+  flex: none;
+  display: grid;
+  gap: 0.7rem;
+  justify-items: start;
+  opacity: 0.38;
+  transition: opacity 260ms ease;
+}
+.chain__module.is-hot {
+  opacity: 1;
+}
+.chain__idx {
+  color: var(--muted);
+}
+.chain__plot {
+  width: clamp(9rem, 22vw, 17rem);
+}
+.chain__plot path {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+.chain__name {
+  font-size: clamp(1.8rem, 4.2vw, 3.4rem);
+  font-weight: 860;
+  letter-spacing: -0.03em;
+  line-height: 0.9;
+}
+.chain__note {
+  color: var(--ink-soft);
+  max-width: 34ch;
+}
+.chain__foot {
+  color: var(--muted);
+}
+
+/* --- chapter 6: proof --- */
+.proof {
+  padding-block: clamp(5rem, 14vh, 11rem);
+}
+.proof__stack {
+  display: grid;
+  gap: clamp(2.5rem, 8vh, 6rem);
+  margin-top: clamp(2rem, 6vh, 4rem);
+}
+.proof__row {
+  display: flex;
+  align-items: baseline;
+  gap: clamp(1.5rem, 4vw, 3.5rem);
+}
+.proof__row--1 { justify-content: center; }
+.proof__row--2 { justify-content: flex-end; }
+.proof__num {
+  font-size: clamp(5rem, 16vw, 15rem);
+  font-weight: 860;
+  line-height: 0.8;
+  letter-spacing: -0.05em;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.proof__row--1 .proof__num {
+  color: var(--accent-text);
+}
+.proof__meta {
+  display: grid;
+  gap: 0.3rem;
+  max-width: 30ch;
+}
+.proof__meta b {
+  font-weight: 700;
+}
+.proof__meta span {
+  color: var(--muted);
+  font-size: var(--step--1);
+}
+
+/* --- chapter 7: install terminal --- */
+.install {
+  padding-block: clamp(4rem, 12vh, 9rem);
+}
+.install__head {
+  display: grid;
+  gap: 1rem;
+  margin-bottom: clamp(2rem, 6vh, 3.5rem);
+}
+.install__title {
+  font-size: clamp(2rem, 5.4vw, 4.4rem);
+  font-weight: 860;
+  letter-spacing: -0.035em;
+  line-height: 0.94;
+}
+.install__title em {
+  font-style: normal;
+  color: var(--accent-text);
+}
+.term {
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: color-mix(in oklab, var(--bg-deep) 92%, transparent);
+  backdrop-filter: blur(6px);
+  overflow: hidden;
+}
+.term__bar {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.6rem 0.9rem;
+  border-bottom: 1px solid var(--line);
+}
+.term__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--line);
+}
+.term__name {
+  color: var(--muted);
+  margin-left: 0.4rem;
+}
+.term__tabs {
+  margin-left: auto;
+  display: flex;
+  gap: 0.4rem;
+}
+.term__tab {
+  padding: 0.3rem 0.65rem;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  color: var(--muted);
+  cursor: pointer;
+}
+.term__tab[aria-selected='true'] {
+  color: var(--accent-text);
+  border-color: var(--accent);
+}
+.term__body {
+  padding: 1.1rem 1rem 1.2rem;
+  display: grid;
+  gap: 0.6rem;
+}
+.term__line {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.86rem;
+}
+.term__prompt {
+  color: var(--accent-text);
+}
+.term__cmd {
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.term__caret {
+  display: inline-block;
+  width: 0.55em;
+  height: 1em;
+  translate: 0 0.15em;
+  background: var(--accent);
+  animation: caret-blink 0.9s steps(1) infinite;
+}
+@keyframes caret-blink {
+  50% { opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .term__caret { animation: none; }
+}
+.term__copy {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  padding: 0.25rem 0.55rem;
+  cursor: pointer;
+}
+.term__copy:hover {
+  color: var(--accent-text);
+  border-color: var(--accent);
+}
+.term__out {
+  color: var(--muted);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.8rem;
+}
+
+/* --- outro --- */
+.outro {
+  padding-block: clamp(4rem, 12vh, 9rem) clamp(2rem, 5vh, 3.5rem);
+}
+.outro__mark {
+  color: var(--muted);
+  margin-bottom: 1.2rem;
+}
+.outro__line {
+  font-size: clamp(1.4rem, 3.4vw, 2.6rem);
+  font-weight: 760;
+  letter-spacing: -0.02em;
+  max-width: 24ch;
+}
+.outro__fine {
+  color: var(--muted);
+  max-width: 52ch;
+  margin-block: 1rem 1.6rem;
+  font-size: var(--step--1);
+}
+.outro__links {
+  display: flex;
+  gap: 1.2rem;
+  flex-wrap: wrap;
+}
+.outro__links a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: var(--ink-soft);
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 0.15rem;
+}
+.outro__links a:hover {
+  color: var(--accent-text);
+  border-color: var(--accent);
+}
 
 .frames {
   background: var(--bg);

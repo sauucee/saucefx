@@ -44,17 +44,11 @@ canvases >= 1
   ? pass('hero mounts WebGL signal field', `canvases=${canvases}`)
   : fail('hero mounts WebGL signal field', `canvases=${canvases}`);
 
-const heroBox = await page.locator('#hero-title').boundingBox();
-const winBox = await page.locator('.hero__window').boundingBox();
-if (!heroBox || !winBox) fail('hero layers', 'missing box');
-else {
-  const heroWider = heroBox.width > winBox.width;
-  heroWider
-    ? pass('headline is wider than the app window', `${Math.round(heroBox.width)}px vs ${Math.round(winBox.width)}px`)
-    : fail('headline is wider than the app window', `${heroBox.width} vs ${winBox.width}`);
-  const overlaps = winBox.y < heroBox.y + heroBox.height && winBox.y + winBox.height > heroBox.y;
-  overlaps ? pass('window overlays the headline') : fail('window overlays the headline', 'no overlap');
-}
+/* overture: the title exists and the claim words are present */
+const overtureTitle = await page.locator('#hero-title').count();
+overtureTitle === 1 ? pass('overture title renders') : fail('overture title renders', `count=${overtureTitle}`);
+const claimWords = await page.locator('.claim__word--flat').count();
+claimWords >= 1 ? pass('claim chapter present') : fail('claim chapter present', 'missing');
 
 const overflow = await page.evaluate(() => {
   const doc = document.documentElement;
@@ -75,37 +69,52 @@ const overflow = await page.evaluate(() => {
 if (overflow.scrollWidth <= overflow.clientWidth + 1) pass('no horizontal overflow (desktop)');
 else fail('no horizontal overflow (desktop)', JSON.stringify(overflow));
 
-/* stats counter finished */
-await page.locator('.stats').scrollIntoViewIfNeeded();
-await page.waitForTimeout(2000);
-const statValue = await page.locator('[data-count]').first().textContent();
-statValue === '05' ? pass('stat counters land on real values', statValue) : fail('stat counters', `got ${statValue}`);
+/* proof counters land on real values */
+await page.locator('#proof').scrollIntoViewIfNeeded();
+await page.waitForTimeout(1800);
+const proofValue = await page.locator('#proof [data-count]').first().textContent();
+proofValue === '05' ? pass('proof counters land on real values', proofValue) : fail('proof counters', `got ${proofValue}`);
 
-/* pinned frames film (v2: replaces the rack steps) — the pin runs for
-   +=400% of the viewport (Frames.tsx), so scrub 55% of that distance */
+/* the claim: pinned scrub wakes the signal */
 await page.evaluate(() => window.scrollTo(0, 0));
 await page.waitForTimeout(400);
-const framesTop = await page.evaluate(() => {
-  const el = document.querySelector('#frames');
+const claimTop = await page.evaluate(() => {
+  const el = document.querySelector('#claim');
   return el ? el.getBoundingClientRect().top + window.scrollY : -1;
 });
-const framesHeight = await page.evaluate(() => document.querySelector('#frames')?.offsetHeight ?? 0);
-const FRAMES_PIN_VIEWPORTS = 4; // keep in sync with end: '+=400%' in Frames.tsx
+const claimH = await page.evaluate(() => document.querySelector('#claim')?.offsetHeight ?? 0);
+const CLAIM_PIN_VIEWPORTS = 2.6; // keep in sync with end: '+=260%' in Claim.tsx
 await page.evaluate(
   (y) => window.scrollTo(0, y),
-  framesTop + framesHeight * FRAMES_PIN_VIEWPORTS * 0.55,
+  claimTop + claimH * CLAIM_PIN_VIEWPORTS * 0.8,
 );
-await page.waitForTimeout(900);
-const framesTitleEl = page.locator('#frames .frames__slide.is-active .frames__title').first();
-const framesTitle = (await framesTitleEl.count()) ? await framesTitleEl.textContent() : null;
-framesTitle && framesTitle !== 'Clarity'
-  ? pass('frames film advances with scroll', framesTitle)
-  : fail('frames film advances with scroll', `title ${framesTitle}`);
-const counterEl = page.locator('#frames .frames__head .label').first();
-const frameCounter = (await counterEl.count()) ? await counterEl.textContent() : null;
-frameCounter && /frame 0[2-5]\/05/i.test(frameCounter.replace(/\s+/g, ' '))
-  ? pass('frames counter advances', frameCounter)
-  : fail('frames counter advances', frameCounter ?? 'none');
+await page.waitForTimeout(1200);
+const aliveOpacity = await page.evaluate(
+  () => Number(getComputedStyle(document.querySelector('.claim__word--alive')).opacity),
+);
+const gainText = await page.locator('#claim .claim__gain span').first().textContent();
+const gainPct = Number(String(gainText).replace('%', '').trim());
+aliveOpacity > 0.5 && gainPct > 40
+  ? pass('claim wakes the signal', `opacity=${aliveOpacity.toFixed(2)} gain=${gainPct}%`)
+  : fail('claim wakes the signal', `opacity=${aliveOpacity.toFixed(2)} gain=${gainText}%`);
+
+/* the chain: horizontal scrub activates modules */
+const chainTop = await page.evaluate(() => {
+  const el = document.querySelector('#chain');
+  return el ? el.getBoundingClientRect().top + window.scrollY : -1;
+});
+const chainScroll = await page.evaluate(
+  () => document.querySelector('.chain__track')?.scrollWidth - window.innerWidth,
+);
+await page.evaluate(
+  (y) => window.scrollTo(0, y),
+  chainTop + Math.max(200, chainScroll) * 0.6,
+);
+await page.waitForTimeout(1200);
+const hotName = await page.locator('.chain__module.is-hot .chain__name').first().textContent();
+hotName && hotName.trim() !== 'Clarity'
+  ? pass('chain advances with scroll', hotName)
+  : fail('chain advances with scroll', `hot=${hotName}`);
 
 /* EQ drag */
 await page.locator('#playground').scrollIntoViewIfNeeded();
@@ -135,13 +144,14 @@ pathBefore !== pathAfter ? pass('preset changes the curve') : fail('preset chang
 await page.locator('#install').scrollIntoViewIfNeeded();
 await page.waitForTimeout(500);
 await page.getByRole('tab', { name: 'Fedora RPM' }).click();
-await page.waitForTimeout(250);
+await page.waitForTimeout(350);
 const rpmSelected = (await page.getByRole('tab', { name: 'Fedora RPM' }).getAttribute('aria-selected')) === 'true';
-const rpmText = (await page.locator('#install-panel').textContent()) ?? '';
-const rpmTab = rpmSelected && rpmText.includes('dnf install') && !rpmText.includes('flatpak install');
+const rpmText = (await page.locator('.term__body').textContent()) ?? '';
+const rpmTab = rpmSelected && rpmText.includes('dnf install');
 rpmTab ? pass('install tabs switch command sets') : fail('install tabs', `selected=${rpmSelected}`);
 
 await page.getByRole('tab', { name: 'Flatpak' }).click();
+await page.waitForTimeout(250);
 await page.getByRole('button', { name: 'Copy command 1' }).click();
 await page.waitForTimeout(200);
 const copiedVisible = await page.getByRole('button', { name: 'Copied' }).first().isVisible();
@@ -150,13 +160,6 @@ const copyWorks = copiedVisible && clipboard.includes('flatpak install');
 copyWorks
   ? pass('copy puts the install commands on the clipboard')
   : fail('copy', `confirmed=${copiedVisible} clipboard=${JSON.stringify(clipboard.slice(0, 40))}`);
-
-const rail = page.locator('.rail__viewport');
-const railBefore = await rail.evaluate((el) => el.scrollLeft);
-await page.getByRole('button', { name: 'Next feature' }).click();
-await page.waitForTimeout(700);
-const railAfter = await rail.evaluate((el) => el.scrollLeft);
-railAfter > railBefore ? pass('feature rail advances with its arrow', `${railBefore} → ${railAfter}`) : fail('feature rail arrow');
 
 /* theme + accent */
 await page.evaluate(() => window.scrollTo(0, 0));
@@ -249,14 +252,15 @@ mOverflow.scrollWidth <= mOverflow.clientWidth + 1
   ? pass('no horizontal overflow (mobile)')
   : fail('no horizontal overflow (mobile)', JSON.stringify(mOverflow));
 
-const mHero = await mobile.evaluate(() => {
-  const word = document.querySelector('#hero-title').getBoundingClientRect();
-  const win = document.querySelector('.hero__window').getBoundingClientRect();
-  return { wordBottom: word.bottom, winTop: win.top };
+const mChapters = await mobile.evaluate(() => {
+  const y = (el) => el.getBoundingClientRect().top + window.scrollY;
+  const overture = document.querySelector('#overture');
+  const engine = document.querySelector('#engine');
+  return { overtureBottom: overture ? y(overture) + overture.offsetHeight : -1, engineTop: engine ? y(engine) : -1 };
 });
-mHero.winTop >= mHero.wordBottom - 20
-  ? pass('mobile hero stacks word above window')
-  : fail('mobile hero stacking', JSON.stringify(mHero));
+mChapters.overtureBottom > 0 && mChapters.engineTop >= mChapters.overtureBottom
+  ? pass('mobile stacks overture above the engine chapter')
+  : fail('mobile chapter stacking', JSON.stringify(mChapters));
 
 const cls = await mobile.evaluate(() => Number((window.__cls ?? 0).toFixed(4)));
 cls < 0.02 ? pass('cumulative layout shift', String(cls)) : fail('cumulative layout shift', String(cls));

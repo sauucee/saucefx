@@ -6,9 +6,9 @@ import { REPO_URL, VERSION } from '../content/site';
 import { motionOff, setMotionOff, storedMotionOff } from '../lib/motionPreference';
 
 const LINKS = [
-  { href: '#frames', label: 'Rack', id: 'frames' },
+  { href: '#engine', label: 'Engine', id: 'engine' },
+  { href: '#chain', label: 'Chain', id: 'chain' },
   { href: '#playground', label: 'EQ', id: 'playground' },
-  { href: '#features', label: 'App', id: 'features' },
   { href: '#install', label: 'Install', id: 'install' },
 ];
 

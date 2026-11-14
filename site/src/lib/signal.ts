@@ -6,6 +6,8 @@ export type SignalEngine = {
   /** Seconds of signal elapsed since creation (for the readout timecode). */
   readonly time: number;
   mode: 'demo' | 'mic';
+  /** 0 = flatline (the narrative "before"), 1 = full signal. */
+  gain: number;
   setSource(next: SignalSource | null): void;
   tick(dt: number): void;
 };
@@ -17,6 +19,7 @@ export function createSignalEngine(bandCount = 31): SignalEngine {
   let t = 0;
   let level = 0;
   let mode: 'demo' | 'mic' = 'demo';
+  let gain = 1;
   let source: SignalSource | null = null;
 
   return {
@@ -33,6 +36,12 @@ export function createSignalEngine(bandCount = 31): SignalEngine {
     set mode(next) {
       mode = next;
       if (next === 'demo') source = null;
+    },
+    get gain() {
+      return gain;
+    },
+    set gain(next) {
+      gain = Math.min(1, Math.max(0, next));
     },
     setSource(next) {
       source = next;
@@ -57,7 +66,7 @@ export function createSignalEngine(bandCount = 31): SignalEngine {
       const ease = Math.min(1, dt * 14);
       let sum = 0;
       for (let i = 0; i < bandCount; i++) {
-        bands[i] += (target[i] - bands[i]) * ease;
+        bands[i] += (target[i] * gain - bands[i]) * ease;
         sum += bands[i];
       }
       level += (sum / bandCount - level) * Math.min(1, dt * 8);
