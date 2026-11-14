@@ -150,11 +150,6 @@ export function EqPlayground() {
   return (
     <section id="playground" className="eq sec" aria-labelledby="eq-title">
       <div className="shell">
-        <header className="sec__head">
-          <span className="label">03 — Playground</span>
-          <span className="label">Mouse · touch · arrow keys</span>
-        </header>
-
         <div className="eq__head">
           <Reveal as="h2" id="eq-title" className="eq__title">
             Thirty-one bands.

@@ -2426,6 +2426,7 @@ main {
   white-space: nowrap;
   color: var(--ink);
   text-transform: uppercase;
+  will-change: transform;
 }
 .overture__sub {
   color: var(--muted);
@@ -2620,6 +2621,12 @@ main {
   stroke: var(--accent);
   stroke-width: 2;
   vector-effect: non-scaling-stroke;
+  stroke-dasharray: 320;
+  stroke-dashoffset: 320;
+  transition: stroke-dashoffset 900ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.chain__module.is-hot .chain__plot path {
+  stroke-dashoffset: 0;
 }
 .chain__name {
   font-size: clamp(1.8rem, 4.2vw, 3.4rem);

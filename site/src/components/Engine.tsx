@@ -35,6 +35,34 @@ export function Engine() {
           },
         );
       });
+      /* pointer tilt — the window leans toward you, never flat */
+      if (window.matchMedia('(pointer: fine)').matches) {
+        const win = root.current?.querySelector<HTMLElement>('.engine__window');
+        if (win) {
+          const restY = -6;
+          const restX = 3;
+          gsap.set(win, { rotationY: restY, rotationX: restX });
+          const rY = gsap.quickTo(win, 'rotationY', { duration: 0.9, ease: 'power3.out' });
+          const rX = gsap.quickTo(win, 'rotationX', { duration: 0.9, ease: 'power3.out' });
+          const onMove = (ev: PointerEvent) => {
+            const nx = (ev.clientX / window.innerWidth) * 2 - 1;
+            const ny = (ev.clientY / window.innerHeight) * 2 - 1;
+            rY(restY + nx * 5);
+            rX(restX - ny * 4);
+          };
+          const onLeave = () => {
+            rY(restY);
+            rX(restX);
+          };
+          root.current?.addEventListener('pointermove', onMove);
+          root.current?.addEventListener('pointerleave', onLeave);
+          return () => {
+            root.current?.removeEventListener('pointermove', onMove);
+            root.current?.removeEventListener('pointerleave', onLeave);
+            mm.revert();
+          };
+        }
+      }
       return () => mm.revert();
     },
     { scope: root },
