@@ -2357,6 +2357,23 @@ a {
   );
 }
 
+/* Opt-in mic bridge */
+.signal-toggle {
+  cursor: pointer;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  padding: 0.45rem 0.8rem;
+  color: var(--accent-text);
+  background: color-mix(in oklab, var(--panel) 80%, transparent);
+  transition: border-color 140ms ease;
+}
+.signal-toggle:hover {
+  border-color: var(--accent);
+}
+.signal-toggle[aria-pressed='true'] {
+  border-color: var(--accent);
+}
+
 /* The canvas spectrum floor replaces the CSS bar strip. Decided at first
    render (not on canvas load) so the grid never reflows mid-session. */
 .hero--signal .hero__spectrum {

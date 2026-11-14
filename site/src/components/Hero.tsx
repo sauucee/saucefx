@@ -4,6 +4,7 @@ import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { ArrowDown, ArrowUpRight, Github, Move } from 'lucide-react';
 import { AppScreenshot } from './AppScreenshot';
+import { SignalToggle } from './SignalToggle';
 import { Spectrum } from './Spectrum';
 import { REPO_URL, VERSION } from '../content/site';
 import { prefersReducedMotion, usePrefersReducedMotion } from '../lib/usePrefersReducedMotion';
@@ -259,6 +260,7 @@ export function Hero({ ready }: { ready: boolean }) {
             <Github aria-hidden="true" /> GitHub
             <ArrowUpRight aria-hidden="true" />
           </a>
+          {signal && <SignalToggle />}
           <span className="label">AGPL-3.0-or-later</span>
         </div>
 
