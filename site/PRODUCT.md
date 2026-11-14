@@ -31,7 +31,8 @@ command. Secondary: link out to the source and the release artefacts.
   features, no invented numbers, no invented press.
 - Static build, GitHub Pages compatible (relative asset paths), also fine on
   Vercel.
-- Vite + React + TypeScript, GSAP + ScrollTrigger, Lenis, Tailwind, Lucide.
+- Vite + React + TypeScript, GSAP + ScrollTrigger, Lenis, Tailwind, Lucide;
+  three + @react-three/fiber (lazy-loaded hero scene only).
 - Figtree only. Dark by default; soft light theme is opt-in.
 - Motion is ambience: `prefers-reduced-motion` removes the curtain, pinning and
   drag momentum rather than merely shortening them.

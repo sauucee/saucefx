@@ -106,3 +106,19 @@ The brief referenced `assets/Images/saucefx-logo.svg` and
   itself would no longer be a screenshot. The page surface, controls and
   spectrum follow the tokens.
 
+## Motion v2 — "The Signal" (amendment, 2026-11-15)
+
+- The hero gains a WebGL **signal field**: a fullscreen GLSL spectrogram
+  backdrop + a 31-band instanced spectrum floor, both driven by one shared
+  signal engine. Colour comes only from tokens (`--accent`, `--bg-deep`); no
+  new palette.
+- **Frames** replaces the rack section: a pinned, scroll-scrubbed 5-step
+  sequence with a mono `FRAME NN/05` readout and a scrub rail. Same copy, same
+  claims.
+- Optional **mic mode** (opt-in only) feeds the same engine; the default is a
+  procedural demo signal — the page never requires audio input.
+- Reduced motion: no canvas, no pin, no scrub — the static fallback still says
+  everything.
+- Perf budget: three.js + R3F in a lazy chunk; main JS ≤ 210 kB gzip; DPR
+  capped at 1.75 desktop / 1.25 mobile; canvas pauses off-screen.
+
