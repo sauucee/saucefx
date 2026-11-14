@@ -85,6 +85,10 @@ export function Hero({ ready }: { ready: boolean }) {
 
       if (!window.matchMedia('(pointer: fine)').matches) return;
 
+      /* The window rests at a real angle — never flat — and leans with the pointer. */
+      const REST_Y = -9;
+      const REST_X = 5;
+      gsap.set(tiltEl, { rotationY: REST_Y, rotationX: REST_X });
       const rotY = gsap.quickTo(tiltEl, 'rotationY', { duration: 0.9, ease: 'power3.out' });
       const rotX = gsap.quickTo(tiltEl, 'rotationX', { duration: 0.9, ease: 'power3.out' });
       const wordX = wordEl ? gsap.quickTo(wordEl, 'x', { duration: 1.2, ease: 'power3.out' }) : null;
@@ -104,8 +108,8 @@ export function Hero({ ready }: { ready: boolean }) {
         const ny = ((event.clientY - rect.top) / rect.height) * 2 - 1;
 
         if (!dragging) {
-          rotY(nx * 7);
-          rotX(-ny * 5);
+          rotY(REST_Y + nx * 7);
+          rotX(REST_X - ny * 5);
           wordX?.(nx * -20);
           wordY?.(ny * -12);
         }
@@ -133,8 +137,8 @@ export function Hero({ ready }: { ready: boolean }) {
       };
 
       const onLeave = () => {
-        rotY(0);
-        rotX(0);
+        rotY(REST_Y);
+        rotX(REST_X);
         wordX?.(0);
         wordY?.(0);
         hideHint();
@@ -160,8 +164,8 @@ export function Hero({ ready }: { ready: boolean }) {
         delete dragEl.dataset.dragging;
         if (dragEl.hasPointerCapture(event.pointerId)) dragEl.releasePointerCapture(event.pointerId);
         gsap.to(dragEl, { x: 0, y: 0, duration: 1.1, ease: 'elastic.out(1, 0.6)' });
-        rotX(0);
-        rotY(0);
+        rotX(REST_X);
+        rotY(REST_Y);
       };
 
       stage.current?.addEventListener('pointermove', onMove);

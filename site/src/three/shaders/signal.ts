@@ -33,26 +33,21 @@ float fbm(vec2 p) {
 
 void main() {
   vec2 uv = vUv;
-  // pointer parallax: the field leans away from the cursor, slowly
   vec2 drift = (uMouse - 0.5) * 0.18;
   vec2 q = vec2(uv.x * 3.0 + drift.x, uv.y * 2.0 + drift.y - uTime * 0.05);
   float field = fbm(q + fbm(q + uTime * 0.03) * 0.6);
 
-  // spectrogram contours: thin accent lines crawling over the field
-  float contour = smoothstep(0.06, 0.0, abs(fract(field * 14.0) - 0.5));
-
-  // scanline sweep: a slow bright band climbing the panel
+  // slow scanline sweep climbing the panel
   float sweepY = fract(uTime * 0.045);
   float sweep = exp(-abs(uv.y - sweepY) * 42.0) * 0.10;
 
-  // hot floor: accent energy breathing with the signal
+  // hot floor breathing with the signal
   float floorGlow = pow(1.0 - uv.y, 3.0) * (0.35 + 0.65 * uLevel);
 
-  vec3 col = uMetal;
-  col = mix(col, uMetal * 0.55 + uAccent * 0.02, contour * (0.35 + 0.45 * uLevel));
-  col += uAccent * contour * (0.14 + 0.26 * uLevel);
-  col += uAccent * floorGlow * 0.5;
-  col += uAccent * pow(field, 3.0) * 0.16;
+  // quiet tonal metal — the waveform lines carry the show, not the backdrop
+  vec3 col = uMetal * (0.9 + 0.2 * field);
+  col += uAccent * floorGlow * 0.28;
+  col += uAccent * pow(field, 3.0) * 0.08;
   col += uAccent * sweep * (0.5 + 0.5 * uLevel);
 
   // vignette — the type always wins (lighter floor on light themes)

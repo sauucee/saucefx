@@ -754,7 +754,7 @@ a {
   place-items: center;
 }
 .hero__word {
-  font-size: var(--step-display);
+  font-size: clamp(3.2rem, 19.2vw, 18.5rem);
   font-weight: 800;
   line-height: 0.72;
   letter-spacing: -0.055em;
@@ -791,8 +791,25 @@ a {
 .hero__window-layer {
   position: relative;
   z-index: 2;
-  width: min(85vw, 760px, 66svh);
-  translate: 0 6%;
+  width: min(88vw, 840px, 74svh);
+  translate: 0 4%;
+}
+/* light pool: the window spills accent glow onto the floor */
+.hero__window-layer::after {
+  content: '';
+  position: absolute;
+  left: 8%;
+  right: 8%;
+  bottom: -14%;
+  height: 26%;
+  background: radial-gradient(
+    50% 50% at 50% 50%,
+    color-mix(in oklab, var(--accent) 26%, transparent),
+    transparent 72%
+  );
+  filter: blur(18px);
+  z-index: -1;
+  pointer-events: none;
 }
 .hero__window {
   cursor: grab;
@@ -2505,7 +2522,7 @@ a {
   inset: 0;
   display: grid;
   place-items: center;
-  font-size: var(--step-display);
+  font-size: clamp(3.2rem, 19.2vw, 18.5rem);
   font-weight: 800;
   line-height: 0.72;
   letter-spacing: -0.055em;
