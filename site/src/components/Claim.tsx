@@ -67,8 +67,15 @@ export function Claim() {
         // UNTIL NOW. + the wake-up
         tl.fromTo(
           alive.current,
-          { opacity: 0, y: 80 },
-          { opacity: 1, y: 0, duration: 0.9, ease: 'expo.out' },
+          { opacity: 0, y: 80, filter: 'blur(16px)', letterSpacing: '0.06em' },
+          {
+            opacity: 1,
+            y: 0,
+            filter: 'blur(0px)',
+            letterSpacing: '-0.04em',
+            duration: 1,
+            ease: 'expo.out',
+          },
           1.28,
         );
         tl.fromTo('.claim__gain', { opacity: 0 }, { opacity: 1, duration: 0.3 }, 1.5);

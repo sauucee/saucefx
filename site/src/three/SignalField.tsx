@@ -65,112 +65,129 @@ function Bloom({ strength }: { strength: number }) {
   return null;
 }
 
-/* ------------------------------------------------- persistence waveform */
+/* ------------------------------------------------- waveform terrain */
 
-const TRAILS = 6; // 1 primary + 5 persistence echoes
-const SEGS = 200;
-const WIDTH = 12.6;
+const ROWS = 22; // 1 hero row + rows receding into fog
+const SEGS = 150;
+const WIDTH = 15;
 
 /**
- * ONE elegant oscilloscope line, displaced by the live 31-band signal, with
- * persistence-trail echoes of its own past — the classic scope look. All
- * trails share the same shape so the field reads as a single object.
+ * The Unknown Pleasures shot: rows of the live waveform receding into fog.
+ * Every row is the same signal at an earlier moment; depth gives it a body.
  */
-function SignalLine({ isLight }: { isLight: boolean }) {
+function SignalTerrain({ isLight }: { isLight: boolean }) {
   const engine = getSignalEngine();
   const accent = useAccentColor();
   const mat = useRef<THREE.LineBasicMaterial>(null);
   const geom = useRef<THREE.BufferGeometry>(null);
-  const positions = useMemo(() => new Float32Array(TRAILS * SEGS * 2 * 3), []);
-  const colors = useMemo(() => new Float32Array(TRAILS * SEGS * 2 * 3), []);
+  const rig = useRef<THREE.Group>(null);
+  const positions = useMemo(() => new Float32Array(ROWS * SEGS * 2 * 3), []);
+  const colors = useMemo(() => new Float32Array(ROWS * SEGS * 2 * 3), []);
   const accentC = useMemo(() => new THREE.Color('#ff2e57'), []);
-  const heatA = useMemo(() => new THREE.Color('#0ea5b7'), []); // deep spectrogram teal
-  const heatB = useMemo(() => new THREE.Color('#7c5cff'), []); // violet mid
-  const heatC = useMemo(() => new THREE.Color('#ff2e57'), []); // accent end
+  const heatA = useMemo(() => new THREE.Color('#0ea5b7'), []);
+  const heatB = useMemo(() => new THREE.Color('#7c5cff'), []);
+  const heatC = useMemo(() => new THREE.Color('#ff2e57'), []);
   const heat = useMemo(() => new THREE.Color(), []);
   const t = useRef(0);
+  const mouse = useRef({ x: 0, y: 0 });
 
   useEffect(() => {
     accentC.set(accent);
     heatC.set(accent);
   }, [accent, accentC, heatC]);
 
-  // spectrogram heat along x (teal → violet → accent), trail intensity baked in
   useEffect(() => {
-    for (let l = 0; l < TRAILS; l++) {
-      const intensity = l === 0 ? 1 : 0.3 * Math.pow(0.66, l - 1);
-      for (let s = 0; s <= SEGS; s++) {
-        const u = s / SEGS;
-        if (u < 0.5) heat.copy(heatA).lerp(heatB, u * 2);
-        else heat.copy(heatB).lerp(heatC, (u - 0.5) * 2);
-        const vi = (l * (SEGS + 1) + s) * 3;
-        colors[vi] = heat.r * intensity;
-        colors[vi + 1] = heat.g * intensity;
-        colors[vi + 2] = heat.b * intensity;
-      }
-    }
-    const cAttr = geom.current?.attributes.color as THREE.BufferAttribute | undefined;
-    if (cAttr) cAttr.needsUpdate = true;
-  }, [accentC, heatC, heatA, heatB, heat, colors, geom]);
-
-  useEffect(() => {
-    if (mat.current) mat.current.opacity = isLight ? 0.62 : 0.9;
+    if (mat.current) mat.current.opacity = isLight ? 0.66 : 0.95;
   }, [isLight]);
-
-  // waveform(x, time): slow swell + second harmonic + a traveling energy packet
-  const sample = (x: number, time: number, level: number) => {
-    const a1 = 0.14 + level * 0.1;
-    const a2 = 0.06;
-    const packet = Math.exp(-((x - Math.sin(time * 0.13) * 3.1) ** 2) / 2.6) * level * 0.3;
-    return (
-      Math.sin(x * 1.15 + time * 0.5) * a1 +
-      Math.sin(x * 2.3 - time * 0.34 + 1.7) * a2 +
-      packet
-    );
-  };
 
   useFrame((_, dt) => {
     t.current += dt;
+    const time = t.current;
+    const level = engine.level;
+    const m = window.__signalMouse;
+    if (m) {
+      mouse.current.x += (m.x - 0.5 - mouse.current.x) * 0.04;
+      mouse.current.y += (m.y - 0.5 - mouse.current.y) * 0.04;
+    }
+    if (rig.current) {
+      rig.current.rotation.y = mouse.current.x * 0.16 + Math.sin(time * 0.07) * 0.012;
+      rig.current.rotation.x = -mouse.current.y * 0.05;
+    }
+
     const arr = positions;
     let k = 0;
-    for (let l = 0; l < TRAILS; l++) {
-      const time = t.current - l * 0.24; // each echo is the line's own past
-      const baseY = -0.3 - l * 0.13; // crosses behind the window's lower third
-      const level = engine.level;
+    for (let l = 0; l < ROWS; l++) {
+      const depth = l / (ROWS - 1); // 0 near, 1 far
+      const z = -depth * 15; // recede into fog
+      const baseY = 0.6 + depth * 3.5; // rows wrap behind the word, rising to the horizon
+      // energy: near rows shout, far rows whisper (fog)
+      const fog = Math.pow(1 - depth, 1.7);
+      const band = engine.bands[Math.min(30, ((1 - depth) * 30) | 0)];
+      // the landscape exists even when the signal sleeps — base undulation
+      const amp = (0.15 + level * 0.12 + band * 0.55) * (0.4 + fog * 0.6);
+      const trailTime = time - depth * 0.5; // far rows are the past
       let prevY = 0;
       for (let s = 0; s <= SEGS; s++) {
         const x = -WIDTH / 2 + (s / SEGS) * WIDTH;
-        const y = baseY + sample(x, time, level);
+        const centred = 0.25 + 0.75 * Math.pow(1 - Math.abs(x) / (WIDTH / 2), 1.5);
+        const y =
+          baseY +
+          (Math.sin(x * 1.05 + trailTime * 0.5 + l * 0.35) * amp +
+            Math.sin(x * 2.2 - trailTime * 0.32 + 1.6) * amp * 0.42 +
+            Math.exp(-((x - Math.sin(trailTime * 0.13) * 2.8) ** 2) / 2.2) * level * 0.34) *
+            centred;
         if (s > 0) {
           arr[k++] = x - WIDTH / SEGS;
           arr[k++] = prevY;
-          arr[k++] = 0;
+          arr[k++] = z;
           arr[k++] = x;
           arr[k++] = y;
-          arr[k++] = 0;
+          arr[k++] = z;
         }
         prevY = y;
       }
     }
     const attr = geom.current?.attributes.position as THREE.BufferAttribute | undefined;
     if (attr) attr.needsUpdate = true;
+
+    // heat gradient along x, faded by fog — baked per row
+    const cArr = colors;
+    let c = 0;
+    for (let l = 0; l < ROWS; l++) {
+      const depth = l / (ROWS - 1);
+      const fog = Math.pow(1 - depth, 1.7);
+      const intensity = (0.06 + fog * 0.94) * 0.9;
+      for (let s = 0; s <= SEGS; s++) {
+        const u = s / SEGS;
+        if (u < 0.5) heat.copy(heatA).lerp(heatB, u * 2);
+        else heat.copy(heatB).lerp(accentC, (u - 0.5) * 2);
+        cArr[c++] = heat.r * intensity;
+        cArr[c++] = heat.g * intensity;
+        cArr[c++] = heat.b * intensity;
+      }
+    }
+    const cAttr = geom.current?.attributes.color as THREE.BufferAttribute | undefined;
+    if (cAttr) cAttr.needsUpdate = true;
   });
 
   return (
-    <lineSegments frustumCulled={false} renderOrder={0}>
-      <bufferGeometry ref={geom}>
-        <bufferAttribute attach="attributes-position" args={[positions, 3]} />
-        <bufferAttribute attach="attributes-color" args={[colors, 3]} />
-      </bufferGeometry>
-      <lineBasicMaterial
-        ref={mat}
-        vertexColors
-        transparent
-        blending={isLight ? THREE.NormalBlending : THREE.AdditiveBlending}
-        depthWrite={false}
-        toneMapped={false}
-      />
-    </lineSegments>
+    <group ref={rig}>
+      <lineSegments frustumCulled={false} renderOrder={0}>
+        <bufferGeometry ref={geom}>
+          <bufferAttribute attach="attributes-position" args={[positions, 3]} />
+          <bufferAttribute attach="attributes-color" args={[colors, 3]} />
+        </bufferGeometry>
+        <lineBasicMaterial
+          ref={mat}
+          vertexColors
+          transparent
+          blending={isLight ? THREE.NormalBlending : THREE.AdditiveBlending}
+          depthWrite={false}
+          toneMapped={false}
+          fog={false}
+        />
+      </lineSegments>
+    </group>
   );
 }
 
@@ -273,7 +290,7 @@ function SignalScene({ metal, isLight }: { metal: string; isLight: boolean }) {
       </mesh>
 
       <Dust />
-      <SignalLine isLight={isLight} />
+      <SignalTerrain isLight={isLight} />
     </>
   );
 }
