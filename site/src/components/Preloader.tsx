@@ -71,6 +71,14 @@ export function Preloader({
         0,
       );
 
+      // The real mark wipes in under the count.
+      tl.fromTo(
+        '.pre__mark',
+        { clipPath: 'inset(0 100% 0 0)' },
+        { clipPath: 'inset(0 0% 0 0)', duration: 0.9, ease: 'power2.inOut' },
+        0.1,
+      );
+
       const breathe = gsap.to(bars, {
         scaleY: () => gsap.utils.random(0.12, 1),
         duration: 0.42,

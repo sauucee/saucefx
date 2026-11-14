@@ -1073,6 +1073,7 @@ a {
   border-block: 1px solid color-mix(in oklab, var(--accent) 60%, black);
   padding-block: 0.55rem;
   rotate: -1.2deg;
+  transform: skewX(var(--skew, 0deg));
   margin-inline: -3vw;
   scale: 1.025;
 }

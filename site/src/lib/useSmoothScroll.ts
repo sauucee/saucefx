@@ -6,6 +6,13 @@ import { prefersReducedMotion } from './usePrefersReducedMotion';
 
 gsap.registerPlugin(ScrollTrigger);
 
+let lenisInstance: Lenis | null = null;
+
+/** The document's single Lenis instance, or null (reduced motion / not mounted). */
+export function getLenis(): Lenis | null {
+  return lenisInstance;
+}
+
 /**
  * One Lenis instance for the document. ScrollTrigger is driven from Lenis'
  * raf loop (not its own), which is what keeps pinned sections from jittering.
@@ -21,6 +28,7 @@ export function useSmoothScroll(): void {
       touchMultiplier: 1.6,
       smoothWheel: true,
     });
+    lenisInstance = lenis;
 
     lenis.on('scroll', ScrollTrigger.update);
 
@@ -46,6 +54,7 @@ export function useSmoothScroll(): void {
       document.removeEventListener('click', onClick);
       gsap.ticker.remove(raf);
       lenis.destroy();
+      lenisInstance = null;
     };
   }, []);
 }

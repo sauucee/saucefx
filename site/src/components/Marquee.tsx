@@ -1,4 +1,6 @@
+import { useRef } from 'react';
 import { EFFECTS } from '../content/site';
+import { useLenisVelocity } from '../lib/useLenisVelocity';
 
 /** A four-point "signal" spark, drawn inline so the strip costs no request. */
 function Spark() {
@@ -32,8 +34,11 @@ function Group() {
 }
 
 export function Marquee() {
+  const wrap = useRef<HTMLDivElement>(null);
+  useLenisVelocity(wrap);
+
   return (
-    <div className="marquee-wrap">
+    <div className="marquee-wrap" ref={wrap}>
       <div className="marquee" role="img" aria-label={`Five effects: ${EFFECTS.join(', ')}`}>
         <div className="marquee__track" aria-hidden="true">
           <Group />
