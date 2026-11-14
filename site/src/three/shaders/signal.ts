@@ -33,27 +33,18 @@ float fbm(vec2 p) {
 
 void main() {
   vec2 uv = vUv;
-  vec2 drift = (uMouse - 0.5) * 0.18;
-  vec2 q = vec2(uv.x * 3.0 + drift.x, uv.y * 2.0 + drift.y - uTime * 0.05);
-  float field = fbm(q + fbm(q + uTime * 0.03) * 0.6);
+  vec2 drift = (uMouse - 0.5) * 0.12;
+  vec2 q = vec2(uv.x * 3.0 + drift.x, uv.y * 2.0 + drift.y - uTime * 0.02);
+  float field = fbm(q + fbm(q + uTime * 0.015) * 0.6);
 
-  // slow scanline sweep climbing the panel
-  float sweepY = fract(uTime * 0.045);
-  float sweep = exp(-abs(uv.y - sweepY) * 42.0) * 0.10;
+  // atmosphere only — the signal line is the focal element
+  vec3 col = uMetal * (0.97 + 0.06 * field);
+  col += uAccent * pow(field, 3.0) * 0.04;
 
-  // hot floor breathing with the signal
-  float floorGlow = pow(1.0 - uv.y, 3.0) * (0.35 + 0.65 * uLevel);
-
-  // quiet tonal metal — the waveform lines carry the show, not the backdrop
-  vec3 col = uMetal * (0.9 + 0.2 * field);
-  col += uAccent * floorGlow * 0.28;
-  col += uAccent * pow(field, 3.0) * 0.08;
-  col += uAccent * sweep * (0.5 + 0.5 * uLevel);
-
-  // vignette — the type always wins (lighter floor on light themes)
+  // vignette — deep void, focus center (lighter on light themes)
   float isLight = step(0.5, dot(uMetal, vec3(0.333)));
-  float vigFloor = mix(0.5, 0.82, isLight);
-  float vig = smoothstep(1.15, 0.35, distance(uv, vec2(0.5, 0.42)));
+  float vigFloor = mix(0.34, 0.88, isLight);
+  float vig = smoothstep(1.0, 0.28, distance(uv, vec2(0.5, 0.4)));
   col *= mix(vigFloor, 1.0, vig);
 
   gl_FragColor = vec4(col, 1.0);

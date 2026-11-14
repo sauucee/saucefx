@@ -47,8 +47,8 @@ function Bloom({ strength }: { strength: number }) {
       new UnrealBloomPass(
         new THREE.Vector2(size.width, size.height),
         strength,
-        0.9, // radius
-        0.32, // threshold — the signal emits
+        1.0, // radius — soft, wide falloff
+        0.28, // threshold — only the signal emits
       ),
     );
     return c;
@@ -57,7 +57,7 @@ function Bloom({ strength }: { strength: number }) {
 
   useEffect(() => {
     composer.setSize(size.width, size.height);
-    composer.setPixelRatio(Math.min(window.devicePixelRatio, 1.75));
+    composer.setPixelRatio(Math.min(window.devicePixelRatio, 1.6));
   }, [composer, size]);
 
   useEffect(() => () => composer.dispose(), [composer]);
@@ -66,53 +66,74 @@ function Bloom({ strength }: { strength: number }) {
   return null;
 }
 
-/* -------------------------------------------------------- waveform lines */
+/* ------------------------------------------------- persistence waveform */
 
-const LINES = 30;
-const SEGS = 144;
-const WIDTH = 13.2;
+const TRAILS = 6; // 1 primary + 5 persistence echoes
+const SEGS = 200;
+const WIDTH = 12.6;
 
 /**
- * The hero IS the signal: horizontal DAW-style lines whose vertical
- * displacement is driven by the live 31-band engine — a glowing waveform
- * field that breathes with the demo (or the user's mic).
+ * ONE elegant oscilloscope line, displaced by the live 31-band signal, with
+ * persistence-trail echoes of its own past — the classic scope look. All
+ * trails share the same shape so the field reads as a single object.
  */
-function WaveformLines({ isLight }: { isLight: boolean }) {
+function SignalLine({ isLight }: { isLight: boolean }) {
   const engine = getSignalEngine();
   const accent = useAccentColor();
   const mat = useRef<THREE.LineBasicMaterial>(null);
   const geom = useRef<THREE.BufferGeometry>(null);
-  const positions = useMemo(
-    () => new Float32Array(LINES * SEGS * 2 * 3),
-    [],
-  );
+  const positions = useMemo(() => new Float32Array(TRAILS * SEGS * 2 * 3), []);
+  const colors = useMemo(() => new Float32Array(TRAILS * SEGS * 2 * 3), []);
+  const accentC = useMemo(() => new THREE.Color('#ff2e57'), []);
   const t = useRef(0);
 
   useEffect(() => {
-    if (mat.current) mat.current.color.set(accent);
-  }, [accent]);
+    accentC.set(accent);
+  }, [accent, accentC]);
+
+  // trail brightness is baked into vertex colors (additive blending)
+  useEffect(() => {
+    for (let l = 0; l < TRAILS; l++) {
+      const intensity = l === 0 ? 1 : 0.3 * Math.pow(0.66, l - 1);
+      for (let s = 0; s <= SEGS; s++) {
+        const vi = (l * (SEGS + 1) + s) * 3;
+        colors[vi] = accentC.r * intensity;
+        colors[vi + 1] = accentC.g * intensity;
+        colors[vi + 2] = accentC.b * intensity;
+      }
+    }
+    const cAttr = geom.current?.attributes.color as THREE.BufferAttribute | undefined;
+    if (cAttr) cAttr.needsUpdate = true;
+  }, [accentC, colors, geom]);
+
+  useEffect(() => {
+    if (mat.current) mat.current.opacity = isLight ? 0.62 : 0.9;
+  }, [isLight]);
+
+  // waveform(x, time): slow swell + second harmonic + a traveling energy packet
+  const sample = (x: number, time: number, level: number) => {
+    const a1 = 0.14 + level * 0.1;
+    const a2 = 0.06;
+    const packet = Math.exp(-((x - Math.sin(time * 0.13) * 3.1) ** 2) / 2.6) * level * 0.3;
+    return (
+      Math.sin(x * 1.15 + time * 0.5) * a1 +
+      Math.sin(x * 2.3 - time * 0.34 + 1.7) * a2 +
+      packet
+    );
+  };
 
   useFrame((_, dt) => {
     t.current += dt;
-    const time = t.current;
     const arr = positions;
     let k = 0;
-    for (let l = 0; l < LINES; l++) {
-      const bn = l / (LINES - 1); // 0 lows … 1 highs
-      const band = engine.bands[Math.min(30, (bn * 30) | 0)];
-      const baseY = 2.5 - bn * 4.35; // fills +2.5 … −1.85
-      const amp = 0.04 + band * 0.55;
-      const freq = 1.15 + bn * 2.3;
-      const speed = 0.9 + bn * 1.9;
-      const phase = l * 0.83;
+    for (let l = 0; l < TRAILS; l++) {
+      const time = t.current - l * 0.24; // each echo is the line's own past
+      const baseY = -0.3 - l * 0.13; // crosses behind the window's lower third
+      const level = engine.level;
       let prevY = 0;
       for (let s = 0; s <= SEGS; s++) {
         const x = -WIDTH / 2 + (s / SEGS) * WIDTH;
-        const centred = 0.3 + 0.7 * Math.pow(1 - Math.abs(x) / (WIDTH / 2), 1.4);
-        const y =
-          baseY +
-          Math.sin(x * freq + time * speed + phase) * amp * centred +
-          Math.sin(x * 5.3 - time * (speed * 0.6)) * amp * 0.24 * centred;
+        const y = baseY + sample(x, time, level);
         if (s > 0) {
           arr[k++] = x - WIDTH / SEGS;
           arr[k++] = prevY;
@@ -132,18 +153,64 @@ function WaveformLines({ isLight }: { isLight: boolean }) {
     <lineSegments frustumCulled={false} renderOrder={0}>
       <bufferGeometry ref={geom}>
         <bufferAttribute attach="attributes-position" args={[positions, 3]} />
+        <bufferAttribute attach="attributes-color" args={[colors, 3]} />
       </bufferGeometry>
       <lineBasicMaterial
         ref={mat}
-        color="#ff2e57"
+        vertexColors
         transparent
-        opacity={isLight ? 0.62 : 0.5}
-        // Additive vanishes on light themes (adds toward white) — draw ink on paper instead.
         blending={isLight ? THREE.NormalBlending : THREE.AdditiveBlending}
         depthWrite={false}
         toneMapped={false}
       />
     </lineSegments>
+  );
+}
+
+/* ------------------------------------------------------------ dust */
+
+const DUST = 240;
+
+/** Slow-drifting atmosphere. Barely visible; adds depth to the void. */
+function Dust() {
+  const pts = useRef<THREE.Points>(null);
+  const positions = useMemo(() => {
+    const a = new Float32Array(DUST * 3);
+    for (let i = 0; i < DUST; i++) {
+      a[i * 3] = (Math.random() - 0.5) * 12;
+      a[i * 3 + 1] = (Math.random() - 0.5) * 6.4;
+      a[i * 3 + 2] = -0.4 - Math.random() * 2.2;
+    }
+    return a;
+  }, []);
+
+  useFrame((_, dt) => {
+    const attr = pts.current?.geometry.attributes.position as THREE.BufferAttribute | undefined;
+    if (!attr) return;
+    const a = attr.array as Float32Array;
+    for (let i = 0; i < DUST; i++) {
+      a[i * 3 + 1] += dt * (0.02 + (i % 5) * 0.004);
+      if (a[i * 3 + 1] > 3.4) a[i * 3 + 1] = -3.4;
+    }
+    attr.needsUpdate = true;
+  });
+
+  return (
+    <points ref={pts} frustumCulled={false}>
+      <bufferGeometry>
+        <bufferAttribute attach="attributes-position" args={[positions, 3]} />
+      </bufferGeometry>
+      <pointsMaterial
+        size={0.018}
+        color="#8a8a92"
+        transparent
+        opacity={0.22}
+        blending={THREE.AdditiveBlending}
+        depthWrite={false}
+        sizeAttenuation
+        toneMapped={false}
+      />
+    </points>
   );
 }
 
@@ -193,12 +260,14 @@ function SignalScene({ metal, isLight }: { metal: string; isLight: boolean }) {
     if (mesh) {
       for (let i = 0; i < BANDS; i++) {
         const n = i / (BANDS - 1);
-        const h = 0.05 + engine.bands[i] * 1.35;
-        dummy.position.set((n - 0.5) * 9.6, -2.55 + h / 2, -1.2);
+        const v = engine.bands[i];
+        const h = 0.03 + v * 0.85;
+        dummy.position.set((n - 0.5) * 9.8, -2.72 + h / 2, -1.2);
         dummy.scale.set(1, h, 1);
         dummy.updateMatrix();
         mesh.setMatrixAt(i, dummy.matrix);
-        tint.set(accent);
+        // scarce accent: most bars whisper, peaks speak
+        tint.set(accent).multiplyScalar(0.12 + v * 0.9);
         mesh.setColorAt(i, tint);
       }
       mesh.instanceMatrix.needsUpdate = true;
@@ -208,7 +277,7 @@ function SignalScene({ metal, isLight }: { metal: string; isLight: boolean }) {
 
   return (
     <>
-      {/* backdrop: fullscreen shader quad, always behind */}
+      {/* backdrop: near-black void with atmosphere */}
       <mesh frustumCulled={false} renderOrder={-1}>
         <planeGeometry args={[2, 2]} />
         <shaderMaterial
@@ -220,17 +289,17 @@ function SignalScene({ metal, isLight }: { metal: string; isLight: boolean }) {
         />
       </mesh>
 
-      {/* the signal: glowing waveform lines across the whole hero */}
-      <WaveformLines isLight={isLight} />
+      <Dust />
+      <SignalLine isLight={isLight} />
 
-      {/* spectrum floor: emissive bars catching the bloom */}
+      {/* spectrum floor hugging the bottom edge */}
       <instancedMesh ref={floor} args={[undefined, undefined, BANDS]} frustumCulled={false}>
-        <boxGeometry args={[0.12, 1, 0.12]} />
+        <boxGeometry args={[0.09, 1, 0.09]} />
         <meshStandardMaterial
           ref={floorMat}
           color="#000000"
           emissive="#ff2e57"
-          emissiveIntensity={isLight ? 0.85 : 1.5}
+          emissiveIntensity={isLight ? 0.5 : 0.9}
           toneMapped={false}
         />
       </instancedMesh>
@@ -275,8 +344,7 @@ export default function SignalField({
         camera={{ position: [0, 0, 5], fov: 50 }}
       >
         <SignalScene metal={metal} isLight={isLight} />
-        {/* bloom only on dark: on cream it would bloom the paper itself */}
-        {!isLight && <Bloom strength={1.05} />}
+        {!isLight && <Bloom strength={0.72} />}
       </Canvas>
     </div>
   );
