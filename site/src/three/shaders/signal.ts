@@ -13,6 +13,7 @@ uniform float uTime;
 uniform float uLevel;   // 0..1 engine level
 uniform vec3  uAccent;  // --accent as 0..1 rgb
 uniform vec3  uMetal;   // --bg-deep as 0..1 rgb (theme-aware base)
+uniform vec2  uMouse;   // 0..1 pointer, for parallax drift
 varying vec2 vUv;
 
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123); }
@@ -32,20 +33,27 @@ float fbm(vec2 p) {
 
 void main() {
   vec2 uv = vUv;
-  vec2 q = vec2(uv.x * 3.0, uv.y * 2.0 - uTime * 0.05);
+  // pointer parallax: the field leans away from the cursor, slowly
+  vec2 drift = (uMouse - 0.5) * 0.18;
+  vec2 q = vec2(uv.x * 3.0 + drift.x, uv.y * 2.0 + drift.y - uTime * 0.05);
   float field = fbm(q + fbm(q + uTime * 0.03) * 0.6);
 
   // spectrogram contours: thin accent lines crawling over the field
   float contour = smoothstep(0.06, 0.0, abs(fract(field * 14.0) - 0.5));
+
+  // scanline sweep: a slow bright band climbing the panel
+  float sweepY = fract(uTime * 0.045);
+  float sweep = exp(-abs(uv.y - sweepY) * 42.0) * 0.10;
 
   // hot floor: accent energy breathing with the signal
   float floorGlow = pow(1.0 - uv.y, 3.0) * (0.35 + 0.65 * uLevel);
 
   vec3 col = uMetal;
   col = mix(col, uMetal * 0.55 + uAccent * 0.02, contour * (0.35 + 0.45 * uLevel));
-  col += uAccent * contour * (0.10 + 0.20 * uLevel);
+  col += uAccent * contour * (0.14 + 0.26 * uLevel);
   col += uAccent * floorGlow * 0.5;
-  col += uAccent * pow(field, 3.0) * 0.14;
+  col += uAccent * pow(field, 3.0) * 0.16;
+  col += uAccent * sweep * (0.5 + 0.5 * uLevel);
 
   // vignette — the type always wins (lighter floor on light themes)
   float isLight = step(0.5, dot(uMetal, vec3(0.333)));

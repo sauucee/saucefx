@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } f
 import { RotateCcw } from 'lucide-react';
 import { BANDS, formatHz, smoothPath } from '../lib/curve';
 import { prefersReducedMotion } from '../lib/usePrefersReducedMotion';
+import { Reveal } from './Reveal';
 
 const BAND_COUNT = BANDS.length;
 
@@ -155,11 +156,11 @@ export function EqPlayground() {
         </header>
 
         <div className="eq__head">
-          <h2 id="eq-title" className="eq__title">
+          <Reveal as="h2" id="eq-title" className="eq__title">
             Thirty-one bands.
             <br />
             <em>Draw your own curve.</em>
-          </h2>
+          </Reveal>
           <p className="eq__lede">
             The same graphic layout as the app: pull a band up or down, or pick a shape and
             watch the curve settle. Nothing here is connected to audio — it is a drawing

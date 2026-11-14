@@ -10,7 +10,7 @@ import { EqPlayground } from './components/EqPlayground';
 import { FeatureRail } from './components/FeatureRail';
 import { Install } from './components/Install';
 import { Footer } from './components/Footer';
-import { ScrollProgress } from './components/ScrollProgress';
+import { Transport } from './components/Transport';
 import { useSmoothScroll } from './lib/useSmoothScroll';
 import { usePrefersReducedMotion } from './lib/usePrefersReducedMotion';
 import { useSignalDriver } from './lib/useSignal';
@@ -46,7 +46,7 @@ export default function App() {
         <Preloader onReveal={() => setReady(true)} onDone={() => setCurtainGone(true)} />
       )}
 
-      <ScrollProgress />
+      <Transport />
 
       <a className="skip-link" href="#main">
         Skip to content

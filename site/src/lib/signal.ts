@@ -3,6 +3,8 @@ export type SignalSource = (target: Float32Array, t: number) => void;
 export type SignalEngine = {
   readonly bands: Float32Array; // 31 eased values, 0..1
   readonly level: number; // 0..1 mean energy
+  /** Seconds of signal elapsed since creation (for the readout timecode). */
+  readonly time: number;
   mode: 'demo' | 'mic';
   setSource(next: SignalSource | null): void;
   tick(dt: number): void;
@@ -21,6 +23,9 @@ export function createSignalEngine(bandCount = 31): SignalEngine {
     bands,
     get level() {
       return level;
+    },
+    get time() {
+      return t;
     },
     get mode() {
       return mode;

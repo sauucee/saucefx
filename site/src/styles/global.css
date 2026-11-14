@@ -2461,3 +2461,392 @@ a {
   color: var(--muted);
 }
 
+/* ============================================================
+   THE SIGNAL v3 — tech-spec instrument furniture
+   (blueprint grid, rulers, crosshairs, ghost type, readouts,
+   transport, LED meters, motion pause switches)
+   ============================================================ */
+
+/* --- blueprint grid: faint drafting paper under every band --- */
+.sec,
+.stats {
+  background-image:
+    linear-gradient(var(--line-soft) 1px, transparent 1px),
+    linear-gradient(90deg, var(--line-soft) 1px, transparent 1px);
+  background-size: 88px 88px;
+  background-position: center;
+}
+.sec > .shell {
+  position: relative;
+}
+
+/* --- SplitText reveal wrappers --- */
+.rv-word {
+  display: inline-block;
+  overflow: hidden; /* mask: chars rise out of their own baseline box */
+  vertical-align: bottom;
+  padding-bottom: 0.08em;
+  margin-bottom: -0.08em;
+}
+.rv-char {
+  display: inline-block;
+  will-change: transform;
+}
+
+/* --- hero: echoed ghost headline --- */
+@media (max-width: 899px) {
+  /* anchor for the ghost below 900px; above that the layer is absolute */
+  .hero__word-layer {
+    position: relative;
+  }
+}
+.hero__word-ghost {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: var(--step-display);
+  font-weight: 800;
+  line-height: 0.72;
+  letter-spacing: -0.055em;
+  white-space: nowrap;
+  text-transform: uppercase;
+  color: transparent;
+  -webkit-text-stroke: 1px color-mix(in oklab, var(--accent) 44%, transparent);
+  translate: 0.028em 0.05em;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* --- hero: Hz edge rulers --- */
+.hero__ruler {
+  position: absolute;
+  top: 4%;
+  bottom: 4%;
+  z-index: 3;
+  display: flex;
+  gap: 0.45rem;
+  pointer-events: none;
+}
+.hero__ruler--l {
+  left: max(0.4rem, calc((100vw - 1560px) / 2));
+}
+.hero__ruler--r {
+  right: max(0.4rem, calc((100vw - 1560px) / 2));
+}
+.hero__ruler-ticks {
+  width: 7px;
+  background: repeating-linear-gradient(
+    to bottom,
+    var(--line) 0 1px,
+    transparent 1px 9px
+  );
+}
+.hero__ruler--l .hero__ruler-ticks {
+  border-right: 1px solid var(--line);
+}
+.hero__ruler--r .hero__ruler-ticks {
+  border-left: 1px solid var(--line);
+  order: 2;
+}
+.hero__ruler-labels {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: flex-end;
+  font-size: 0.55rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.hero__ruler--r .hero__ruler-labels {
+  order: 1;
+  align-items: flex-start;
+}
+
+/* --- live instrument readouts --- */
+.hero__readouts {
+  position: relative;
+  z-index: 3;
+  padding-block: 0.55rem 0.9rem;
+}
+.readouts {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  border-block: 1px solid var(--line);
+}
+.readouts::-webkit-scrollbar {
+  display: none;
+}
+.readouts__cell {
+  flex: none;
+  display: inline-flex;
+  gap: 0.5rem;
+  padding: 0.5rem 1.1rem;
+  border-right: 1px solid var(--line);
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.readouts__cell > span {
+  color: var(--ink);
+  min-width: 5.5ch;
+}
+.readouts__cell--mode {
+  margin-left: auto;
+  border-right: 0;
+  border-left: 1px solid var(--line);
+  color: var(--accent-text);
+}
+
+/* --- transport playhead (fixed, bottom-left, after the hero) --- */
+.transport {
+  position: fixed;
+  left: max(0.75rem, calc((100vw - 1560px) / 2));
+  bottom: 0.85rem;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.4rem 0.7rem;
+  border: 1px solid var(--line);
+  background: color-mix(in oklab, var(--bg) 72%, transparent);
+  backdrop-filter: blur(8px);
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+  opacity: 0;
+  translate: 0 6px;
+  transition: opacity 260ms ease, translate 260ms ease;
+}
+html[data-transport='on'] .transport {
+  opacity: 1;
+  translate: 0 0;
+}
+.transport__glyph {
+  color: var(--accent-text);
+  font-size: 0.55rem;
+}
+.transport__time {
+  color: var(--ink);
+}
+.transport__rail {
+  position: relative;
+  width: clamp(72px, 12vw, 168px);
+  height: 1px;
+  background: var(--line);
+}
+.transport__bar {
+  position: absolute;
+  inset: 0;
+  transform-origin: left;
+  transform: scaleX(0);
+  background: var(--accent);
+}
+.transport__head {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 5px;
+  height: 5px;
+  translate: -50% -50%;
+  rotate: 45deg;
+  background: var(--accent);
+}
+
+/* --- stats: channel meter bridge --- */
+.stat {
+  gap: 1rem;
+}
+.stat__meter {
+  display: flex;
+  gap: 3px;
+  align-items: flex-end;
+  height: 30px;
+  width: min(100%, 260px);
+}
+.stat__seg {
+  flex: 1;
+  height: 100%;
+  background: var(--accent);
+  opacity: 0.14;
+}
+.stat__seg.is-lit {
+  opacity: 1;
+}
+
+/* --- frames: ghost numeral + full-bleed plot --- */
+.frames__slide {
+  width: min(1560px, 100%);
+}
+.frames__ghost {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  translate: -50% -54%;
+  font-size: clamp(9rem, 34vw, 30rem);
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  color: transparent;
+  -webkit-text-stroke: 1px color-mix(in oklab, var(--accent) 34%, transparent);
+  pointer-events: none;
+  user-select: none;
+  z-index: 0;
+}
+.frames__plot {
+  width: 100%;
+  height: clamp(120px, 26vh, 280px);
+  position: relative;
+  z-index: 1;
+}
+.frames__title,
+.frames__note,
+.frames__index {
+  position: relative;
+  z-index: 1;
+}
+.frames__title {
+  font-size: clamp(var(--step-3), 6vw, var(--step-5));
+}
+.frames__scrub {
+  --sprockets: 40;
+  height: 3px;
+}
+.frames__scrub::before {
+  content: '';
+  position: absolute;
+  inset-block: -7px;
+  left: 0;
+  right: 0;
+  background: repeating-linear-gradient(
+    to right,
+    var(--line) 0 1px,
+    transparent 1px calc(100% / 40)
+  );
+}
+
+/* --- section head: dimension line + crosshair --- */
+.sec__head {
+  position: relative;
+}
+.sec__head::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: -4px;
+  width: 9px;
+  height: 9px;
+  border-right: 1px solid var(--muted);
+  border-bottom: 1px solid var(--muted);
+}
+
+/* --- MOTION pause switch (CSS side) --- */
+[data-motion='off'] .marquee__track {
+  animation: none;
+}
+[data-motion='off'] .rv-char,
+[data-motion='off'] .rv-word {
+  transform: none;
+  opacity: 1;
+}
+[data-motion='off'] .spectrum span {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .rv-char,
+  .rv-word {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+/* --- mobile: rulers off, transport compact --- */
+@media (max-width: 900px) {
+  .hero__ruler {
+    display: none;
+  }
+  .transport {
+    left: 0.6rem;
+    bottom: 0.6rem;
+  }
+  .transport__rail {
+    width: 56px;
+  }
+  .readouts__cell {
+    padding: 0.45rem 0.7rem;
+  }
+  .stat__meter {
+    height: 22px;
+  }
+}
+
+/* --- pointer spotlight (21st.dev signature, token-driven) --- */
+.spotlight {
+  position: relative;
+  overflow: hidden;
+}
+.spotlight::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 260ms ease;
+  background: radial-gradient(
+    220px circle at var(--spot-x, 50%) var(--spot-y, 50%),
+    color-mix(in oklab, var(--accent) 14%, transparent),
+    transparent 70%
+  );
+}
+@media (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .spotlight:hover::before {
+    opacity: 1;
+  }
+}
+.spotlight > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* --- shimmer sweep on the primary CTA --- */
+@media (prefers-reduced-motion: no-preference) {
+  .btn--fill {
+    position: relative;
+    overflow: hidden;
+  }
+  .btn--fill::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: -40%;
+    width: 36%;
+    background: linear-gradient(
+      100deg,
+      transparent,
+      color-mix(in oklab, var(--accent-ink) 34%, transparent),
+      transparent
+    );
+    transform: skewX(-18deg);
+    opacity: 0;
+  }
+  .btn--fill:hover::after,
+  .btn--fill:focus-visible::after {
+    opacity: 1;
+    animation: btn-shimmer 900ms ease;
+  }
+}
+@keyframes btn-shimmer {
+  from {
+    left: -40%;
+  }
+  to {
+    left: 120%;
+  }
+}
+

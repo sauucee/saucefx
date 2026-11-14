@@ -4,6 +4,8 @@ import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { ArrowDown, ArrowUpRight, Github, Move } from 'lucide-react';
 import { AppScreenshot } from './AppScreenshot';
+import { Readouts } from './Readouts';
+import { Reveal } from './Reveal';
 import { SignalToggle } from './SignalToggle';
 import { Spectrum } from './Spectrum';
 import { REPO_URL, VERSION } from '../content/site';
@@ -20,7 +22,6 @@ export function Hero({ ready }: { ready: boolean }) {
   const reduced = usePrefersReducedMotion();
   const [canWebGL] = useState(() => webglSupported());
   const signal = !reduced && canWebGL;
-  const word = useRef<HTMLHeadingElement>(null);
   const wordLayer = useRef<HTMLDivElement>(null);
   const windowLayer = useRef<HTMLDivElement>(null);
   const dragLayer = useRef<HTMLDivElement>(null);
@@ -31,21 +32,22 @@ export function Hero({ ready }: { ready: boolean }) {
   useGSAP(
     () => {
       const reduced = prefersReducedMotion();
-      const wordEl = word.current;
+      // The wordmark is split + revealed by <Reveal/>; this timeline only
+      // choreographs the window, labels and foot around it.
+      const wordEl = section.current?.querySelector<HTMLElement>('#hero-title');
       const winWrap = windowLayer.current;
       const tiltEl = tiltLayer.current;
       const dragEl = dragLayer.current;
-      if (!wordEl || !winWrap || !tiltEl || !dragEl) return;
+      if (!winWrap || !tiltEl || !dragEl) return;
 
       if (reduced) {
-        gsap.set([wordEl, winWrap, dragEl, tiltEl], { clearProps: 'all' });
+        gsap.set([winWrap, dragEl, tiltEl], { clearProps: 'all' });
         return;
       }
 
       const frameEl = section.current?.querySelector<HTMLElement>('.shot');
 
       const timeline = gsap.timeline({ paused: true, defaults: { ease: 'expo.out' } });
-      timeline.fromTo(wordEl, { yPercent: 16, opacity: 0 }, { yPercent: 0, opacity: 1, duration: 1.3 });
       timeline.fromTo(
         frameEl ?? winWrap,
         { y: 64, opacity: 0, rotateX: 10 },
@@ -68,11 +70,13 @@ export function Hero({ ready }: { ready: boolean }) {
       intro.current = timeline;
 
       /* Scroll depth: word and window separate as the section leaves. */
-      gsap.to(wordEl, {
-        yPercent: -13,
-        ease: 'none',
-        scrollTrigger: { trigger: section.current, start: 'top top', end: 'bottom top', scrub: true },
-      });
+      if (wordEl) {
+        gsap.to(wordEl, {
+          yPercent: -13,
+          ease: 'none',
+          scrollTrigger: { trigger: section.current, start: 'top top', end: 'bottom top', scrub: true },
+        });
+      }
       gsap.to(winWrap, {
         yPercent: 10,
         ease: 'none',
@@ -83,8 +87,8 @@ export function Hero({ ready }: { ready: boolean }) {
 
       const rotY = gsap.quickTo(tiltEl, 'rotationY', { duration: 0.9, ease: 'power3.out' });
       const rotX = gsap.quickTo(tiltEl, 'rotationX', { duration: 0.9, ease: 'power3.out' });
-      const wordX = gsap.quickTo(wordEl, 'x', { duration: 1.2, ease: 'power3.out' });
-      const wordY = gsap.quickTo(wordEl, 'y', { duration: 1.2, ease: 'power3.out' });
+      const wordX = wordEl ? gsap.quickTo(wordEl, 'x', { duration: 1.2, ease: 'power3.out' }) : null;
+      const wordY = wordEl ? gsap.quickTo(wordEl, 'y', { duration: 1.2, ease: 'power3.out' }) : null;
       const hintX = gsap.quickTo(hint.current, 'x', { duration: 0.4, ease: 'power3.out' });
       const hintY = gsap.quickTo(hint.current, 'y', { duration: 0.4, ease: 'power3.out' });
 
@@ -102,8 +106,8 @@ export function Hero({ ready }: { ready: boolean }) {
         if (!dragging) {
           rotY(nx * 7);
           rotX(-ny * 5);
-          wordX(nx * -20);
-          wordY(ny * -12);
+          wordX?.(nx * -20);
+          wordY?.(ny * -12);
         }
 
         if (hint.current && !dragging) {
@@ -131,8 +135,8 @@ export function Hero({ ready }: { ready: boolean }) {
       const onLeave = () => {
         rotY(0);
         rotX(0);
-        wordX(0);
-        wordY(0);
+        wordX?.(0);
+        wordY?.(0);
         hideHint();
       };
 
@@ -216,15 +220,36 @@ export function Hero({ ready }: { ready: boolean }) {
 
       <div className="hero__stage" ref={stage}>
         <div className="hero__word-layer" ref={wordLayer}>
-          <span className="hero__side hero__side--l" aria-hidden="true">
-            31 bands / 20 Hz — 20 kHz
-          </span>
-          <span className="hero__side hero__side--r" aria-hidden="true">
-            Virtual sink / Native engine
-          </span>
-          <h1 id="hero-title" className="hero__word" ref={word}>
+          <div className="hero__ruler hero__ruler--l" aria-hidden="true">
+            <span className="hero__ruler-ticks" />
+            <span className="hero__ruler-labels">
+              <b>20k</b>
+              <b>10k</b>
+              <b>5k</b>
+              <b>1k</b>
+              <b>500</b>
+              <b>100</b>
+              <b>20 Hz</b>
+            </span>
+          </div>
+          <div className="hero__ruler hero__ruler--r" aria-hidden="true">
+            <span className="hero__ruler-ticks" />
+            <span className="hero__ruler-labels">
+              <b>20k</b>
+              <b>10k</b>
+              <b>5k</b>
+              <b>1k</b>
+              <b>500</b>
+              <b>100</b>
+              <b>20 Hz</b>
+            </span>
+          </div>
+          <span className="hero__word-ghost" aria-hidden="true">
             SauceFX
-          </h1>
+          </span>
+          <Reveal as="h1" id="hero-title" className="hero__word" mode="chars" immediate>
+            SauceFX
+          </Reveal>
         </div>
 
         <div className="hero__window-layer" ref={windowLayer}>
@@ -239,6 +264,10 @@ export function Hero({ ready }: { ready: boolean }) {
           <Move size={10} strokeWidth={2.6} />
           drag
         </div>
+      </div>
+
+      <div className="shell hero__readouts">
+        <Readouts />
       </div>
 
       <div className="shell hero__foot">

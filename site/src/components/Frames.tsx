@@ -98,7 +98,10 @@ export function Frames() {
         <div className="frames__stage">
           {EFFECTS.map((effect, i) => (
             <article key={effect} className="frames__slide">
-              <svg className="frames__plot" viewBox="0 0 128 96" aria-hidden="true">
+              <span className="frames__ghost" aria-hidden="true">
+                {String(i + 1).padStart(2, '0')}
+              </span>
+              <svg className="frames__plot" viewBox="0 0 128 96" preserveAspectRatio="none" aria-hidden="true">
                 <path d={PLOTS[effect]} />
               </svg>
               <h2 className="frames__title">{effect}</h2>

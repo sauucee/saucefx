@@ -3,7 +3,19 @@ import * as THREE from 'three';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { getSignalEngine } from '../lib/useSignal';
 import { useAccentColor, useTokenColor } from '../lib/useTokenColor';
+import { motionOff } from '../lib/motionPreference';
 import { SIGNAL_FRAG, SIGNAL_VERT } from './shaders/signal';
+
+/** Tracks <html data-motion="off"> so the whole canvas can freeze. */
+function useMotionOff(): boolean {
+  const [off, setOff] = useState(motionOff);
+  useEffect(() => {
+    const obs = new MutationObserver(() => setOff(motionOff()));
+    obs.observe(document.documentElement, { attributeFilter: ['data-motion'] });
+    return () => obs.disconnect();
+  }, []);
+  return off;
+}
 
 function useVisible<T extends HTMLElement>(ref: React.RefObject<T | null>) {
   const [visible, setVisible] = useState(true);
@@ -32,6 +44,7 @@ function SignalScene() {
       uLevel: { value: 0 },
       uAccent: { value: new THREE.Color('#ff2e57') },
       uMetal: { value: new THREE.Color('#050506') },
+      uMouse: { value: new THREE.Vector2(0.5, 0.5) },
     }),
     [],
   );
@@ -47,6 +60,8 @@ function SignalScene() {
   useFrame((_, dt) => {
     uniforms.uTime.value += dt;
     uniforms.uLevel.value = engine.level;
+    const m = window.__signalMouse;
+    if (m) uniforms.uMouse.value.set(m.x, m.y);
     window.__signal ??= { frames: 0 };
     window.__signal.frames += 1;
 
@@ -95,12 +110,24 @@ export default function SignalField({
   rootRef: React.RefObject<HTMLElement | null>;
 }) {
   const visible = useVisible(rootRef);
+  const motionPaused = useMotionOff();
   const small = typeof matchMedia !== 'undefined' && matchMedia('(max-width: 767px)').matches;
+
+  useEffect(() => {
+    const onMove = (event: PointerEvent) => {
+      window.__signalMouse ??= { x: 0.5, y: 0.5 };
+      window.__signalMouse.x = event.clientX / window.innerWidth;
+      window.__signalMouse.y = 1 - event.clientY / window.innerHeight;
+    };
+    window.addEventListener('pointermove', onMove, { passive: true });
+    return () => window.removeEventListener('pointermove', onMove);
+  }, []);
+
   return (
     <div className="signal-field" aria-hidden="true">
       <Canvas
         dpr={[1, small ? 1.25 : 1.75]}
-        frameloop={visible ? 'always' : 'demand'}
+        frameloop={visible && !motionPaused ? 'always' : 'demand'}
         gl={{ antialias: false, alpha: false, powerPreference: 'high-performance' }}
         camera={{ position: [0, 0, 5], fov: 50 }}
       >

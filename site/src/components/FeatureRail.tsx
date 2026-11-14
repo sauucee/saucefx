@@ -10,6 +10,7 @@ import {
   Square,
 } from 'lucide-react';
 import { FEATURES } from '../content/site';
+import { Reveal } from './Reveal';
 
 const ICONS = [SlidersHorizontal, Cable, History, Power, Square];
 
@@ -80,11 +81,11 @@ export function FeatureRail() {
       </div>
 
       <div className="shell rail__head">
-        <h2 id="rail-title" className="rail__title">
+        <Reveal as="h2" id="rail-title" className="rail__title">
           Not a wrapper.
           <br />
           An instrument.
-        </h2>
+        </Reveal>
         <p className="sec__lede">
           The engine is native and the window is the app. Everything below is inside
           SauceFX — the site you are reading is the only thing that does not ship.
@@ -116,7 +117,16 @@ export function FeatureRail() {
           {FEATURES.map((feature, i) => {
             const Icon = ICONS[i] ?? Square;
             return (
-              <article className="rail__card" key={feature.title}>
+              <article
+                className="rail__card spotlight"
+                key={feature.title}
+                onPointerMove={(event) => {
+                  const el = event.currentTarget;
+                  const r = el.getBoundingClientRect();
+                  el.style.setProperty('--spot-x', `${event.clientX - r.left}px`);
+                  el.style.setProperty('--spot-y', `${event.clientY - r.top}px`);
+                }}
+              >
                 <div className="rail__card-top">
                   <span className="rail__num">0{i + 1}</span>
                   <span className="rail__mark">

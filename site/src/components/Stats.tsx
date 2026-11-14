@@ -1,11 +1,38 @@
 import { useEffect, useRef } from 'react';
+import gsap from 'gsap';
+import { ScrollTrigger } from 'gsap/ScrollTrigger';
+import { useGSAP } from '@gsap/react';
 import { STATS, VERSION } from '../content/site';
 import { prefersReducedMotion } from '../lib/usePrefersReducedMotion';
 
+gsap.registerPlugin(ScrollTrigger, useGSAP);
+
 const pad = (value: number) => String(value).padStart(2, '0');
+/** Every meter shares the 31-band scale — that IS the product. */
+const METER_SEGMENTS = 31;
 
 export function Stats() {
   const section = useRef<HTMLElement>(null);
+
+  useGSAP(
+    () => {
+      if (prefersReducedMotion()) return;
+      const meters = gsap.utils.toArray<HTMLElement>('.stat__meter');
+      meters.forEach((meter) => {
+        const lit = Number(meter.dataset.lit ?? 0);
+        const segs = Array.from(meter.querySelectorAll<HTMLElement>('.stat__seg'));
+        gsap.set(segs, { opacity: 0.14 });
+        gsap.to(segs.slice(0, lit), {
+          opacity: 1,
+          duration: 0.14,
+          stagger: 0.035,
+          ease: 'none',
+          scrollTrigger: { trigger: meter, start: 'top 85%', once: true },
+        });
+      });
+    },
+    { scope: section },
+  );
 
   useEffect(() => {
     const root = section.current;
@@ -75,6 +102,17 @@ export function Stats() {
                 <span data-count={stat.value}>
                   {prefersReducedMotion() ? pad(stat.value) : '00'}
                 </span>
+              </span>
+              {/* 31-segment channel meter; lit count is the stat. */}
+              <span
+                className="stat__meter"
+                data-lit={stat.value}
+                role="img"
+                aria-label={`${stat.value} of ${METER_SEGMENTS} segments lit`}
+              >
+                {Array.from({ length: METER_SEGMENTS }, (_, i) => (
+                  <i key={i} className={`stat__seg${i < stat.value ? ' is-lit' : ''}`} />
+                ))}
               </span>
               <div className="stat__meta">
                 <b>{stat.label}</b>

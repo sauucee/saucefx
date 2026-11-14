@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowUpRight, Check, Copy, Plus } from 'lucide-react';
+import { Reveal } from './Reveal';
 import {
   FLATPAK_COMMANDS,
   RELEASES_URL,
@@ -44,11 +45,11 @@ export function Install() {
 
         <div className="install__grid">
           <div className="install__copy">
-            <h2 id="install-title">
+            <Reveal as="h2" id="install-title">
               One or two.
               <br />
               <em>That’s it.</em>
-            </h2>
+            </Reveal>
             <p>
               Ready-to-install packages are attached to tagged GitHub Releases. Pick the
               format for your distro, copy the block and run it.

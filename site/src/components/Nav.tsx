@@ -1,15 +1,38 @@
 import { useEffect, useState } from 'react';
-import { ArrowUpRight, Github, Menu, Moon, Sun, X } from 'lucide-react';
+import { ArrowUpRight, Github, Menu, Moon, Pause, Play, Sun, X } from 'lucide-react';
 import logo from '../assets/saucefx-logo.svg';
 import { ACCENTS, useTheme } from '../theme/ThemeProvider';
 import { REPO_URL, VERSION } from '../content/site';
+import { motionOff, setMotionOff, storedMotionOff } from '../lib/motionPreference';
 
 const LINKS = [
-  { href: '#rack', label: 'Rack', id: 'rack' },
+  { href: '#frames', label: 'Rack', id: 'frames' },
   { href: '#playground', label: 'EQ', id: 'playground' },
   { href: '#features', label: 'App', id: 'features' },
   { href: '#install', label: 'Install', id: 'install' },
 ];
+
+/** User-facing pause switch for persistent motion (marquee, canvas, reveals). */
+function MotionSwitch() {
+  const [off, setOff] = useState(storedMotionOff);
+  return (
+    <button
+      type="button"
+      className="icon-btn"
+      aria-label={off ? 'Resume motion' : 'Pause motion'}
+      title={off ? 'Motion off' : 'Motion on'}
+      data-on={!off}
+      onClick={() => {
+        const next = !motionOff();
+        setMotionOff(next);
+        setOff(next);
+        // The shader reacts on its next read; CSS reacts via [data-motion].
+      }}
+    >
+      {off ? <Play size={14} strokeWidth={2} aria-hidden /> : <Pause size={14} strokeWidth={2} aria-hidden />}
+    </button>
+  );
+}
 
 function ThemeSwitch({ compact = false }: { compact?: boolean }) {
   const { theme, setTheme } = useTheme();
@@ -133,6 +156,7 @@ export function Nav() {
             <div className="nav__accents">
               <AccentDots />
             </div>
+            <MotionSwitch />
             <ThemeSwitch />
 
             <a
