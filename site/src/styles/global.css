@@ -791,8 +791,8 @@ a {
 .hero__window-layer {
   position: relative;
   z-index: 2;
-  width: min(88vw, 840px, 74svh);
-  translate: 0 4%;
+  width: min(96vw, 1180px, 86svh);
+  translate: 0 10%;
 }
 /* light pool: the window spills accent glow onto the floor */
 .hero__window-layer::after {
