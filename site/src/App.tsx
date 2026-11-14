@@ -12,12 +12,16 @@ import { Install } from './components/Install';
 import { Footer } from './components/Footer';
 import { ScrollProgress } from './components/ScrollProgress';
 import { useSmoothScroll } from './lib/useSmoothScroll';
+import { usePrefersReducedMotion } from './lib/usePrefersReducedMotion';
+import { useSignalDriver } from './lib/useSignal';
 
 export default function App() {
   const [intro] = useState(shouldPlayPreloader);
   const [ready, setReady] = useState(() => !intro);
   const [curtainGone, setCurtainGone] = useState(() => !intro);
+  const reduced = usePrefersReducedMotion();
   useSmoothScroll();
+  useSignalDriver(!reduced);
 
   /**
    * Pins and scrubs are measured from the DOM, so every trigger is re-measured
