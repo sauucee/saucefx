@@ -297,15 +297,6 @@ a {
 }
 
 /* Film grain: one fixed, tiny SVG turbulence tile. */
-.grain {
-  position: fixed;
-  inset: 0;
-  z-index: 150;
-  pointer-events: none;
-  opacity: var(--grain-opacity);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)' opacity='0.55'/%3E%3C/svg%3E");
-  mix-blend-mode: overlay;
-}
 
 /* Scroll progress hairline. */
 .progress {
@@ -2552,7 +2543,7 @@ main {
   max-width: 58ch;
 }
 .engine__window {
-  width: min(96vw, 1180px, 86svh);
+  width: min(96vw, 1240px, 88svh);
   margin-inline: auto;
   translate: 0 12%;
   padding-bottom: 2rem;
@@ -2648,33 +2639,10 @@ main {
 .proof {
   padding-block: clamp(5rem, 14vh, 11rem);
 }
-.proof__stack {
-  display: grid;
-  gap: clamp(2.5rem, 8vh, 6rem);
-  margin-top: clamp(2rem, 6vh, 4rem);
-}
-.proof__row {
-  display: flex;
-  align-items: baseline;
-  gap: clamp(1.5rem, 4vw, 3.5rem);
-}
 .proof__row--1 { justify-content: center; }
 .proof__row--2 { justify-content: flex-end; }
-.proof__num {
-  font-size: clamp(5rem, 16vw, 15rem);
-  font-weight: 860;
-  line-height: 0.8;
-  letter-spacing: -0.05em;
-  color: var(--ink);
-  font-variant-numeric: tabular-nums;
-}
 .proof__row--1 .proof__num {
   color: var(--accent-text);
-}
-.proof__meta {
-  display: grid;
-  gap: 0.3rem;
-  max-width: 30ch;
 }
 .proof__meta b {
   font-weight: 700;
@@ -2795,6 +2763,209 @@ main {
   color: var(--muted);
   font-family: var(--font-mono, ui-monospace, monospace);
   font-size: 0.8rem;
+}
+
+
+/* ============================================================
+   AppWindow — the product rebuilt in code (crisp + alive)
+   Elevation: med (sits over page content), declared once.
+   Rhythm: tight inside groups, generous between panels.
+   ============================================================ */
+.appwin {
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: color-mix(in oklab, var(--panel) 94%, transparent);
+  backdrop-filter: blur(10px);
+  box-shadow:
+    0 40px 90px -24px rgba(0, 0, 0, 0.75),
+    0 12px 30px -18px color-mix(in oklab, var(--accent) 32%, transparent);
+  overflow: hidden;
+  font-size: 0.82rem;
+}
+.appwin__bar {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.6rem 0.85rem;
+  border-bottom: 1px solid var(--line);
+}
+.appwin__name {
+  display: grid;
+  line-height: 1.05;
+  font-weight: 700;
+  font-size: 0.8rem;
+}
+.appwin__name small {
+  font-size: 0.5rem;
+  letter-spacing: 0.18em;
+  color: var(--muted);
+  font-weight: 600;
+}
+.appwin__on {
+  margin-left: auto;
+  padding: 0.2rem 0.6rem;
+  border: 1px solid var(--accent);
+  color: var(--accent-text);
+  border-radius: 2px;
+}
+.appwin__btns {
+  display: inline-flex;
+  gap: 0.55rem;
+  color: var(--muted);
+}
+.appwin__io {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  background: var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.appwin__io > div {
+  background: var(--panel);
+  padding: 0.7rem 0.85rem;
+  display: grid;
+  gap: 0.15rem;
+}
+.appwin__io .label {
+  color: var(--muted);
+}
+.appwin__io b {
+  font-weight: 650;
+}
+.appwin__io small {
+  color: var(--muted);
+  font-size: 0.68rem;
+}
+.appwin__main {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.9fr) 1.6fr;
+  gap: 1px;
+  background: var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.appwin__panel-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.9rem;
+}
+.appwin__panel-head b {
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+.appwin__panel-head .label {
+  color: var(--muted);
+}
+.appwin__effects {
+  background: var(--panel);
+  padding: 0.85rem;
+}
+.appwin__fx {
+  display: grid;
+  grid-template-columns: 5.6rem 1fr 1.2rem;
+  align-items: center;
+  gap: 0.6rem;
+  padding-block: 0.42rem;
+}
+.appwin__fx-name {
+  font-weight: 550;
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+}
+.appwin__fader {
+  --fd: 12%;
+  position: relative;
+  height: 14px;
+  display: flex;
+  align-items: center;
+}
+.appwin__fader::before {
+  content: '';
+  position: absolute;
+  inset-block: 50%;
+  height: 2px;
+  left: 0;
+  right: 0;
+  translate: 0 -50%;
+  background: var(--line);
+}
+.appwin__fader::after {
+  content: '';
+  position: absolute;
+  height: 2px;
+  left: 0;
+  width: var(--fd);
+  translate: 0 -50%;
+  inset-block: 50%;
+  background: var(--accent);
+}
+.appwin__fader-dot {
+  position: absolute;
+  left: var(--fd);
+  width: 11px;
+  height: 14px;
+  translate: -50% 0;
+  border-radius: 2px;
+  background: var(--accent);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45);
+}
+.appwin__fx-val {
+  color: var(--muted);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-size: 0.72rem;
+}
+.appwin__eq {
+  background: var(--panel);
+  padding: 0.85rem;
+}
+.appwin__spectrum {
+  position: relative;
+  height: clamp(120px, 22vh, 210px);
+  border-bottom: 1px solid var(--line);
+  overflow: hidden;
+}
+.appwin__spectrum i {
+  position: absolute;
+  bottom: 0;
+  width: calc(100% / 31 - 3px);
+  margin-inline: 1.5px;
+  height: 100%;
+  background: var(--accent);
+  transform-origin: bottom;
+  transform: scaleY(0.05);
+  opacity: 0.85;
+}
+.appwin__curve {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.appwin__curve polyline {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+.appwin__scale {
+  display: flex;
+  justify-content: space-between;
+  color: var(--muted);
+  padding-top: 0.4rem;
+  font-size: 0.56rem;
+}
+.appwin__foot {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.5rem 0.85rem;
+  color: var(--muted);
+  font-size: 0.68rem;
+}
+.appwin__foot-right {
+  margin-left: auto;
 }
 
 /* --- outro --- */
@@ -2918,8 +3089,7 @@ main {
    ============================================================ */
 
 /* --- blueprint grid: faint drafting paper under every band --- */
-.sec,
-.stats {
+#playground {
   background-image:
     linear-gradient(var(--line-soft) 1px, transparent 1px),
     linear-gradient(90deg, var(--line-soft) 1px, transparent 1px);
@@ -3300,3 +3470,45 @@ html[data-transport='on'] .transport {
   }
 }
 
+
+/* ============================================================
+   Browser surfaces — themed from the palette (craft floor)
+   ============================================================ */
+::selection {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 1px;
+}
+* {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklab, var(--ink) 26%, transparent) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: color-mix(in oklab, var(--ink) 26%, transparent);
+  border-radius: 4px;
+}
+main a:not(.btn) {
+  text-underline-offset: 0.22em;
+}
+
+/* Theme re-light: token surfaces ease over 240ms (motion duration spec) */
+body,
+.appwin,
+.term,
+.overture__sub,
+.readouts,
+.transport {
+  transition:
+    background-color 240ms ease,
+    border-color 240ms ease,
+    color 240ms ease,
+    box-shadow 240ms ease;
+}

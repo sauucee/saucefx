@@ -41,6 +41,10 @@ void main() {
   vec3 col = uMetal * (0.97 + 0.06 * field);
   col += uAccent * pow(field, 3.0) * 0.04;
 
+  // horizon: a band of light where the signal lives
+  float horizon = exp(-abs(uv.y - 0.615) * 7.0);
+  col += uAccent * horizon * (0.05 + 0.05 * uLevel);
+
   // vignette — deep void, focus center (lighter on light themes)
   float isLight = step(0.5, dot(uMetal, vec3(0.333)));
   float vigFloor = mix(0.34, 0.88, isLight);

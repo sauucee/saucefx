@@ -50,7 +50,6 @@ export function Claim() {
           },
         });
 
-        tl.fromTo('.claim__pre', { opacity: 0, y: 20 }, { opacity: 1, y: 0, duration: 0.4 }, 0.05);
         tl.fromTo(
           '.claim__word--flat',
           { opacity: 0, y: 60 },
@@ -86,8 +85,6 @@ export function Claim() {
   return (
     <section ref={root} id="claim" className="claim" aria-label="The claim">
       <div className="claim__pin">
-        <p className="claim__pre label">stock playout · stock speakers · stock everything</p>
-
         <div className="claim__stage">
           <h2 className="claim__line claim__word--flat">
             Your audio is flat

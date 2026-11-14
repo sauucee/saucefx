@@ -70,7 +70,6 @@ export function InstallTerminal() {
     <section id="install" className="install" aria-labelledby="install-title">
       <div className="shell">
         <header className="install__head">
-          <span className="label">Chapter 04 — install</span>
           <h2 id="install-title" className="install__title">
             Two commands.
             <br />

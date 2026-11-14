@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { Reveal } from './Reveal';
 import { getSignalEngine } from '../lib/useSignal';
+import { Readouts } from './Readouts';
 import { VERSION } from '../content/site';
 
 /**
@@ -18,15 +19,14 @@ export function Overture() {
   return (
     <section id="overture" className="overture" aria-label="Introduction">
       <div className="overture__mid">
-        <span className="label overture__kick">A sound equalizer for Linux</span>
         <Reveal as="h1" id="hero-title" className="overture__word" mode="chars" immediate>
           SauceFX
         </Reveal>
-        <span className="label overture__sub">v{VERSION} · the FxSound DSP engine, native</span>
+        <span className="overture__sub">v{VERSION} · the FxSound DSP engine, native</span>
       </div>
 
       <div className="overture__foot">
-        <span className="label">Scroll to run the signal</span>
+        <Readouts />
         <span className="overture__cue" aria-hidden="true" />
       </div>
     </section>

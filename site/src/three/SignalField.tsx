@@ -84,26 +84,34 @@ function SignalLine({ isLight }: { isLight: boolean }) {
   const positions = useMemo(() => new Float32Array(TRAILS * SEGS * 2 * 3), []);
   const colors = useMemo(() => new Float32Array(TRAILS * SEGS * 2 * 3), []);
   const accentC = useMemo(() => new THREE.Color('#ff2e57'), []);
+  const heatA = useMemo(() => new THREE.Color('#0ea5b7'), []); // deep spectrogram teal
+  const heatB = useMemo(() => new THREE.Color('#7c5cff'), []); // violet mid
+  const heatC = useMemo(() => new THREE.Color('#ff2e57'), []); // accent end
+  const heat = useMemo(() => new THREE.Color(), []);
   const t = useRef(0);
 
   useEffect(() => {
     accentC.set(accent);
-  }, [accent, accentC]);
+    heatC.set(accent);
+  }, [accent, accentC, heatC]);
 
-  // trail brightness is baked into vertex colors (additive blending)
+  // spectrogram heat along x (teal → violet → accent), trail intensity baked in
   useEffect(() => {
     for (let l = 0; l < TRAILS; l++) {
       const intensity = l === 0 ? 1 : 0.3 * Math.pow(0.66, l - 1);
       for (let s = 0; s <= SEGS; s++) {
+        const u = s / SEGS;
+        if (u < 0.5) heat.copy(heatA).lerp(heatB, u * 2);
+        else heat.copy(heatB).lerp(heatC, (u - 0.5) * 2);
         const vi = (l * (SEGS + 1) + s) * 3;
-        colors[vi] = accentC.r * intensity;
-        colors[vi + 1] = accentC.g * intensity;
-        colors[vi + 2] = accentC.b * intensity;
+        colors[vi] = heat.r * intensity;
+        colors[vi + 1] = heat.g * intensity;
+        colors[vi + 2] = heat.b * intensity;
       }
     }
     const cAttr = geom.current?.attributes.color as THREE.BufferAttribute | undefined;
     if (cAttr) cAttr.needsUpdate = true;
-  }, [accentC, colors, geom]);
+  }, [accentC, heatC, heatA, heatB, heat, colors, geom]);
 
   useEffect(() => {
     if (mat.current) mat.current.opacity = isLight ? 0.62 : 0.9;
@@ -215,15 +223,9 @@ function Dust() {
 
 /* ---------------------------------------------------------------- scene */
 
-const BANDS = 31;
-
 function SignalScene({ metal, isLight }: { metal: string; isLight: boolean }) {
   const engine = getSignalEngine();
   const accent = useAccentColor();
-  const floor = useRef<THREE.InstancedMesh>(null);
-  const floorMat = useRef<THREE.MeshStandardMaterial>(null);
-  const dummy = useMemo(() => new THREE.Object3D(), []);
-  const tint = useMemo(() => new THREE.Color(), []);
   const uniforms = useMemo(
     () => ({
       uTime: { value: 0 },
@@ -241,11 +243,11 @@ function SignalScene({ metal, isLight }: { metal: string; isLight: boolean }) {
 
   useEffect(() => {
     uniforms.uMetal.value.set(metal);
+    // freed palette: dark theme sits in deep blue-black, not pure black
+    if (!isLightColor(metal)) {
+      uniforms.uMetal.value.lerp(new THREE.Color('#0a1020'), 0.55);
+    }
   }, [metal, uniforms]);
-
-  useEffect(() => {
-    if (floorMat.current) floorMat.current.emissive.set(accent);
-  }, [accent]);
 
   useFrame((_, dt) => {
     uniforms.uTime.value += dt;
@@ -254,24 +256,6 @@ function SignalScene({ metal, isLight }: { metal: string; isLight: boolean }) {
     if (m) uniforms.uMouse.value.set(m.x, m.y);
     window.__signal ??= { frames: 0 };
     window.__signal.frames += 1;
-
-    const mesh = floor.current;
-    if (mesh) {
-      for (let i = 0; i < BANDS; i++) {
-        const n = i / (BANDS - 1);
-        const v = engine.bands[i];
-        const h = 0.015 + v * 0.9;
-        dummy.position.set((n - 0.5) * 9.8, -2.72 + h / 2, -1.2);
-        dummy.scale.set(1, h, 1);
-        dummy.updateMatrix();
-        mesh.setMatrixAt(i, dummy.matrix);
-        // scarce accent: most bars whisper, peaks speak
-        tint.set(accent).multiplyScalar(0.12 + v * 0.9);
-        mesh.setColorAt(i, tint);
-      }
-      mesh.instanceMatrix.needsUpdate = true;
-      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
-    }
   });
 
   return (
@@ -290,18 +274,6 @@ function SignalScene({ metal, isLight }: { metal: string; isLight: boolean }) {
 
       <Dust />
       <SignalLine isLight={isLight} />
-
-      {/* spectrum floor hugging the bottom edge */}
-      <instancedMesh ref={floor} args={[undefined, undefined, BANDS]} frustumCulled={false}>
-        <boxGeometry args={[0.09, 1, 0.09]} />
-        <meshStandardMaterial
-          ref={floorMat}
-          color="#000000"
-          emissive="#ff2e57"
-          emissiveIntensity={isLight ? 0.5 : 0.9}
-          toneMapped={false}
-        />
-      </instancedMesh>
     </>
   );
 }

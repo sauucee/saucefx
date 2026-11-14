@@ -7,7 +7,6 @@ import { Claim } from './components/Claim';
 import { Engine } from './components/Engine';
 import { Chain } from './components/Chain';
 import { EqPlayground } from './components/EqPlayground';
-import { Proof } from './components/Proof';
 import { InstallTerminal } from './components/InstallTerminal';
 import { Outro } from './components/Outro';
 import { Transport } from './components/Transport';
@@ -36,8 +35,9 @@ export default function App() {
     const refresh = () => ScrollTrigger.refresh();
     const timer = window.setTimeout(refresh, 140);
     document.fonts?.ready.then(refresh).catch(() => undefined);
-    const image = document.querySelector<HTMLImageElement>('.engine__window img');
-    if (image && !image.complete) image.addEventListener('load', refresh, { once: true });
+    document.querySelectorAll('img').forEach((img) => {
+      if (!img.complete) img.addEventListener('load', refresh, { once: true });
+    });
     return () => window.clearTimeout(timer);
   }, [ready, curtainGone]);
 
@@ -67,12 +67,10 @@ export default function App() {
         <Engine />
         <Chain />
         <EqPlayground />
-        <Proof />
         <InstallTerminal />
       </main>
 
       <Outro />
-      <div className="grain" aria-hidden="true" />
     </>
   );
 }

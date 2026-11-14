@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ArrowUpRight, Github, Menu, Moon, Pause, Play, Sun, X } from 'lucide-react';
 import logo from '../assets/saucefx-logo.svg';
-import { ACCENTS, useTheme } from '../theme/ThemeProvider';
+import { useTheme } from '../theme/ThemeProvider';
 import { REPO_URL, VERSION } from '../content/site';
 import { motionOff, setMotionOff, storedMotionOff } from '../lib/motionPreference';
 
@@ -62,25 +62,6 @@ function ThemeSwitch({ compact = false }: { compact?: boolean }) {
   );
 }
 
-function AccentDots() {
-  const { accent, setAccent } = useTheme();
-  return (
-    <div className="swatches" role="group" aria-label="Accent colour">
-      {ACCENTS.map((item) => (
-        <button
-          key={item.id}
-          type="button"
-          className="swatch"
-          style={{ ['--swatch' as string]: `var(--palette-${item.id})` }}
-          aria-pressed={accent === item.id}
-          aria-label={`${item.label} accent`}
-          title={item.label}
-          onClick={() => setAccent(item.id)}
-        />
-      ))}
-    </div>
-  );
-}
 
 export function Nav() {
   const [stuck, setStuck] = useState(false);
@@ -153,9 +134,6 @@ export function Nav() {
           </nav>
 
           <div className="nav__tools">
-            <div className="nav__accents">
-              <AccentDots />
-            </div>
             <MotionSwitch />
             <ThemeSwitch />
 
@@ -222,7 +200,6 @@ export function Nav() {
             </div>
             <div className="drawer__row">
               <span className="label">Accent</span>
-              <AccentDots />
             </div>
             <a className="btn btn--fill" href="#install" onClick={close}>
               Download for Linux

@@ -72,11 +72,6 @@ export function Chain() {
   return (
     <section ref={root} id="chain" className="chain" aria-label="The effect chain">
       <div className="chain__pin">
-        <header className="shell chain__head">
-          <span className="label">Chapter 02 — the chain</span>
-          <span className="label">Five effects, wired in signal order</span>
-        </header>
-
         <div className="chain__viewport">
           {/* the patch cable — drawn by scroll, behind the modules */}
           <svg className="chain__cable" viewBox="0 0 2000 100" preserveAspectRatio="none" aria-hidden="true">
@@ -104,9 +99,6 @@ export function Chain() {
           </div>
         </div>
 
-        <footer className="shell chain__foot">
-          <span className="label">Drag · scroll — the signal passes through each module</span>
-        </footer>
       </div>
     </section>
   );

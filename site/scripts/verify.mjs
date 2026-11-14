@@ -69,12 +69,6 @@ const overflow = await page.evaluate(() => {
 if (overflow.scrollWidth <= overflow.clientWidth + 1) pass('no horizontal overflow (desktop)');
 else fail('no horizontal overflow (desktop)', JSON.stringify(overflow));
 
-/* proof counters land on real values */
-await page.locator('#proof').scrollIntoViewIfNeeded();
-await page.waitForTimeout(1800);
-const proofValue = await page.locator('#proof [data-count]').first().textContent();
-proofValue === '05' ? pass('proof counters land on real values', proofValue) : fail('proof counters', `got ${proofValue}`);
-
 /* the claim: pinned scrub wakes the signal */
 await page.evaluate(() => window.scrollTo(0, 0));
 await page.waitForTimeout(400);
@@ -172,16 +166,6 @@ const lightAttr = await page.evaluate(() => document.documentElement.dataset.the
 darkBg !== lightBg && lightAttr === 'light'
   ? pass('theme toggle switches the whole site', `${darkBg} → ${lightBg}`)
   : fail('theme toggle', `${darkBg} → ${lightBg} (${lightAttr})`);
-
-const accentBefore = await page.evaluate(() =>
-  getComputedStyle(document.documentElement).getPropertyValue('--accent').trim(),
-);
-await page.getByRole('button', { name: 'Amber accent' }).click({ force: true });
-await page.waitForTimeout(400);
-const accentAfter = await page.evaluate(() =>
-  getComputedStyle(document.documentElement).getPropertyValue('--accent').trim(),
-);
-accentBefore !== accentAfter ? pass('accent picker recolours', `${accentBefore} → ${accentAfter}`) : fail('accent picker');
 
 await page.screenshot({ path: `${OUT}/desktop-light.png`, fullPage: false });
 await page.evaluate(() => {

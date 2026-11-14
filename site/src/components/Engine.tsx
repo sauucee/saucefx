@@ -2,9 +2,8 @@ import { useRef } from 'react';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { useGSAP } from '@gsap/react';
-import { AppScreenshot } from './AppScreenshot';
+import { AppWindow } from './AppWindow';
 import { Readouts } from './Readouts';
-import { Reveal } from './Reveal';
 import { REPO_URL } from '../content/site';
 import { ArrowUpRight } from 'lucide-react';
 
@@ -35,18 +34,6 @@ export function Engine() {
             },
           },
         );
-        gsap.fromTo(
-          '.engine__copy > *',
-          { opacity: 0, y: 30 },
-          {
-            opacity: 1,
-            y: 0,
-            duration: 0.9,
-            stagger: 0.12,
-            ease: 'expo.out',
-            scrollTrigger: { trigger: '.engine__copy', start: 'top 78%', once: true },
-          },
-        );
       });
       return () => mm.revert();
     },
@@ -55,16 +42,12 @@ export function Engine() {
 
   return (
     <section ref={root} id="engine" className="engine" aria-labelledby="engine-title">
-      <div className="shell engine__head">
-        <span className="label">Chapter 01 — the engine</span>
-      </div>
-
       <div className="shell engine__copy">
-        <Reveal as="h2" id="engine-title" className="engine__title">
+        <h2 id="engine-title" className="engine__title">
           Not a wrapper.
           <br />
           <em>The engine itself.</em>
-        </Reveal>
+        </h2>
         <p className="engine__body">
           SauceFX runs the open-source FxSound DSP engine natively on Linux and routes
           system audio through a PipeWire virtual sink. Five effects, a 31-band graphic
@@ -76,7 +59,7 @@ export function Engine() {
       </div>
 
       <div className="engine__window">
-        <AppScreenshot />
+        <AppWindow />
       </div>
 
       <div className="shell engine__readouts">
