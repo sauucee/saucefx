@@ -3499,6 +3499,26 @@ main a:not(.btn) {
   text-underline-offset: 0.22em;
 }
 
+/* Interface mechanics: touch, tap, balance, safe areas */
+html {
+  -webkit-tap-highlight-color: transparent;
+}
+button,
+a {
+  touch-action: manipulation;
+}
+h1,
+h2,
+h3 {
+  text-wrap: balance;
+}
+p {
+  text-wrap: pretty;
+}
+.transport {
+  bottom: calc(0.85rem + env(safe-area-inset-bottom, 0px));
+}
+
 /* Theme re-light: token surfaces ease over 240ms (motion duration spec) */
 body,
 .appwin,
