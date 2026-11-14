@@ -12,6 +12,7 @@ precision highp float;
 uniform float uTime;
 uniform float uLevel;   // 0..1 engine level
 uniform vec3  uAccent;  // --accent as 0..1 rgb
+uniform vec3  uMetal;   // --bg-deep as 0..1 rgb (theme-aware base)
 varying vec2 vUv;
 
 float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123); }
@@ -39,16 +40,18 @@ void main() {
 
   // hot floor: accent energy breathing with the signal
   float floorGlow = pow(1.0 - uv.y, 3.0) * (0.35 + 0.65 * uLevel);
-  vec3 metal = vec3(0.027, 0.027, 0.031); // sits on --bg-deep
 
-  vec3 col = metal;
+  vec3 col = uMetal;
+  col = mix(col, uMetal * 0.55 + uAccent * 0.02, contour * (0.35 + 0.45 * uLevel));
   col += uAccent * contour * (0.10 + 0.20 * uLevel);
   col += uAccent * floorGlow * 0.5;
   col += uAccent * pow(field, 3.0) * 0.14;
 
-  // vignette — the type always wins
+  // vignette — the type always wins (lighter floor on light themes)
+  float isLight = step(0.5, dot(uMetal, vec3(0.333)));
+  float vigFloor = mix(0.5, 0.82, isLight);
   float vig = smoothstep(1.15, 0.35, distance(uv, vec2(0.5, 0.42)));
-  col *= mix(0.5, 1.0, vig);
+  col *= mix(vigFloor, 1.0, vig);
 
   gl_FragColor = vec4(col, 1.0);
 }

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { Canvas, useFrame } from '@react-three/fiber';
 import { getSignalEngine } from '../lib/useSignal';
-import { useAccentColor } from '../lib/useAccentColor';
+import { useAccentColor, useTokenColor } from '../lib/useTokenColor';
 import { SIGNAL_FRAG, SIGNAL_VERT } from './shaders/signal';
 
 function useVisible<T extends HTMLElement>(ref: React.RefObject<T | null>) {
@@ -22,6 +22,7 @@ const BANDS = 31;
 function SignalScene() {
   const engine = getSignalEngine();
   const accent = useAccentColor();
+  const metal = useTokenColor('--bg-deep', '#050506');
   const floor = useRef<THREE.InstancedMesh>(null);
   const dummy = useMemo(() => new THREE.Object3D(), []);
   const tint = useMemo(() => new THREE.Color(), []);
@@ -30,6 +31,7 @@ function SignalScene() {
       uTime: { value: 0 },
       uLevel: { value: 0 },
       uAccent: { value: new THREE.Color('#ff2e57') },
+      uMetal: { value: new THREE.Color('#050506') },
     }),
     [],
   );
@@ -37,6 +39,10 @@ function SignalScene() {
   useEffect(() => {
     uniforms.uAccent.value.set(accent);
   }, [accent, uniforms]);
+
+  useEffect(() => {
+    uniforms.uMetal.value.set(metal);
+  }, [metal, uniforms]);
 
   useFrame((_, dt) => {
     uniforms.uTime.value += dt;
