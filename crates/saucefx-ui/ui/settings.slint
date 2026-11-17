@@ -1,0 +1,676 @@
+// Source-equivalent Settings dialog (frontend/src/components/SettingsDialog.tsx
+// + styles.css .settings-*): appearance row, accent swatches + custom button,
+// preset import/export/save actions, start-at-login switch and the version footer.
+import { Layout, Palette, Typography } from "palette.slint";
+
+component SwatchButton inherits Rectangle {
+    in property <color> swatch;
+    in property <bool> pressed: false;
+    in property <bool> focused: false;
+    in property <bool> custom: false;
+    callback picked();
+
+    width: 24px;
+    height: 24px;
+    border-radius: 12px;
+    background: transparent;
+    border-width: custom ? 1px : 0px;
+    border-color: Palette.border;
+
+    if pressed || focused : Rectangle {
+        width: parent.width + 4px;
+        height: parent.height + 4px;
+        x: -2px;
+        y: -2px;
+        border-radius: (parent.width + 4px) / 2;
+        border-width: 1.5px;
+        border-color: Palette.accent;
+        background: transparent;
+    }
+
+    Rectangle {
+        width: 16px;
+        height: 16px;
+        x: 4px;
+        y: 4px;
+        border-radius: 8px;
+        background: custom ? (root.pressed ? root.swatch : Palette.surface-2) : swatch;
+    }
+
+    // The reference custom label shows the lucide `Palette` glyph on the
+    // neutral dot until a custom colour is active (then the check replaces it).
+    if custom && !pressed : Path {
+        width: 11px;
+        height: 11px;
+        x: (parent.width - 11px) / 2;
+        y: (parent.height - 11px) / 2;
+        viewbox-width: 24;
+        viewbox-height: 24;
+        stroke-width: 1.9px;
+        stroke-line-cap: round;
+        stroke: Palette.muted;
+        commands: "M 12 2 C 6.49 2 2 6.49 2 12 C 2 17.51 6.49 22 12 22 C 12.93 22 13.65 21.25 13.65 20.31 C 13.65 19.87 13.47 19.48 13.21 19.19 C 12.92 18.9 12.77 18.54 12.77 18.06 C 12.77 17.14 13.52 16.39 14.44 16.39 L 16.44 16.39 C 19.49 16.39 22 13.89 22 10.83 C 22 6.01 17.46 2 12 2 Z M 13.5 6.13 L 13.5 6.87 M 17.5 10.13 L 17.5 10.87 M 8.5 7.13 L 8.5 7.87 M 6.5 12.13 L 6.5 12.87";
+    }
+
+    if pressed : Text {
+        text: "\u{2713}";
+        width: 16px;
+        height: 16px;
+        x: 4px;
+        y: 4px;
+        color: custom ? #ffffff : #ffffff;
+        font-size: 9px;
+        font-weight: 700;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.picked(); }
+    }
+}
+
+export component SettingsDialog inherits Rectangle {
+    in property <bool> light: false;
+    in property <bool> custom-accent: false;
+    in property <string> custom-hex-text: "";
+    in property <int> accent-index: 0;
+    in property <bool> autostart: false;
+    in property <string> accent-label: "Rose";
+    in property <string> version: "0.2.4";
+    in property <string> save-error: "";
+    callback theme-changed(bool);
+    callback accent-chosen(int);
+    callback custom-accent-clicked();
+    callback custom-accent-text-changed(string);
+    callback autostart-changed(bool);
+    callback import-clicked();
+    callback export-clicked();
+    callback save-opened();
+    callback quit-clicked();
+    callback closed();
+    callback focus-changed(string);
+    in property <int> refocus-count: 0;
+
+    out property <bool> modal-focused: fs.has-focus;
+    private property <int> focus-index: 0;
+    changed focus-index => { root.focus-changed("settings:" + root.focus-index); }
+    changed refocus-count => { root.focus-modal(); }
+    // A fresh open focuses the Close button, as the Base UI dialog does.
+    changed visible => { if (self.visible) { root.select(0); } }
+    // Re-edits that the host rejected (or canonicalised) restore the bound
+    // text, because the first typed edit breaks the `text:` binding above.
+    changed custom-hex-text => { hex-input.text = root.custom-hex-text; }
+
+    width: 604px;
+    height: content.preferred-height;
+    border-radius: 14px;
+    background: Palette.surface;
+    border-width: 1px;
+    border-color: Palette.border;
+    // styles.css .dialog uses overflow: hidden, so the section backgrounds
+    // must not square off the card's rounded corners.
+    clip: true;
+
+    // Manual focus chain: Tab/Backtab are consumed here so focus cannot leave
+    // the modal, and Enter/Space activate the focused action. Slint maps
+    // Backtab to U+0019 when the backend reports it, but the winit/X11 path
+    // delivers Shift+Tab as "\t" with the shift modifier, so both are handled.
+    // Blocks backdrop clicks from reaching the dismiss layer underneath.
+    card-block := TouchArea {
+        x: 0;
+        y: 0;
+        width: parent.width;
+        height: parent.height;
+        clicked => { root.focus-modal(); }
+    }
+
+    fs := FocusScope {
+        x: 0;
+        y: 0;
+        width: parent.width;
+        height: parent.height;
+        key-pressed(event) => {
+            if (event.text == "\u{0009}" && !event.modifiers.shift) {
+                root.focus-index = root.next-focus(root.focus-index);
+                return accept;
+            }
+            if (event.text == "\u{0019}" || (event.text == "\u{0009}" && event.modifiers.shift)) {
+                root.focus-index = root.prev-focus(root.focus-index);
+                return accept;
+            }
+            if (event.text == "\u{000a}" || event.text == "\u{0020}") {
+                root.activate(root.focus-index);
+                return accept;
+            }
+            if (event.text == "\u{001b}") {
+                root.closed();
+                return accept;
+            }
+            reject
+        }
+    }
+
+    // Traversal follows the protected SettingsDialog.tsx DOM, not the numeric
+    // action IDs: Close(0), Dark(1), Light(2), accents(3-8), custom(9),
+    // Import(11), Export(12), Save preset(13), Start at login(10), Quit(14).
+    // IDs and callbacks (including the restored Save=13) are unchanged.
+    pure function next-focus(index: int) -> int {
+        if index == 0 { return 1; }
+        if index == 1 { return 2; }
+        if index == 2 { return 3; }
+        if index == 3 { return 4; }
+        if index == 4 { return 5; }
+        if index == 5 { return 6; }
+        if index == 6 { return 7; }
+        if index == 7 { return 8; }
+        if index == 8 { return 9; }
+        if index == 9 { return 11; }
+        if index == 11 { return 12; }
+        if index == 12 { return 13; }
+        if index == 13 { return 10; }
+        if index == 10 { return 14; }
+        return 0;
+    }
+
+    pure function prev-focus(index: int) -> int {
+        if index == 0 { return 14; }
+        if index == 14 { return 10; }
+        if index == 10 { return 13; }
+        if index == 13 { return 12; }
+        if index == 12 { return 11; }
+        if index == 11 { return 9; }
+        if index == 9 { return 8; }
+        if index == 8 { return 7; }
+        if index == 7 { return 6; }
+        if index == 6 { return 5; }
+        if index == 5 { return 4; }
+        if index == 4 { return 3; }
+        if index == 3 { return 2; }
+        if index == 2 { return 1; }
+        return 0;
+    }
+
+    // Restores keyboard focus to the dialog without resetting the focused
+    // action: reopening Settings after Save returns to the Save opener.
+    public function focus-modal() {
+        fs.focus();
+        root.focus-changed("settings:" + root.focus-index);
+    }
+
+    // Pointer activation moves the keyboard target to the clicked action, so a
+    // following Enter repeats that action instead of hitting Close.
+    public function select(index: int) {
+        root.focus-index = index;
+        fs.focus();
+    }
+
+    // Computed from the live focus scope, so a test never depends on event
+    // ordering when a dialog becomes visible.
+    public pure function report() -> string {
+        return fs.has-focus ? "settings:" + focus-index : "settings:none";
+    }
+
+    public function activate(index: int) {
+        if (index == 0) { root.closed(); }
+        else if (index == 1) { root.theme-changed(false); }
+        else if (index == 2) { root.theme-changed(true); }
+        else if (index >= 3 && index <= 8) { root.accent-chosen(index - 3); }
+        else if (index == 9) { root.custom-accent-clicked(); }
+        else if (index == 10) { root.autostart-changed(!root.autostart); }
+        else if (index == 11) { root.import-clicked(); }
+        else if (index == 12) { root.export-clicked(); }
+        else if (index == 13) { root.save-opened(); }
+        else if (index == 14) { root.quit-clicked(); }
+    }
+
+    // A hidden dialog must not own the window focus (a later pointer event
+    // would drop it via the runtime's invisible-focus guard); focus is granted
+    // only when the dialog becomes visible.
+    content := VerticalLayout {
+        spacing: 0px;
+
+        // Header: title, description, close.
+        Rectangle {
+            background: Palette.surface;
+
+            HorizontalLayout {
+                padding-left: 21px;
+                padding-right: 21px;
+                padding-top: 19px;
+                padding-bottom: 14px;
+                spacing: 20px;
+                VerticalLayout {
+                    spacing: 4px;
+                    Text {
+                        text: "Settings";
+                        color: Palette.text;
+                        font-family: Typography.family;
+                        font-size: 17px;
+                        font-weight: 600;
+                        letter-spacing: -0.1px;
+                        vertical-alignment: center;
+                    }
+                    Text {
+                        text: "Appearance, presets, and startup behavior.";
+                        color: Palette.muted;
+                        font-family: Typography.family;
+                        font-size: 10.5px;
+                        vertical-alignment: center;
+                    }
+                }
+                Rectangle { horizontal-stretch: 1; }
+                Rectangle {
+                    width: Layout.icon-button;
+                    height: Layout.icon-button;
+                    border-radius: 7px;
+                    background: close-ta.has-hover || root.focus-index == 0 ? Palette.surface-hover : transparent;
+                    border-width: 1px;
+                    border-color: root.focus-index == 0 ? Palette.accent : transparent;
+                    // lucide `X` (24-unit grid at 15px, 1.9 stroke), as the
+                    // reference Dialog.Close renders.
+                    Path {
+                        width: 15px;
+                        height: 15px;
+                        viewbox-width: 24;
+                        viewbox-height: 24;
+                        stroke-width: 1.9px;
+                        stroke-line-cap: round;
+                        stroke: Palette.muted;
+                        commands: "M 18 6 L 6 18 M 6 6 L 18 18";
+                    }
+                    close-ta := TouchArea {
+                        mouse-cursor: pointer;
+                        clicked => { root.select(0); root.closed(); }
+                    }
+                }
+            }
+        }
+
+        // Appearance section. The reference .settings-section draws a 1px top
+        // divider only (styles.css .settings-section), never a full border.
+        Rectangle {
+            background: Palette.surface;
+            Rectangle {
+                y: 0;
+                width: parent.width;
+                height: 1px;
+                background: Palette.border-subtle;
+            }
+
+            VerticalLayout {
+                padding-left: 21px;
+                padding-right: 21px;
+                padding-top: 14px;
+                padding-bottom: 12px;
+                spacing: 7px;
+
+                HorizontalLayout {
+                    Text {
+                        text: "APPEARANCE";
+                        color: Palette.muted;
+                        font-family: Typography.family;
+                        font-size: 9.5px;
+                        font-weight: 600;
+                        letter-spacing: 1px;
+                        vertical-alignment: center;
+                    }
+                    Rectangle { horizontal-stretch: 1; }
+                    Text {
+                        text: root.accent-label;
+                        color: Palette.muted-2;
+                        font-family: Typography.family;
+                        font-size: 9.5px;
+                        vertical-alignment: center;
+                    }
+                }
+
+                // Theme row.
+                HorizontalLayout {
+                    height: 35px;
+                    spacing: 20px;
+                    VerticalLayout {
+                        spacing: 2px;
+                        Text {
+                            text: "Theme";
+                            color: Palette.text-soft;
+                            font-family: Typography.family;
+                            font-size: 12px;
+                            vertical-alignment: center;
+                        }
+                        Text {
+                            text: "Soft light or low-contrast dark surfaces.";
+                            color: Palette.muted-2;
+                            font-family: Typography.family;
+                            font-size: 10px;
+                            vertical-alignment: center;
+                        }
+                    }
+                    Rectangle { horizontal-stretch: 1; }
+                    Rectangle {
+                        width: 116px;
+                        height: 29px;
+                        border-radius: 7px;
+                        border-width: 1px;
+                        border-color: Palette.border-subtle;
+                        background: Palette.surface-2;
+                        theme-group := HorizontalLayout {
+                            x: 2px;
+                            y: 2px;
+                            spacing: 2px;
+                            for segment[i] in [false, true] : Rectangle {
+                                width: 55px;
+                                height: 25px;
+                                border-radius: 5px;
+                                border-width: 1px;
+                                border-color: root.focus-index == (segment ? 2 : 1)
+                                    ? Palette.accent
+                                    : ((root.light == segment) ? Palette.border : transparent);
+                                background: (root.light == segment || root.focus-index == (segment ? 2 : 1))
+                                    ? Palette.surface : transparent;
+                                segment-text := Text {
+                                    text: segment ? "Light" : "Dark";
+                                    color: (root.light == segment) ? Palette.text : Palette.muted;
+                                    font-family: Typography.family;
+                                    font-size: 10.5px;
+                                    font-weight: 600;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
+                                TouchArea {
+                                    mouse-cursor: pointer;
+                                    clicked => { root.select(segment ? 2 : 1); root.theme-changed(segment); }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Accent row.
+                HorizontalLayout {
+                    height: 35px;
+                    spacing: 20px;
+                    VerticalLayout {
+                        spacing: 2px;
+                        Text {
+                            text: "Accent";
+                            color: Palette.text-soft;
+                            font-family: Typography.family;
+                            font-size: 12px;
+                            vertical-alignment: center;
+                        }
+                        Text {
+                            text: "Used for controls and the live spectrum.";
+                            color: Palette.muted-2;
+                            font-family: Typography.family;
+                            font-size: 10px;
+                            vertical-alignment: center;
+                        }
+                    }
+                    Rectangle { horizontal-stretch: 1; }
+                    HorizontalLayout {
+                        spacing: 8px;
+                        alignment: end;
+                        for swatch[i] in [
+                            { n: 0, c: #f2486f },
+                            { n: 1, c: #3b82f6 },
+                            { n: 2, c: #2fa572 },
+                            { n: 3, c: #12a8a0 },
+                            { n: 4, c: #d4922a },
+                            { n: 5, c: #8b7cf6 },
+                        ] : SwatchButton {
+                            swatch: swatch.c;
+                            pressed: !root.custom-accent && root.accent-index == swatch.n;
+                            focused: root.focus-index == swatch.n + 3;
+                            picked => { root.select(swatch.n + 3); root.accent-chosen(swatch.n); }
+                        }
+                        SwatchButton {
+                            swatch: Palette.accent;
+                            custom: true;
+                            pressed: root.custom-accent;
+                            focused: root.focus-index == 9;
+                            picked => { root.select(9); root.custom-accent-clicked(); }
+                        }
+                        // Hex field for the custom accent, matching the
+                        // reference colour input (`#rrggbb`, applied as
+                        // typed; invalid or unfinished text is not applied).
+                        Rectangle {
+                            width: 78px;
+                            height: 24px;
+                            border-radius: 6px;
+                            border-width: 1px;
+                            border-color: hex-input.has-focus ? Palette.accent : Palette.border;
+                            background: Palette.surface-2;
+                            hex-input := TextInput {
+                                x: 8px;
+                                width: parent.width - 12px;
+                                height: parent.height;
+                                vertical-alignment: center;
+                                text: root.custom-hex-text;
+                                color: Palette.text;
+                                font-family: Typography.family;
+                                font-size: 10.5px;
+                                edited => { root.custom-accent-text-changed(self.text); }
+                                accepted => { root.custom-accent-text-changed(self.text); }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Presets section.
+        Rectangle {
+            background: Palette.surface;
+            Rectangle {
+                y: 0;
+                width: parent.width;
+                height: 1px;
+                background: Palette.border-subtle;
+            }
+
+            VerticalLayout {
+                padding-left: 21px;
+                padding-right: 21px;
+                padding-top: 14px;
+                padding-bottom: 12px;
+                spacing: 9px;
+                HorizontalLayout {
+                    Text {
+                        text: "PRESETS";
+                        color: Palette.muted;
+                        font-family: Typography.family;
+                        font-size: 9.5px;
+                        font-weight: 600;
+                        letter-spacing: 1px;
+                        vertical-alignment: center;
+                    }
+                    Rectangle { horizontal-stretch: 1; }
+                    Text {
+                        text: "Factory files stay untouched";
+                        color: Palette.muted-2;
+                        font-family: Typography.family;
+                        font-size: 9.5px;
+                        vertical-alignment: center;
+                    }
+                }
+                Text {
+                    text: "Save the current effects and EQ as a custom preset, or move presets in and out as .fac files.";
+                    color: Palette.muted;
+                    font-family: Typography.family;
+                    font-size: 10px;
+                    wrap: word-wrap;
+                }
+                HorizontalLayout {
+                    spacing: 7px;
+                    for action[i] in [0, 1, 2] : Rectangle {
+                        horizontal-stretch: 1;
+                        height: 32px;
+                        border-radius: 6px;
+                        border-width: 1px;
+                        border-color: root.focus-index == 11 + i
+                            ? Palette.accent
+                            : (i == 2 ? Palette.accent-border : Palette.border);
+                        background: action-ta.has-hover || root.focus-index == 11 + i
+                            ? (i == 2 ? Palette.accent-wash : Palette.surface-hover)
+                            : Palette.surface-2;
+                        HorizontalLayout {
+                            spacing: 6px;
+                            alignment: center;
+                            // lucide `Upload` / `Download` / `Save`, as the
+                            // reference action buttons render them.
+                            Path {
+                                width: 14px;
+                                height: 14px;
+                                viewbox-width: 24;
+                                viewbox-height: 24;
+                                stroke-width: 1.9px;
+                                stroke-line-cap: round;
+                                stroke-line-join: round;
+                                stroke: i == 2 ? Palette.text : Palette.text-soft;
+                                commands: i == 0
+                                    ? "M 21 15 L 21 19 A 2 2 0 0 1 19 21 L 5 21 A 2 2 0 0 1 3 19 L 3 15 M 17 8 L 12 3 L 7 8 M 12 3 L 12 15"
+                                    : (i == 1
+                                        ? "M 21 15 L 21 19 A 2 2 0 0 1 19 21 L 5 21 A 2 2 0 0 1 3 19 L 3 15 M 7 10 L 12 15 L 17 10 M 12 15 L 12 3"
+                                        : "M 15.2 3 A 2 2 0 0 1 16.6 3.6 L 20.4 7.4 A 2 2 0 0 1 21 8.8 L 21 18 A 2 2 0 0 1 19 20 L 5 20 A 2 2 0 0 1 3 18 L 3 5 A 2 2 0 0 1 5 3 L 15.2 3 Z M 17 21 L 17 14 A 1 1 0 0 0 16 13 L 8 13 A 1 1 0 0 0 7 14 L 7 21 M 7 3 L 7 7 A 1 1 0 0 0 8 8 L 15 8 A 1 1 0 0 0 16 7 L 16 3");
+                            }
+                            Text {
+                                text: i == 0 ? "Import" : (i == 1 ? "Export" : "Save preset");
+                                color: i == 2 ? Palette.text : Palette.text-soft;
+                                font-family: Typography.family;
+                                font-size: 10.5px;
+                                font-weight: 600;
+                                vertical-alignment: center;
+                            }
+                        }
+                        action-ta := TouchArea {
+                            mouse-cursor: pointer;
+                            clicked => {
+                                root.select(11 + i);
+                                if (i == 0) { root.import-clicked(); }
+                                if (i == 1) { root.export-clicked(); }
+                                if (i == 2) { root.save-opened(); }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Start at login row.
+        Rectangle {
+            background: Palette.surface;
+            Rectangle {
+                y: 0;
+                width: parent.width;
+                height: 1px;
+                background: Palette.border-subtle;
+            }
+
+            HorizontalLayout {
+                padding-left: 21px;
+                padding-right: 21px;
+                padding-top: 14px;
+                padding-bottom: 13px;
+                height: 35px;
+                spacing: 20px;
+                VerticalLayout {
+                    spacing: 2px;
+                    Text {
+                        text: "Start at login";
+                        color: Palette.text-soft;
+                        font-family: Typography.family;
+                        font-size: 12px;
+                        vertical-alignment: center;
+                    }
+                    Text {
+                        text: "Keep the engine ready in the background.";
+                        color: Palette.muted-2;
+                        font-family: Typography.family;
+                        font-size: 10px;
+                        vertical-alignment: center;
+                    }
+                }
+                Rectangle { horizontal-stretch: 1; }
+                switch := Rectangle {
+                    width: 34px;
+                    height: 20px;
+                    border-radius: 10px;
+                    border-width: 1px;
+                    border-color: root.focus-index == 10 ? Palette.accent : transparent;
+                    background: root.autostart ? Palette.accent : Palette.track;
+                    Rectangle {
+                        width: 14px;
+                        height: 14px;
+                        y: 3px;
+                        x: root.autostart ? parent.width - 17px : 3px;
+                        border-radius: 7px;
+                        background: #ffffff;
+                    }
+                    TouchArea {
+                        mouse-cursor: pointer;
+                        clicked => { root.select(10); root.autostart-changed(!root.autostart); }
+                    }
+                }
+            }
+        }
+
+        // Footer: version + quit.
+        Rectangle {
+            background: Palette.surface;
+            Rectangle {
+                y: 0;
+                width: parent.width;
+                height: 1px;
+                background: Palette.border-subtle;
+            }
+
+            HorizontalLayout {
+                padding-left: 21px;
+                padding-right: 21px;
+                padding-top: 12px;
+                padding-bottom: 12px;
+                spacing: 7px;
+                Text {
+                    text: "SauceFX " + root.version;
+                    color: Palette.muted-2;
+                    font-family: Typography.family;
+                    font-size: 9.5px;
+                    vertical-alignment: center;
+                }
+                Rectangle {
+                    width: 2.5px;
+                    height: 2.5px;
+                    border-radius: 2px;
+                    background: Palette.muted-2;
+                }
+                Text {
+                    text: "AGPL-3.0";
+                    color: Palette.muted-2;
+                    font-family: Typography.family;
+                    font-size: 9.5px;
+                    vertical-alignment: center;
+                }
+                Rectangle { horizontal-stretch: 1; }
+                Rectangle {
+                    width: quit-text.width;
+                    height: 20px;
+                    background: transparent;
+                    quit-text := Text {
+                        text: "Quit SauceFX";
+                        color: quit-ta.has-hover || root.focus-index == 14 ? Palette.danger : Palette.muted;
+                        font-family: Typography.family;
+                        font-size: 10px;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                    quit-ta := TouchArea {
+                        mouse-cursor: pointer;
+                        clicked => { root.select(14); root.quit-clicked(); }
+                    }
+                }
+            }
+        }
+    }
+}

@@ -69,3 +69,10 @@ handoff-*.md
 .flatpak-builder/
 /packaging/flatpak/build/
 /packaging/flatpak/repo/
+
+# Rust workspace build output
+/target/
+/crates/*/target/
+
+# Local agent working data
+/.hermes/

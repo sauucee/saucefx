@@ -1,0 +1,375 @@
+// The preview shell. Geometry and colors come from Layout/Palette, which mirror
+// frontend/src/styles.css; nothing here invents a new design.
+import { Layout, Palette, Typography } from "palette.slint";
+import { AppHeader } from "header.slint";
+import { MenuEntry, MenuPopup, SelectorField } from "selectors.slint";
+import { Spectrum } from "spectrum.slint";
+import { EffectsPanel } from "effects.slint";
+import { EqualizerPanel } from "equalizer.slint";
+import { SettingsDialog } from "settings.slint";
+import { SavePresetDialog } from "save-preset.slint";
+import { Toast } from "toast.slint";
+
+export { Layout, Palette, Typography }
+
+export component AppWindow inherits Window {
+    title: "SauceFX Rust UI Preview \u{2014} no audio connection";
+    no-frame: true;
+    width: Layout.window-width;
+    height: Layout.window-height;
+    background: transparent;
+    default-font-family: Typography.family;
+
+    in property <bool> power: true;
+    in property <bool> light: false;
+    in property <color> accent: #f2486f;
+    in property <[float]> effect-values: [0, 0, 0, 0, 0];
+    in property <[string]> effect-names: ["Clarity", "Ambience", "Surround", "Dynamic Boost", "Bass Boost"];
+    in property <[string]> effect-labels: ["0", "0", "0", "0", "0"];
+    in property <[float]> eq-gains: [];
+    in property <string> eq-curve: "";
+    in property <string> eq-curve-fill: "";
+    in property <[string]> eq-labels: ["20", "50", "100", "200", "500", "1k", "2k", "5k", "10k", "16k", "20k"];
+    in property <string> eq-readout: "";
+    out property <string> focus-report:
+        root.save-open ? save-dialog.report()
+        : root.settings-open ? settings-dialog.report()
+        : "none";
+    property <int> settings-refocus: 0;
+
+    changed settings-open => {
+        if (self.settings-open) { settings-dialog.focus-modal(); }
+    }
+    changed save-open => {
+        if (self.save-open) { save-dialog.focus-modal(); }
+        else if (self.settings-open) { settings-dialog.focus-modal(); }
+    }
+    in property <[float]> eq-label-positions: [0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1];
+    in property <bool> edited: false;
+    in property <[float]> spectrum-bars: [];
+    in property <color> spectrum-edge: #000000;
+    in property <color> spectrum-centre: #000000;
+    in property <float> spectrum-alpha: 0.78;
+    in property <string> preset-name: "Default";
+    in property <string> preset-detail: "Factory preset";
+    in property <string> output-name: "Test speakers";
+    in property <string> output-detail: "Audio output";
+    in property <[MenuEntry]> preset-entries;
+    in property <[MenuEntry]> output-entries;
+    // Menu keyboard geometry/state supplied by the host (see selectors.slint).
+    in property <[float]> preset-entry-offsets;
+    in property <[float]> output-entry-offsets;
+    in property <int> preset-first-enabled: -1;
+    in property <int> preset-last-enabled: -1;
+    in property <int> preset-initial-highlight: -1;
+    in property <int> output-first-enabled: -1;
+    in property <int> output-last-enabled: -1;
+    in property <int> output-initial-highlight: -1;
+    in property <bool> preset-open: false;
+    in property <bool> output-open: false;
+    in property <bool> settings-open: false;
+    in property <bool> save-open: false;
+    in property <bool> custom-accent: false;
+    in property <string> custom-hex-text: "";
+    in property <int> accent-index: 0;
+    in property <string> accent-label: "Rose";
+    in property <string> save-error: "";
+    in property <string> save-help: "";
+    in property <string> app-version: "0.2.4";
+    in property <bool> autostart: false;
+    in property <string> save-name: "";
+    in property <bool> save-valid: false;
+    in property <bool> toast-visible: false;
+    in property <string> toast-message: "";
+    out property <bool> preset-selector-focused: preset-selector.keyboard-focused;
+    out property <bool> output-selector-focused: output-selector.keyboard-focused;
+    out property <bool> power-focused: app-header.power-focused;
+
+    callback power-toggled();
+    callback effect-changed(int, float);
+    callback eq-band-changed(int, float);
+    callback eq-reset();
+    callback reset-all();
+    callback eq-band-reset(int);
+    callback eq-band-stepped(int, int);
+    callback eq-band-hovered(int);
+    callback eq-band-blurred(int);
+    callback effect-reset(int);
+    callback effect-stepped(int, int);
+    callback preset-toggle();
+    callback output-toggle();
+    callback preset-chosen(int);
+    callback output-chosen(int);
+    callback settings-clicked();
+    callback settings-closed();
+    callback theme-changed(bool);
+    callback accent-chosen(int);
+    callback custom-accent-clicked();
+    callback custom-accent-text-changed(string);
+    callback import-clicked();
+    callback export-clicked();
+    callback quit-clicked();
+    callback autostart-changed(bool);
+    callback save-opened();
+    callback save-closed();
+    callback save-name-changed(string);
+    callback save-confirmed();
+    callback close-clicked();
+    callback minimize-clicked();
+    callback drag-requested();
+    callback menu-dismissed();
+
+    shell := Rectangle {
+        x: 0;
+        y: 0;
+        width: min(Layout.window-width, parent.width);
+        height: min(Layout.window-height, parent.height);
+        border-radius: Layout.shell-radius;
+        background: Palette.bg;
+        border-width: 1px;
+        border-color: Palette.border-subtle;
+        clip: true;
+
+        app-header := AppHeader {
+            x: 1px;
+            y: 1px;
+            width: parent.width - 2px;
+            keyboard-enabled: !root.settings-open && !root.save-open;
+            power: root.power;
+            power-toggled => { root.power-toggled(); }
+            settings-clicked => { root.settings-clicked(); }
+            minimize-clicked => { root.minimize-clicked(); }
+            close-clicked => { root.close-clicked(); }
+            drag-requested => { root.drag-requested(); }
+        }
+
+        // The shell border is part of the reference box model: the title bar
+        // starts at y=1 and the workspace content box is inset by that 1px
+        // (styles.css .app-shell border + .titlebar flex 0 0 52px).
+        VerticalLayout {
+            x: 1px;
+            y: 1px;
+            width: parent.width - 2px;
+            height: parent.height - 2px;
+            padding-top: Layout.header-height;
+            spacing: 0px;
+
+            VerticalLayout {
+                padding-left: Layout.workspace-pad-h;
+                padding-right: Layout.workspace-pad-h;
+                padding-top: Layout.workspace-pad-top;
+                padding-bottom: Layout.workspace-pad-bottom;
+                spacing: Layout.workspace-gap;
+
+                HorizontalLayout {
+                    spacing: Layout.workspace-gap;
+                    preset-selector := SelectorField {
+                        heading: "PRESET";
+                        value: root.preset-name;
+                        detail: root.preset-detail;
+                        enabled: root.power;
+                        badge: root.edited;
+                        open: root.preset-open;
+                        clicked => { root.preset-toggle(); }
+                        min-width: Layout.selector-width;
+                        max-width: Layout.selector-width;
+                    }
+                    output-selector := SelectorField {
+                        heading: "OUTPUT";
+                        value: root.output-name;
+                        detail: root.output-detail;
+                        enabled: true;
+                        open: root.output-open;
+                        clicked => { root.output-toggle(); }
+                        min-width: Layout.selector-width;
+                        max-width: Layout.selector-width;
+                    }
+                }
+
+                Spectrum {
+                    power: root.power;
+                    bars: root.spectrum-bars;
+                    edge: root.spectrum-edge;
+                    centre: root.spectrum-centre;
+                    alpha: root.spectrum-alpha;
+                }
+
+                HorizontalLayout {
+                    spacing: Layout.workspace-gap;
+                    vertical-stretch: 1;
+
+                    EffectsPanel {
+                        keyboard-enabled: !root.settings-open && !root.save-open;
+                        width: Layout.effects-width;
+                        vertical-stretch: 1;
+                        names: root.effect-names;
+                        values: root.effect-values;
+                        value-labels: root.effect-labels;
+                        enabled: root.power;
+                        changed(i, v) => { root.effect-changed(i, v); }
+                        stepped(i, d) => { root.effect-stepped(i, d); }
+                        reset(i) => { root.effect-reset(i); }
+                    }
+
+                    panel := Rectangle {
+                        horizontal-stretch: 1;
+                        vertical-stretch: 1;
+                        border-radius: Layout.panel-radius;
+                        background: Palette.bg-elevated;
+                        border-width: 1px;
+                        border-color: Palette.border;
+
+                        EqualizerPanel {
+                            // styles.css uses box-sizing: border-box, so the
+                            // 1px panel border eats into the content box: the
+                            // child starts at 1,1 and is 2px smaller. Without
+                            // this the EQ chart is drawn at 323/657 instead of
+                            // the protected reference 324/655.
+                            x: 1px;
+                            y: 1px;
+                            width: parent.width - 2px;
+                            height: parent.height - 2px;
+                            keyboard-enabled: !root.settings-open && !root.save-open;
+                            gains: root.eq-gains;
+                            readout: root.eq-readout;
+                            band-hovered(index) => { root.eq-band-hovered(index); }
+                            band-blurred(index) => { root.eq-band-blurred(index); }
+                            curve-commands: root.eq-curve;
+                            fill-commands: root.eq-curve-fill;
+                            enabled: root.power;
+                            band-stepped(i, d) => { root.eq-band-stepped(i, d); }
+                            band-reset(i) => { root.eq-band-reset(i); }
+                            reset-all => { root.reset-all(); }
+                            labels: root.eq-labels;
+                            label-positions: root.eq-label-positions;
+                            band-changed(i, g) => { root.eq-band-changed(i, g); }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Full-window dismiss layer declared *before* the popups: rows keep
+        // their clicks, outside clicks still close the menu.
+        if root.preset-open || root.output-open : TouchArea {
+            width: parent.width;
+            height: parent.height;
+            clicked => { root.menu-dismissed(); }
+        }
+
+        // Dropdown popups, anchored under the matching trigger. Escape inside
+        // a popup dismisses it and returns focus to that trigger, like the
+        // reference select closing back onto its trigger.
+        if root.preset-open : MenuPopup {
+            x: Layout.workspace-pad-h;
+            y: Layout.header-height + Layout.workspace-pad-top + Layout.field-heading-height + Layout.field-heading-gap + Layout.select-height + 4px;
+            width: Layout.preset-menu-width;
+            entries: root.preset-entries;
+            entry-offsets: root.preset-entry-offsets;
+            first-enabled: root.preset-first-enabled;
+            last-enabled: root.preset-last-enabled;
+            initial-highlight: root.preset-initial-highlight;
+            activated(i) => { root.preset-chosen(i); }
+            dismissed => {
+                root.menu-dismissed();
+                preset-selector.take-focus();
+            }
+        }
+        if root.output-open : MenuPopup {
+            x: (Layout.window-width - 2 * Layout.workspace-pad-h - Layout.workspace-gap) / 2 + Layout.workspace-gap + Layout.workspace-pad-h;
+            y: Layout.header-height + Layout.workspace-pad-top + Layout.field-heading-height + Layout.field-heading-gap + Layout.select-height + 4px;
+            width: Layout.output-menu-width;
+            entries: root.output-entries;
+            entry-offsets: root.output-entry-offsets;
+            first-enabled: root.output-first-enabled;
+            last-enabled: root.output-last-enabled;
+            initial-highlight: root.output-initial-highlight;
+            activated(i) => { root.output-chosen(i); }
+            dismissed => {
+                root.menu-dismissed();
+                output-selector.take-focus();
+            }
+        }
+
+        if root.settings-open : Rectangle {
+            width: parent.width;
+            height: parent.height;
+            background: Palette.overlay;
+
+            // Clicking the backdrop dismisses the dialog; the card itself has
+            // its own blocking TouchArea so inside clicks stay inside.
+            backdrop-ta := TouchArea {
+                clicked => {
+                    root.settings-closed();
+                    app-header.focus-settings-opener();
+                }
+            }
+        }
+
+        settings-dialog := SettingsDialog {
+            visible: root.settings-open;
+            x: (parent.width - self.width) / 2;
+            y: max(16px, (parent.height - self.height) / 2);
+            light: root.light;
+            autostart: root.autostart;
+            custom-accent: root.custom-accent;
+            custom-hex-text: root.custom-hex-text;
+            accent-index: root.accent-index;
+            accent-label: root.accent-label;
+            version: root.app-version;
+            refocus-count: root.settings-refocus;
+            theme-changed(v) => { root.theme-changed(v); }
+            accent-chosen(i) => { root.accent-chosen(i); }
+            custom-accent-clicked => { root.custom-accent-clicked(); }
+            custom-accent-text-changed(text) => { root.custom-accent-text-changed(text); }
+            autostart-changed(v) => { root.autostart-changed(v); }
+            import-clicked => { root.import-clicked(); }
+            export-clicked => { root.export-clicked(); }
+            save-opened => { root.save-opened(); }
+            quit-clicked => { root.quit-clicked(); }
+            closed => {
+                root.settings-closed();
+                app-header.focus-settings-opener();
+            }
+        }
+
+        // Top modal boundary. The backdrop is owned by Save: an outside click
+        // closes Save only (Settings stays open) and never reaches the Settings
+        // dismiss layer or the preset trigger underneath.
+        if root.save-open : Rectangle {
+            width: parent.width;
+            height: parent.height;
+            background: Palette.overlay.with-alpha(0.82);
+
+            save-backdrop := TouchArea {
+                clicked => {
+                    root.save-closed();
+                    root.settings-refocus = root.settings-refocus + 1;
+                }
+            }
+        }
+
+        save-dialog := SavePresetDialog {
+            visible: root.save-open;
+            x: (parent.width - self.width) / 2;
+            y: max(16px, (parent.height - self.height) / 2);
+            name: root.save-name;
+            valid: root.save-valid;
+            error: root.save-error;
+            help: root.save-help;
+            name-changed(n) => { root.save-name-changed(n); }
+            confirmed => { root.save-confirmed(); }
+            cancelled => {
+                root.save-closed();
+                root.settings-refocus = root.settings-refocus + 1;
+            }
+        }
+
+        if root.toast-visible : Toast {
+            message: root.toast-message;
+            y: parent.height - 54px;
+            x: (parent.width - self.width) / 2;
+        }
+
+    }
+}

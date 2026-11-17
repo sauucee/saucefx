@@ -1,0 +1,20 @@
+[package]
+name = "saucefx-ui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+slint = { version = "=1.18.1", default-features = false, features = [
+    "std",
+    "backend-winit",
+    "renderer-femtovg",
+    "compat-1-2",
+    # Native minimize and title-bar dragging need the winit window handle.
+    "unstable-winit-030",
+] }
+saucefx-core = { path = "../saucefx-core" }
+
+[build-dependencies]
+slint-build = "=1.18.1"

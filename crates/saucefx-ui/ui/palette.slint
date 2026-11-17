@@ -1,0 +1,106 @@
+// Design tokens copied from the shipped front-end, not from a stock theme:
+// frontend/src/styles.css:26-110 (colors), :174-200 (shell/header),
+// :400-470 (workspace/selectors), :660-760 (spectrum/panels).
+import "../../../frontend/src/fonts/Figtree-Regular.ttf";
+import "../../../frontend/src/fonts/Figtree-SemiBold.ttf";
+import "../../../frontend/src/fonts/Figtree-Bold.ttf";
+
+export global Layout {
+    out property <length> window-width: 1040px;
+    out property <length> window-height: 568px;
+    out property <length> shell-radius: 14px;
+    out property <length> header-height: 52px;
+    out property <length> header-gap: 14px;
+    out property <length> header-pad-left: 17px;
+    out property <length> header-pad-right: 11px;
+    out property <length> workspace-gap: 13px;
+    out property <length> workspace-pad-h: 18px;
+    out property <length> workspace-pad-top: 14px;
+    out property <length> workspace-pad-bottom: 16px;
+    // styles.css:400-420 .selector-row grid 1fr 1fr with a 13px gap: every
+    // field is an equal share of the 1002px workspace content box.
+    out property <length> selector-width: 494.5px;
+    out property <length> field-heading-height: 14px;
+    out property <length> field-heading-gap: 6px;
+    out property <length> select-height: 42px;
+    out property <length> select-radius: 9px;
+    out property <length> spectrum-height: 128px;
+    out property <length> panel-radius: 12px;
+    out property <length> effects-width: 276px;
+    // select-popup: min(292px, anchor-width) / compact min(420px, anchor-width)
+    out property <length> preset-menu-width: 292px;
+    out property <length> output-menu-width: 420px;
+    out property <length> menu-max-height: 320px;
+    out property <length> panel-head-pad-top: 14px;
+    out property <length> panel-head-pad-h: 15px;
+    out property <length> panel-head-pad-bottom: 8px;
+    out property <length> brand-mark-height: 29px;
+    out property <length> brand-mark-width: 15px;
+    out property <length> brand-min-width: 190px;
+    out property <length> brand-gap: 10px;
+    out property <length> icon-button: 28px;
+    out property <length> power-control-height: 30px;
+    out property <length> power-control-radius: 7px;
+    out property <length> panel-count-width: 19px;
+    out property <length> panel-count-height: 18px;
+    out property <length> panel-hint-pad-top: 6px;
+    out property <length> panel-hint-pad-bottom: 11px;
+    // styles.css:913-1080: the plot fills the panel body, the chart leaves 26px
+    // for the dB scale, the frequency labels take the last 16px and the scale
+    // is 19px wide, 3px below the plot top and 20px above its bottom.
+    out property <length> eq-chart-inset-top: 3px;
+    out property <length> eq-chart-inset-bottom: 20px;
+    out property <length> eq-chart-inset-right: 26px;
+    out property <length> eq-scale-width: 19px;
+    out property <length> eq-curve-stroke: 2px;
+    out property <length> eq-frequency-height: 16px;
+    // Equalizer.tsx paints the trace in a 1000x200 viewbox; kept for the
+    // binding-layer geometry contract.
+    out property <length> eq-chart-width: 675px;
+    out property <length> eq-chart-height: 186px;
+    out property <length> eq-chart-x: 16px;
+    out property <length> eq-chart-y: 44px;
+    out property <int> eq-bands: 31;
+    out property <int> spectrum-bands: 100;
+    out property <int> effects: 5;
+}
+
+export global Palette {
+    in property <bool> light: false;
+    in property <color> accent: #f2486f;
+
+    out property <color> bg: light ? #f3f0eb : #0d0e10;
+    out property <color> bg-elevated: light ? #f6f3ee : #101215;
+    out property <color> surface: light ? #fbfaf7 : #141619;
+    out property <color> surface-2: light ? #f4f1eb : #191c20;
+    out property <color> surface-hover: light ? #f0ece5 : #202329;
+    out property <color> text: light ? #25221f : #f2f0ed;
+    out property <color> text-soft: light ? #3d3934 : #d7d4cf;
+    out property <color> muted: light ? #6f6961 : #a3a5aa;
+    out property <color> muted-2: light ? #787167 : #85888f;
+    out property <color> border: light ? #ded8cf : #272a30;
+    out property <color> border-subtle: light ? #e8e2d9 : #1e2126;
+    out property <color> track: light ? #d8d1c6 : #2c3036;
+    out property <color> border-strong: light ? #c9c1b7 : #383c43;
+    out property <color> danger: light ? #b54a4a : #e07171;
+    out property <color> danger-wash: danger.with-alpha(0.1);
+    out property <color> input-bg: light ? #f7f4ee : #131518;
+    out property <color> overlay: light ? #2d272047 : #030405b8;
+    out property <color> eq-grid: light ? #25221f0f : #ffffff0e;
+    out property <color> eq-zero: light ? #25221f21 : #ffffff1c;
+    out property <color> accent-ink: #1d1015;
+    out property <color> accent-wash: accent.with-alpha(0.10);
+    out property <color> accent-wash-strong: accent.with-alpha(0.16);
+    out property <color> accent-border: accent.with-alpha(0.34);
+}
+
+export global Typography {
+    out property <string> family: "Figtree";
+    out property <length> label: 10px;
+    out property <length> small: 10px;
+    out property <length> body: 11px;
+    out property <length> trigger: 12.5px;
+    out property <length> title: 13px;
+    out property <length> brand: 14.5px;
+    out property <length> value: 11.5px;
+}

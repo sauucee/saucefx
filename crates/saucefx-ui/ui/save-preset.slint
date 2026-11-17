@@ -1,0 +1,338 @@
+// Source-equivalent Save preset dialog (frontend/src/components/SavePresetDialog.tsx
+// + .save-dialog styles): name field with help/error text, Cancel and a Save
+// button that stays disabled until the name is present and not taken.
+//
+// Event ownership: the whole dialog lives *inside* the `fs` FocusScope, so the
+// scope is the ancestor of every focusable descendant and therefore receives
+// capture-key-pressed (Escape/Tab/Backtab) no matter which control was clicked.
+import { Layout, Palette, Typography } from "palette.slint";
+
+export component SavePresetDialog inherits Rectangle {
+    in property <string> name: "";
+    in property <bool> valid: false;
+    in property <string> error: "";
+    in property <string> help: "";
+    callback name-changed(string);
+    callback cancelled();
+    callback confirmed();
+
+    callback focus-changed(string);
+
+    // Traversal order follows the protected source DOM
+    // (SavePresetDialog.tsx: Close at 63, autofocus Input at 71, Cancel at 96,
+    // Save at 97): Close -> Input -> Cancel -> Save -> Close. Tab from the
+    // initial Input therefore goes Cancel; Shift+Tab from Input goes Close.
+    // A disabled Save is skipped in both directions.
+    public function step-focus(delta: int) {
+        if (delta > 0) {
+            if (field.has-focus) {
+                cancel-focus.focus();
+            } else if (cancel-focus.has-focus) {
+                if (root.valid) { save-focus.focus(); } else { close-focus.focus(); }
+            } else if (save-focus.has-focus) {
+                close-focus.focus();
+            } else {
+                field.focus();
+            }
+        } else {
+            if (field.has-focus) {
+                close-focus.focus();
+            } else if (close-focus.has-focus) {
+                if (root.valid) { save-focus.focus(); } else { cancel-focus.focus(); }
+            } else if (save-focus.has-focus) {
+                cancel-focus.focus();
+            } else {
+                field.focus();
+            }
+        }
+    }
+
+    public function focus-modal() {
+        field.focus();
+        root.focus-changed("save:input");
+    }
+
+    public pure function report() -> string {
+        return save-focus.has-focus ? "save:save"
+            : cancel-focus.has-focus ? "save:cancel"
+            : close-focus.has-focus ? "save:close"
+            : field.has-focus ? "save:input" : "save:none";
+    }
+
+    changed visible => { if (self.visible) { root.focus-modal(); } }
+
+    width: 424px;
+    height: content.preferred-height;
+    border-radius: 14px;
+    background: Palette.surface;
+    border-width: 1px;
+    border-color: Palette.border;
+
+    fs := FocusScope {
+        x: 0;
+        y: 0;
+        width: parent.width;
+        height: parent.height;
+
+        // Capture runs window -> focused item before key-pressed, so Tab and
+        // Backtab are handled here instead of the window's built-in focus walk
+        // (which used to escape into the background EQ).
+        capture-key-pressed(event) => {
+            if (event.text == "\u{001b}") {
+                root.cancelled();
+                return accept;
+            }
+            if (event.text == "\u{0009}" && !event.modifiers.shift) {
+                root.step-focus(1);
+                return accept;
+            }
+            // winit/X11 reports Shift+Tab as "\t" plus the shift modifier.
+            if event.text == "\u{0019}" || (event.text == "\u{0009}" && event.modifiers.shift) {
+                root.step-focus(-1);
+                return accept;
+            }
+            reject
+        }
+
+        // Keeps pointer clicks on the dialog card inside the dialog (and away
+        // from the Settings layer underneath) without activating anything. The
+        // card takes the dialog's initial focus so the Tab chain always starts
+        // from a real target instead of leaving the report empty.
+        card-block := TouchArea {
+            width: parent.width;
+            height: parent.height;
+            clicked => { root.focus-modal(); }
+        }
+
+        content := VerticalLayout {
+            spacing: 0px;
+
+            // Header.
+            Rectangle {
+                background: Palette.surface;
+
+                HorizontalLayout {
+                    padding-left: 21px;
+                    padding-right: 21px;
+                    padding-top: 19px;
+                    padding-bottom: 14px;
+                    spacing: 20px;
+                    VerticalLayout {
+                        spacing: 4px;
+                        Text {
+                            text: "Save preset";
+                            color: Palette.text;
+                            font-family: Typography.family;
+                            font-size: 17px;
+                            font-weight: 600;
+                            letter-spacing: -0.1px;
+                            vertical-alignment: center;
+                        }
+                        Text {
+                            text: "Creates a new custom preset. Factory presets are never overwritten.";
+                            color: Palette.muted;
+                            font-family: Typography.family;
+                            font-size: 10.5px;
+                            vertical-alignment: center;
+                        }
+                    }
+                    Rectangle { horizontal-stretch: 1; }
+                    Rectangle {
+                        width: Layout.icon-button;
+                        height: Layout.icon-button;
+                        border-radius: 7px;
+                        background: close-ta.has-hover || close-focus.has-focus ? Palette.surface-hover : transparent;
+                        border-width: 1px;
+                        border-color: close-focus.has-focus ? Palette.accent : transparent;
+                        Text {
+                            text: "\u{00d7}";
+                            color: Palette.muted;
+                            font-size: 15px;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+                        close-focus := FocusScope {
+                            width: parent.width;
+                            height: parent.height;
+                            changed has-focus => {
+                                if (self.has-focus) { root.focus-changed("save:close"); }
+                            }
+                            key-pressed(event) => {
+                                if (event.text == "\u{000a}" || event.text == "\u{0020}") {
+                                    root.cancelled();
+                                    return accept;
+                                }
+                                reject
+                            }
+                        }
+                        close-ta := TouchArea {
+                            mouse-cursor: pointer;
+                            clicked => {
+                                close-focus.focus();
+                                root.cancelled();
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Body: name field + help/error.
+            Rectangle {
+                background: Palette.surface;
+
+                VerticalLayout {
+                    padding-left: 21px;
+                    padding-right: 21px;
+                    padding-top: 2px;
+                    padding-bottom: 18px;
+                    spacing: 0px;
+                    Text {
+                        text: "Preset name";
+                        color: Palette.muted;
+                        font-family: Typography.family;
+                        font-size: 10px;
+                        font-weight: 600;
+                        vertical-alignment: center;
+                    }
+                    Rectangle {
+                        height: 38px;
+                        border-radius: 7px;
+                        border-width: 1px;
+                        border-color: root.error != "" ? Palette.danger : Palette.border;
+                        background: Palette.input-bg;
+                        field := TextInput {
+                            x: 10px;
+                            width: parent.width - 20px;
+                            height: parent.height;
+                            text: root.name;
+                            color: Palette.text;
+                            font-family: Typography.family;
+                            font-size: 12px;
+                            vertical-alignment: center;
+                            single-line: true;
+                            changed has-focus => {
+                                if (self.has-focus) { root.focus-changed("save:input"); }
+                            }
+                            edited => { root.name-changed(self.text); }
+                            accepted => {
+                                if (root.valid) { root.confirmed(); }
+                            }
+                            key-pressed(event) => {
+                                if (event.text == "\u{001b}") {
+                                    root.cancelled();
+                                    return accept;
+                                }
+                                reject
+                            }
+                        }
+                    }
+                    Text {
+                        text: root.error != "" ? root.error : root.help;
+                        color: root.error != "" ? Palette.danger : Palette.muted-2;
+                        font-family: Typography.family;
+                        font-size: 9.5px;
+                        vertical-alignment: center;
+                    }
+                }
+            }
+
+            // Footer: Cancel + Save.
+            Rectangle {
+                border-width: 1px;
+                border-color: Palette.border-subtle;
+                background: Palette.surface;
+
+                HorizontalLayout {
+                    padding-left: 21px;
+                    padding-right: 21px;
+                    padding-top: 12px;
+                    padding-bottom: 12px;
+                    spacing: 7px;
+                    Rectangle { horizontal-stretch: 1; }
+                    Rectangle {
+                        width: cancel-text.preferred-width + 24px;
+                        height: 31px;
+                        border-radius: 6px;
+                        border-width: 1px;
+                        border-color: cancel-focus.has-focus ? Palette.accent : Palette.border;
+                        background: cancel-ta.has-hover ? Palette.surface-hover : Palette.surface-2;
+                        cancel-text := Text {
+                            text: "Cancel";
+                            color: Palette.text-soft;
+                            font-family: Typography.family;
+                            font-size: 10.5px;
+                            font-weight: 600;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+                        cancel-focus := FocusScope {
+                            width: parent.width;
+                            height: parent.height;
+                            changed has-focus => {
+                                if (self.has-focus) { root.focus-changed("save:cancel"); }
+                            }
+                            key-pressed(event) => {
+                                if (event.text == "\u{000a}" || event.text == "\u{0020}") {
+                                    root.cancelled();
+                                    return accept;
+                                }
+                                reject
+                            }
+                        }
+                        cancel-ta := TouchArea {
+                            mouse-cursor: pointer;
+                            clicked => {
+                                cancel-focus.focus();
+                                root.cancelled();
+                            }
+                        }
+                    }
+                    Rectangle {
+                        width: save-text.preferred-width + 24px;
+                        height: 31px;
+                        border-radius: 6px;
+                        background: Palette.accent;
+                        opacity: root.valid ? 1 : 0.46;
+                        border-width: 1px;
+                        border-color: save-focus.has-focus ? Palette.accent-ink : transparent;
+                        save-text := Text {
+                            text: "Save preset";
+                            color: Palette.accent-ink;
+                            font-family: Typography.family;
+                            font-size: 10.5px;
+                            font-weight: 600;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+                        save-focus := FocusScope {
+                            width: parent.width;
+                            height: parent.height;
+                            changed has-focus => {
+                                if (self.has-focus) { root.focus-changed("save:save"); }
+                            }
+                            key-pressed(event) => {
+                                if ((event.text == "\u{000a}" || event.text == "\u{0020}") && root.valid) {
+                                    root.confirmed();
+                                    return accept;
+                                }
+                                reject
+                            }
+                        }
+                        save-ta := TouchArea {
+                            mouse-cursor: pointer;
+                            clicked => {
+                                if (root.valid) {
+                                    save-focus.focus();
+                                    root.confirmed();
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Focus is granted by AppWindow when the dialog becomes visible, so the
+    // hidden dialog never steals focus from the app at startup.
+}

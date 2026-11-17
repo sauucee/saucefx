@@ -1,0 +1,338 @@
+// Effect rack: frontend/src/components/EffectRack.tsx. Five rows on a
+// 89px / 1fr / 22px grid, a 1.0 step, a rounded value readout, double-click to
+// reset the individual effect, and 0.48 opacity while processing is off.
+import { Layout, Palette, Typography } from "palette.slint";
+
+export component EffectRow inherits Rectangle {
+    in property <string> name;
+    in property <float> value: 0;
+    in property <string> value-label: "0";
+    in property <bool> enabled: true;
+    in property <bool> keyboard-enabled: true;
+    callback changed(float);
+    callback stepped(int);
+    callback reset();
+
+    // styles.css .effect-row is a grid column of the rack, so the row must be
+    // 244px wide (panel inner width minus 15px padding each side), not the
+    // 131px its content prefers, so the row carries the stretch and the inner
+    // layout follows the row width. Without them the layout centred a 131px
+    // row, which shifted every thumb +56.5px and collapsed the rail to 0.
+    height: 34px;
+    horizontal-stretch: 1;
+    background: transparent;
+
+    HorizontalLayout {
+        width: parent.width;
+        spacing: 10px;
+        // `alignment` is the MAIN (horizontal) axis in Slint and packs the
+        // columns at their preferred width, which is what centred the 131px
+        // content. The intent was vertical centring, i.e. cross-axis-alignment.
+        cross-axis-alignment: center;
+
+        // Name column: 89px, elided, 11.5px.
+        Rectangle {
+            width: 89px;
+            height: parent.height;
+            background: transparent;
+            Text {
+                width: parent.width;
+                text: root.name;
+                color: Palette.text-soft;
+                opacity: root.enabled ? 1 : 0.48;
+                font-family: Typography.family;
+                font-size: 11.5px;
+                vertical-alignment: center;
+                overflow: elide;
+            }
+        }
+
+        // Slider column, stretched.
+        Rectangle {
+            horizontal-stretch: 1;
+            height: 26px;
+            background: transparent;
+            // styles.css `.effect-thumb:hover` scales the whole thumb element
+            // (disk and both shadow rings) by 1.08 and the dragging state by
+            // 1.16. The rings are 3px surface and 5px accent wash (0.10 while
+            // dragging, 0.16 for the keyboard-only focus ring). Only the thumb
+            // itself is a hover target in the source (`:hover` on the thumb
+            // element), not the whole rail.
+            // Hover and drag decorations exist only while the slider is live.
+            // Processing off leaves the FocusScope enabled=false, which in this
+            // event order does not clear has-focus/keyboard-visible, so an
+            // unguarded focus wash stayed visible after powering off behind a
+            // focused row. Disabled keeps the dimmed disk, base ring and track.
+            private property <bool> live: root.enabled && root.keyboard-enabled;
+            property <float> thumb-scale: live ? (touch.pressed ? 1.16 : (thumb-hovered ? 1.08 : 1.0)) : 1.0;
+            // The hover box is the 12px thumb itself: the source box is
+            // [left, right), so the right edge is exclusive. A half extent of
+            // 6px with a strict comparison hovers x134/x139 and not x140/x141,
+            // which is the reference boundary (a 7px box hovered 140 and 141,
+            // and `<= 6px` still hovered 140).
+            property <bool> thumb-hovered: touch.has-hover
+                && abs(touch.mouse-x - thumb-centre-x) < 6px
+                && abs(touch.mouse-y - self.height / 2) < 6px;
+            property <bool> keyboard-visible: false;
+            property <bool> focus-visible: focus.has-focus && keyboard-visible && live;
+            property <bool> show-wash: (touch.pressed && live) || focus-visible;
+            property <color> wash-color: focus-visible ? Palette.accent-wash-strong : Palette.accent-wash;
+
+            focus := FocusScope {
+                enabled: root.keyboard-enabled && root.enabled;
+                width: parent.width;
+                height: parent.height;
+                // Pointer focus is real focus so arrows work after a click, but
+                // the styles.css focus ring is `:focus-visible`: only keyboard
+                // acquisition shows it. Focus is taken explicitly on click, so
+                // the reason is Programmatic and Slint reports it synchronously,
+                // exactly as the EQ band cells do.
+                focus-on-click: false;
+                focus-gained(reason) => {
+                    parent.keyboard-visible = reason != FocusReason.programmatic;
+                }
+                focus-lost(reason) => {
+                    parent.keyboard-visible = false;
+                }
+                key-pressed(event) => {
+                    if (root.keyboard-enabled && root.enabled) {
+                        // A visible focus ring is keyboard-only: a pointer
+                        // click also focuses the scope but must not draw it.
+                        parent.keyboard-visible = true;
+                        // Slint 1.18 sends the arrow keys as U+F700 (Up),
+                        // U+F701 (Down), U+F702 (Left) and U+F703 (Right), not
+                        // as "ArrowUp"/"ArrowRight" text, so the literal
+                        // comparison never matched and every arrow was inert.
+                        if (event.text == "\u{f700}" || event.text == "\u{f703}") {
+                            root.stepped(1);
+                            return accept;
+                        }
+                        if (event.text == "\u{f701}" || event.text == "\u{f702}") {
+                            root.stepped(-1);
+                            return accept;
+                        }
+                        // The reference range input jumps to its limits:
+                        // Home/PageDown to 0, End/PageUp to 10 (the rack range
+                        // is exactly 10 steps wide, so ±10 always clamps).
+                        if (event.text == Key.Home || event.text == Key.PageDown) {
+                            root.stepped(-10);
+                            return accept;
+                        }
+                        if (event.text == Key.End || event.text == Key.PageUp) {
+                            root.stepped(10);
+                            return accept;
+                        }
+                    }
+                    reject
+                }
+            }
+
+            // Processing off dims the whole slider group to 0.4 while keeping
+            // the accent colour (.slider{opacity:.4}); the name and value
+            // columns keep their own 0.48.
+            Rectangle {
+                x: 0;
+                y: 0;
+                width: parent.width;
+                height: parent.height;
+                background: transparent;
+                opacity: root.enabled ? 1 : 0.4;
+
+                Rectangle {
+                    x: 0;
+                    y: (parent.height - 4px) / 2;
+                    height: 4px;
+                    width: parent.width;
+                    border-radius: 2px;
+                    background: Palette.track;
+                }
+                Rectangle {
+                    x: 0;
+                    y: (parent.height - 4px) / 2;
+                    height: 4px;
+                    width: parent.width * (root.value / 10);
+                    border-radius: 2px;
+                    background: Palette.accent;
+                }
+            }
+            // styles.css .effect-thumb: a 12px accent disk with `0 0 0 3px
+            // surface` plus an accent wash ring at 5px. All three share one
+            // centre and scale together.
+            property <length> thumb-size: 12px;
+            // Base UI positions the thumb centre at value/10 of the track and
+            // translates it by -50%, so it overflows the track ends by 6px and
+            // is never clamped. Clamping pushed the value-0 disk +3px right.
+            property <length> thumb-centre-x: parent.width * (root.value / 10);
+            Rectangle {
+                visible: show-wash;
+                x: thumb-centre-x - (thumb-size + 10px) * thumb-scale / 2;
+                y: (parent.height - (thumb-size + 10px) * thumb-scale) / 2;
+                width: (thumb-size + 10px) * thumb-scale;
+                height: (thumb-size + 10px) * thumb-scale;
+                border-radius: (thumb-size + 10px) * thumb-scale / 2;
+                background: wash-color;
+                opacity: root.enabled ? 1 : 0.4;
+            }
+            Rectangle {
+                x: thumb-centre-x - (thumb-size + 6px) * thumb-scale / 2;
+                y: (parent.height - (thumb-size + 6px) * thumb-scale) / 2;
+                width: (thumb-size + 6px) * thumb-scale;
+                height: (thumb-size + 6px) * thumb-scale;
+                border-radius: (thumb-size + 6px) * thumb-scale / 2;
+                background: Palette.surface;
+                opacity: root.enabled ? 1 : 0.4;
+            }
+            Rectangle {
+                x: thumb-centre-x - thumb-size * thumb-scale / 2;
+                y: (parent.height - thumb-size * thumb-scale) / 2;
+                width: thumb-size * thumb-scale;
+                height: thumb-size * thumb-scale;
+                border-radius: thumb-size * thumb-scale / 2;
+                background: Palette.accent;
+                opacity: root.enabled ? 1 : 0.4;
+            }
+
+            touch := TouchArea {
+                // Pointer edits are mutations too: they must respect both the
+                // processing switch and the keyboard lock, like the EQ cells.
+                enabled: root.enabled && root.keyboard-enabled;
+                mouse-cursor: root.enabled && root.keyboard-enabled ? pointer : default;
+                // No continuous edit without a pressed pointer.
+                moved => {
+                    if (self.pressed) {
+                        parent.keyboard-visible = false;
+                        root.changed(clamp(0, round(self.mouse-x / self.width * 10), 10));
+                    }
+                }
+                clicked => {
+                    parent.keyboard-visible = false;
+                    focus.focus();
+                    root.changed(clamp(0, round(self.mouse-x / self.width * 10), 10));
+                }
+                double-clicked => { root.reset(); }
+            }
+        }
+
+        // Value column: 22px, right aligned.
+        Text {
+            width: 22px;
+            text: root.value-label;
+            color: Palette.muted;
+            opacity: root.enabled ? 1 : 0.48;
+            font-family: Typography.family;
+            font-size: 10.5px;
+            horizontal-alignment: right;
+            vertical-alignment: center;
+        }
+    }
+}
+
+export component EffectsPanel inherits Rectangle {
+    in property <[string]> names;
+    in property <[float]> values;
+    in property <[string]> value-labels;
+    in property <bool> enabled: true;
+    in property <bool> keyboard-enabled: true;
+    callback changed(int, float);
+    callback stepped(int, int);
+    callback reset(int);
+
+    width: Layout.effects-width;
+    background: Palette.bg-elevated;
+    border-width: 1px;
+    border-color: Palette.border;
+    border-radius: 12px;
+    clip: true;
+
+    // The panel draws a 1px border; children of a bordered Rectangle are not
+    // inset by it, so the content box is offset by 1px and loses 2px, exactly
+    // as in EqualizerPanel. Without this the rows were 34..280 instead of
+    // 35..279 and every track ran 2px long.
+    VerticalLayout {
+        x: 1px;
+        y: 1px;
+        width: parent.width - 2px;
+        height: parent.height - 2px;
+        spacing: 0px;
+        HorizontalLayout {
+            padding-left: Layout.panel-head-pad-h;
+            padding-right: Layout.panel-head-pad-h;
+            padding-top: Layout.panel-head-pad-top;
+            padding-bottom: Layout.panel-head-pad-bottom;
+            spacing: 8px;
+            VerticalLayout {
+                spacing: 3px;
+                Text {
+                    text: "Effects";
+                    color: Palette.text;
+                    font-family: Typography.family;
+                    font-size: Typography.title;
+                    font-weight: 600;
+                    vertical-alignment: center;
+                }
+                Text {
+                    text: "Five native DSP controls";
+                    color: Palette.muted-2;
+                    font-family: Typography.family;
+                    font-size: Typography.small;
+                    vertical-alignment: center;
+                }
+            }
+            Rectangle { horizontal-stretch: 1; }
+            // styles.css .panel-count: 19x18, 4px radius, bordered pill.
+            Rectangle {
+                width: Layout.panel-count-width;
+                height: Layout.panel-count-height;
+                border-radius: 4px;
+                border-width: 1px;
+                border-color: Palette.border-subtle;
+                background: transparent;
+                Text {
+                    text: "5";
+                    width: parent.width;
+                    height: parent.height;
+                    color: Palette.muted-2;
+                    font-family: Typography.family;
+                    font-size: 9px;
+                    font-weight: 600;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+            }
+        }
+
+        VerticalLayout {
+            padding-left: Layout.panel-head-pad-h;
+            padding-right: Layout.panel-head-pad-h;
+            spacing: 1px;
+            for row[i] in root.values : EffectRow {
+                name: root.names[i];
+                value: row;
+                value-label: i < root.value-labels.length ? root.value-labels[i] : "0";
+                enabled: root.enabled;
+                keyboard-enabled: root.keyboard-enabled;
+                changed(v) => { root.changed(i, v); }
+                stepped(d) => { root.stepped(i, d); }
+                reset => { root.reset(i); }
+            }
+        }
+
+        // styles.css .panel-hint uses `margin: auto 0 0`, so the footer sits on
+        // the panel bottom instead of trailing the effect list.
+        Rectangle { vertical-stretch: 1; }
+
+        HorizontalLayout {
+            padding-left: Layout.panel-head-pad-h;
+            padding-right: Layout.panel-head-pad-h;
+            padding-top: Layout.panel-hint-pad-top;
+            padding-bottom: Layout.panel-hint-pad-bottom;
+            Text {
+                text: "Double-click a slider to reset it.";
+                color: Palette.muted-2;
+                font-family: Typography.family;
+                font-size: 9.5px;
+                horizontal-alignment: left;
+            }
+        }
+    }
+}

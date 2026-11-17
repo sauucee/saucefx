@@ -1,0 +1,60 @@
+// FxVisualizer parity (frontend/src/components/Spectrum.tsx): ten bands keep a
+// ten-slot history each and every slot is drawn, so a frame is 100 rectangular
+// bars on a 960x120 surface, band-major, both halves shifted outward from the
+// centre. The preview is fed by a declared synthetic fixture, never by audio.
+import { Layout, Palette, Typography } from "palette.slint";
+
+export component Spectrum inherits Rectangle {
+    in property <bool> power: true;
+    in property <[float]> bars;
+    in property <color> edge;
+    in property <color> centre;
+    in property <float> alpha: 0.78;
+
+    height: Layout.spectrum-height;
+    border-radius: Layout.panel-radius;
+    background: Palette.bg;
+    border-width: 1px;
+    border-color: Palette.border;
+
+    if root.power : Rectangle {
+        width: parent.width;
+        height: parent.height;
+        background: transparent;
+
+        // 27px start, 9.1px pitch, 4px bars, 100px maximum on a 960x120 canvas.
+        // The bar's own slice of the canvas-wide gradient is clipped from a
+        // full-height copy so the vertical stops stay canvas-aligned.
+        for bar[i] in root.bars : Rectangle {
+            x: ((27px + i * 9.1px) / 960px) * parent.width;
+            width: max(1px, (4px / 960px) * parent.width);
+            height: max(1px, (bar * 100px / 120px) * parent.height);
+            y: (parent.height - self.height) / 2;
+            clip: true;
+            background: transparent;
+
+            Rectangle {
+                x: 0px;
+                width: parent.width;
+                y: -parent.y;
+                height: root.height;
+                background: @linear-gradient(180deg,
+                    root.edge.with-alpha(root.alpha) 0%,
+                    root.centre.with-alpha(root.alpha) 50%,
+                    root.edge.with-alpha(root.alpha) 100%);
+            }
+        }
+    }
+
+    if !root.power : Text {
+        text: "Audio processing is off";
+        color: Palette.muted;
+        font-family: Typography.family;
+        font-size: Typography.small;
+        font-weight: 600;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+        width: parent.width;
+        height: parent.height;
+    }
+}

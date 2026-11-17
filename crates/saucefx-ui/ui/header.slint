@@ -1,0 +1,254 @@
+// Title bar: frontend/src/components/AppHeader.tsx and styles.css:186-260.
+import { Layout, Palette, Typography } from "palette.slint";
+
+export component GlyphButton inherits Rectangle {
+    in property <string> glyph: "gear";
+    in property <bool> danger: false;
+    in property <bool> keyboard-enabled: true;
+    out property <bool> keyboard-focused: focus.has-focus;
+    public function take-focus() { focus.focus(); }
+    callback clicked();
+    width: Layout.icon-button;
+    height: Layout.icon-button;
+    border-radius: 7px;
+    background: touch.has-hover ? (danger ? Palette.accent-wash : Palette.surface-hover) : transparent;
+
+    focus := FocusScope {
+        enabled: root.keyboard-enabled;
+        width: parent.width;
+        height: parent.height;
+        key-pressed(event) => {
+            if (event.text == "\u{000a}" || event.text == "\u{0020}") {
+                root.clicked();
+                return accept;
+            }
+            reject
+        }
+    }
+
+    touch := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { focus.focus(); root.clicked(); }
+    }
+
+    if glyph == "minus" : Path {
+        x: (parent.width - 10px) / 2;
+        y: (parent.height - 1.4px) / 2;
+        width: 10px;
+        height: 1.4px;
+        stroke-width: 1.4px;
+        stroke: Palette.muted;
+        commands: "M 0 0 L 10 0";
+    }
+
+    if glyph == "close" : Path {
+        x: (parent.width - 11px) / 2;
+        y: (parent.height - 11px) / 2;
+        width: 11px;
+        height: 11px;
+        stroke-width: 1.5px;
+        stroke: danger ? #e07171 : Palette.muted;
+        commands: "M 0 0 L 11 11 M 11 0 L 0 11";
+    }
+
+    // AppHeader.tsx uses lucide `Settings2` (two sliders), not a gear.
+    if glyph == "gear" : Path {
+        x: (parent.width - 12px) / 2;
+        y: (parent.height - 12px) / 2;
+        width: 12px;
+        height: 12px;
+        stroke-width: 1.5px;
+        stroke: Palette.muted;
+        commands: "M 5.5 3.5 L 10 3.5 M 2.5 8.5 L 7 8.5 M 3.5 2 A 1.5 1.5 0 1 0 3.5 5 A 1.5 1.5 0 1 0 3.5 2 M 8.5 7 A 1.5 1.5 0 1 0 8.5 10 A 1.5 1.5 0 1 0 8.5 7";
+    }
+}
+
+export component PowerPill inherits Rectangle {
+    in property <bool> on: true;
+    in property <bool> keyboard-enabled: true;
+    callback toggled();
+    // Keyboard reachability: the reference is a labelled Base UI switch, so
+    // Enter/Space toggle it and focus can land here via Tab.
+    out property <bool> keyboard-focused: pill-focus.has-focus;
+    width: 62px;
+    height: Layout.power-control-height;
+    border-radius: Layout.power-control-radius;
+    background: on ? Palette.accent-wash : Palette.surface;
+    border-width: 1px;
+    border-color: on ? Palette.accent-border
+        : (pill-focus.has-focus ? Palette.accent : Palette.border);
+
+    pill-focus := FocusScope {
+        enabled: root.keyboard-enabled;
+        width: parent.width;
+        height: parent.height;
+        key-pressed(event) => {
+            if (event.text == Key.Return || event.text == Key.Space) {
+                root.toggled();
+                return accept;
+            }
+            reject
+        }
+    }
+
+    ta := TouchArea {
+        mouse-cursor: pointer;
+        clicked => { pill-focus.focus(); root.toggled(); }
+    }
+
+    content := HorizontalLayout {
+        x: 9px;
+        width: parent.width - 18px;
+        height: parent.height;
+        spacing: 5px;
+        alignment: center;
+        // AppHeader.tsx uses the lucide `Power` icon (24-unit grid, drawn at
+        // 13px with a 2.2 stroke), not a status dot.
+        Rectangle {
+            width: 13px;
+            height: 13px;
+            background: transparent;
+            Path {
+                width: 13px;
+                height: 13px;
+                viewbox-width: 24;
+                viewbox-height: 24;
+                stroke-width: 2.2px;
+                stroke-line-cap: round;
+                stroke: root.on ? Palette.accent : Palette.muted-2;
+                commands: "M 12 2 L 12 12 M 18.36 6.64 A 9 9 0 1 1 5.63 6.64";
+            }
+        }
+        Text {
+            text: root.on ? "On" : "Off";
+            color: root.on ? Palette.accent : Palette.muted;
+            font-family: Typography.family;
+            font-size: Typography.small;
+            font-weight: 600;
+            vertical-alignment: center;
+        }
+    }
+}
+
+export component AppHeader inherits Rectangle {
+    in property <bool> power: true;
+    in property <bool> keyboard-enabled: true;
+    out property <bool> power-focused: power-pill.keyboard-focused;
+    public function focus-settings-opener() { settings-opener.take-focus(); }
+    callback power-toggled();
+    callback settings-clicked();
+    callback minimize-clicked();
+    callback close-clicked();
+    callback drag-requested();
+
+    width: Layout.window-width;
+    height: Layout.header-height;
+    background: Palette.bg-elevated;
+
+    // styles.css .titlebar only draws a bottom border; the outer 1px shell
+    // border is the frame, so the bar must not add a second one.
+    Rectangle {
+        x: 0;
+        y: parent.height - 1px;
+        width: parent.width;
+        height: 1px;
+        background: Palette.border-subtle;
+    }
+
+    // The native window is fixed at 1040x568, so the title bar positions its two
+    // groups explicitly instead of relying on layout stretch (which collapsed
+    // the actions into the middle of the bar).
+    drag-area := TouchArea {
+        x: 0;
+        y: 0;
+        width: parent.width - 250px;
+        height: parent.height;
+        pointer-event(ev) => {
+            if (ev.button == PointerEventButton.left && ev.kind == PointerEventKind.down) {
+                root.drag-requested();
+            }
+        }
+    }
+
+    // styles.css .brand: 29px mark at the titlebar padding edge, a 10px gap,
+    // then the name/subtitle stack centred in the 52px bar. Explicit positions
+    // because a layout pins the fixed-height mark to the top instead of
+    // centring it.
+    brand := Rectangle {
+        x: Layout.header-pad-left;
+        y: 0;
+        width: Layout.brand-min-width;
+        height: Layout.header-height;
+        background: transparent;
+
+        Image {
+            x: 0;
+            y: (parent.height - Layout.brand-mark-height) / 2;
+            width: Layout.brand-mark-width;
+            height: Layout.brand-mark-height;
+            source: @image-url("../../../frontend/public/saucefx-mark.svg");
+            image-fit: contain;
+        }
+
+        VerticalLayout {
+            x: Layout.brand-mark-width + Layout.brand-gap;
+            y: 0;
+            width: 160px;
+            height: parent.height;
+            spacing: 2px;
+            alignment: center;
+            Text {
+                text: "SauceFX";
+                color: Palette.text;
+                font-family: Typography.family;
+                font-size: Typography.brand;
+                font-weight: 600;
+                vertical-alignment: center;
+            }
+            Text {
+                text: "AUDIO ENHANCER";
+                color: Palette.muted-2;
+                font-family: Typography.family;
+                font-size: 8.5px;
+                font-weight: 600;
+                letter-spacing: 1.1px;
+                vertical-alignment: center;
+            }
+        }
+    }
+
+    actions := HorizontalLayout {
+        x: parent.width - self.width - Layout.header-pad-right;
+        // Centred by hand: a layout outside a layout keeps its preferred
+        // height, so asking for the full bar height would pin it to the top.
+        y: (Layout.header-height - Layout.power-control-height) / 2;
+        width: 171px;
+        height: Layout.power-control-height;
+        spacing: 3px;
+        alignment: center;
+
+        power-pill := PowerPill {
+            on: root.power;
+            keyboard-enabled: root.keyboard-enabled;
+            toggled => { root.power-toggled(); }
+        }
+        Rectangle {
+            width: 13px;
+            height: 20px;
+            background: transparent;
+            Rectangle {
+                x: 6px;
+                width: 1px;
+                height: parent.height;
+                background: Palette.border-subtle;
+            }
+        }
+        settings-opener := GlyphButton {
+            glyph: "gear";
+            keyboard-enabled: root.keyboard-enabled;
+            clicked => { root.settings-clicked(); }
+        }
+        GlyphButton { glyph: "minus"; keyboard-enabled: root.keyboard-enabled; clicked => { root.minimize-clicked(); } }
+        GlyphButton { glyph: "close"; danger: true; keyboard-enabled: root.keyboard-enabled; clicked => { root.close-clicked(); } }
+    }
+}
