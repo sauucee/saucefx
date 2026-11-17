@@ -11,7 +11,7 @@ export component GlyphButton inherits Rectangle {
     width: Layout.icon-button;
     height: Layout.icon-button;
     border-radius: 7px;
-    background: touch.has-hover ? (danger ? Palette.accent-wash : Palette.surface-hover) : transparent;
+    background: touch.has-hover ? (danger ? Palette.danger-wash : Palette.surface-hover) : transparent;
 
     focus := FocusScope {
         enabled: root.keyboard-enabled;
@@ -31,13 +31,16 @@ export component GlyphButton inherits Rectangle {
         clicked => { focus.focus(); root.clicked(); }
     }
 
+    // Icon glyphs: muted like styles.css .icon-button, text color on hover.
+    // Stroke widths are in viewbox units and Slint scales them with the
+    // geometry, so widths are compensated for the small element sizes.
     if glyph == "minus" : Path {
         x: (parent.width - 10px) / 2;
         y: (parent.height - 1.4px) / 2;
         width: 10px;
         height: 1.4px;
         stroke-width: 1.4px;
-        stroke: Palette.muted;
+        stroke: touch.has-hover ? Palette.text : Palette.muted;
         commands: "M 0 0 L 10 0";
     }
 
@@ -47,19 +50,23 @@ export component GlyphButton inherits Rectangle {
         width: 11px;
         height: 11px;
         stroke-width: 1.5px;
-        stroke: danger ? #e07171 : Palette.muted;
+        stroke: touch.has-hover ? Palette.text : Palette.muted;
         commands: "M 0 0 L 11 11 M 11 0 L 0 11";
     }
 
-    // AppHeader.tsx uses lucide `Settings2` (two sliders), not a gear.
+    // AppHeader.tsx uses lucide `Settings2`: two lines with round knobs.
+    // Circles are cubic-approximated (Slint paths have no arc command).
     if glyph == "gear" : Path {
-        x: (parent.width - 12px) / 2;
-        y: (parent.height - 12px) / 2;
-        width: 12px;
-        height: 12px;
-        stroke-width: 1.5px;
-        stroke: Palette.muted;
-        commands: "M 5.5 3.5 L 10 3.5 M 2.5 8.5 L 7 8.5 M 3.5 2 A 1.5 1.5 0 1 0 3.5 5 A 1.5 1.5 0 1 0 3.5 2 M 8.5 7 A 1.5 1.5 0 1 0 8.5 10 A 1.5 1.5 0 1 0 8.5 7";
+        x: (parent.width - 15px) / 2;
+        y: (parent.height - 15px) / 2;
+        width: 15px;
+        height: 15px;
+        viewbox-width: 24;
+        viewbox-height: 24;
+        stroke-width: 1.19px;
+        stroke-line-cap: round;
+        stroke: touch.has-hover ? Palette.text : Palette.muted;
+        commands: "M 20 7 L 11 7 M 14 17 L 5 17 M 4 7 C 4 5.343 5.343 4 7 4 C 8.657 4 10 5.343 10 7 C 10 8.657 8.657 10 7 10 C 5.343 10 4 8.657 4 7 Z M 14 17 C 14 15.343 15.343 14 17 14 C 18.657 14 20 15.343 20 17 C 20 18.657 18.657 20 17 20 C 15.343 20 14 18.657 14 17 Z";
     }
 }
 
@@ -73,10 +80,11 @@ export component PowerPill inherits Rectangle {
     width: 62px;
     height: Layout.power-control-height;
     border-radius: Layout.power-control-radius;
-    background: on ? Palette.accent-wash : Palette.surface;
+    // The reference checked pill has no border: wash bg, white label, and
+    // only the glyph turns accent.
+    background: on ? Palette.accent-wash : (pill-focus.has-focus ? Palette.surface-hover : transparent);
     border-width: 1px;
-    border-color: on ? Palette.accent-border
-        : (pill-focus.has-focus ? Palette.accent : Palette.border);
+    border-color: pill-focus.has-focus ? Palette.accent : transparent;
 
     pill-focus := FocusScope {
         enabled: root.keyboard-enabled;
@@ -113,18 +121,21 @@ export component PowerPill inherits Rectangle {
                 height: 13px;
                 viewbox-width: 24;
                 viewbox-height: 24;
-                stroke-width: 2.2px;
+                // The reference lucide stroke (2.2 units at 24) scales to
+                // 1.19 element pixels at this size.
+                stroke-width: 1.19px;
                 stroke-line-cap: round;
                 stroke: root.on ? Palette.accent : Palette.muted-2;
                 commands: "M 12 2 L 12 12 M 18.36 6.64 A 9 9 0 1 1 5.63 6.64";
             }
         }
         Text {
-            text: root.on ? "On" : "Off";
-            color: root.on ? Palette.accent : Palette.muted;
+            text: root.on ? "ON" : "OFF";
+            color: root.on ? Palette.text : Palette.muted;
             font-family: Typography.family;
             font-size: Typography.small;
-            font-weight: 600;
+            font-weight: 700;
+            letter-spacing: 0.5px;
             vertical-alignment: center;
         }
     }

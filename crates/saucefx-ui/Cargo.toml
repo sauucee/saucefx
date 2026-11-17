@@ -10,10 +10,14 @@ slint = { version = "=1.18.1", default-features = false, features = [
     "std",
     "backend-winit",
     "renderer-femtovg",
+    "renderer-software",
     "compat-1-2",
+    "unstable-fontique-011",
     # Native minimize and title-bar dragging need the winit window handle.
     "unstable-winit-030",
 ] }
+# PNG output for the offscreen UI capture tool.
+image = { version = "0.25", default-features = false, features = ["png"] }
 saucefx-core = { path = "../saucefx-core" }
 
 [build-dependencies]

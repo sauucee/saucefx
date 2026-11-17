@@ -1,0 +1,21 @@
+[package]
+name = "saucefx-host"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[[bin]]
+name = "saucefx"
+path = "src/main.rs"
+
+[dependencies]
+slint = { version = "=1.18.1", default-features = false, features = [
+    "std",
+    "backend-winit",
+    "renderer-femtovg",
+    "compat-1-2",
+    "unstable-winit-030",
+] }
+saucefx-core = { path = "../saucefx-core" }
+saucefx-ui = { path = "../saucefx-ui" }

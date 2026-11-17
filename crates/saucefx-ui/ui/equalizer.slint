@@ -72,9 +72,12 @@ export component EqualizerPanel inherits Rectangle {
                     y: (parent.height - 14px) / 2;
                     width: 14px;
                     height: 14px;
+                    viewbox-width: 24;
+                    viewbox-height: 24;
+                    // lucide RotateCcw (the reference reset glyph), counterclockwise.
                     stroke-width: 1.9px;
                     stroke: reset-ta.has-hover ? Palette.text : Palette.muted;
-                    commands: "M 3.2 5.1 A 5 5 0 1 1 2.1 8.4 M 3.4 1.4 L 3.2 5.2 L 7 5.4";
+                    commands: "M 3 12 A 9 9 0 1 0 12 3 A 9.75 9.75 0 0 0 5.26 5.74 L 3 8 M 3 3 L 3 8 L 8 8";
                 }
                 reset-ta := TouchArea {
                     enabled: root.enabled;

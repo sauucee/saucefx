@@ -2,6 +2,7 @@
 //! menu/dialog state. Nothing here creates audio, files or devices.
 
 use std::cell::RefCell;
+use std::path::Path;
 use std::rc::Rc;
 
 use slint::winit_030::WinitWindowAccessor;
@@ -11,6 +12,47 @@ use saucefx_core::settings::ThemeMode;
 use saucefx_core::state::{BAND_COUNT, EFFECT_COUNT, EditError, UiState};
 
 use crate::{AppWindow, MenuEntry, Palette};
+
+/// The reference interface bundles Figtree; without registering it here the
+/// Slint text falls back to a system font and every label renders
+/// differently. Registered once, before the first paint.
+fn register_ui_fonts() {
+    use std::sync::Once;
+    static REGISTER: Once = Once::new();
+    REGISTER.call_once(|| {
+        const FONTS: [(&str, &[u8]); 3] = [
+            (
+                "Figtree-Regular.ttf",
+                include_bytes!(concat!(
+                    env!("CARGO_MANIFEST_DIR"),
+                    "/../../frontend/src/fonts/Figtree-Regular.ttf"
+                )),
+            ),
+            (
+                "Figtree-SemiBold.ttf",
+                include_bytes!(concat!(
+                    env!("CARGO_MANIFEST_DIR"),
+                    "/../../frontend/src/fonts/Figtree-SemiBold.ttf"
+                )),
+            ),
+            (
+                "Figtree-Bold.ttf",
+                include_bytes!(concat!(
+                    env!("CARGO_MANIFEST_DIR"),
+                    "/../../frontend/src/fonts/Figtree-Bold.ttf"
+                )),
+            ),
+        ];
+        // Shared fontique storage: registering on the returned collection
+        // applies process-wide, so "Figtree" resolves like the reference UI.
+        let mut collection = slint::fontique_011::shared_collection();
+        for (_file, bytes) in FONTS {
+            let blob =
+                slint::fontique_011::fontique::Blob::new(std::sync::Arc::new(bytes.to_vec()));
+            collection.register_fonts(blob, None);
+        }
+    });
+}
 
 /// Literal effect labels from `frontend/src/components/EffectRack.tsx`.
 pub const EFFECT_NAMES: [&str; EFFECT_COUNT] = [
@@ -154,8 +196,8 @@ impl EditOutcome {
     }
 }
 
-/// One synthetic preset fixture: the values a factory choice applies. These
-/// stand in for the protected `.fac` files, which are never read here.
+/// One preset fixture: the values a preset choice applies, plus the .fac
+/// path for real library rows ("" for the synthetic preview fixtures).
 #[derive(Clone, Debug, PartialEq)]
 pub struct PresetFixture {
     /// Row label, e.g. `Default` or `Factsoft 3`.
@@ -166,6 +208,8 @@ pub struct PresetFixture {
     pub effects: [f32; EFFECT_COUNT],
     /// Thirty-one EQ gains in dB.
     pub eq: [f32; BAND_COUNT],
+    /// Absolute .fac path the fixture was loaded from ("" for synthetic).
+    pub path: String,
 }
 
 impl PresetFixture {
@@ -176,6 +220,7 @@ impl PresetFixture {
             factory,
             effects: [0.0; EFFECT_COUNT],
             eq: [0.0; BAND_COUNT],
+            path: String::new(),
         }
     }
 }
@@ -221,6 +266,7 @@ pub fn factory_fixtures() -> Vec<PresetFixture> {
             factory: true,
             effects,
             eq,
+            path: String::new(),
         });
     }
     presets
@@ -237,6 +283,11 @@ pub struct MenuRow {
     pub is_group: bool,
     /// Disabled row, not selectable.
     pub disabled: bool,
+    /// Device name an output row routes to ("" elsewhere); passed to the
+    /// engine verbatim, like the fxpw_set_output contract.
+    pub output_name: String,
+    /// Port an output row routes to ("" elsewhere).
+    pub output_port: String,
 }
 
 impl MenuRow {
@@ -246,6 +297,8 @@ impl MenuRow {
             detail: detail.to_string(),
             is_group: false,
             disabled: false,
+            output_name: String::new(),
+            output_port: String::new(),
         }
     }
 
@@ -255,6 +308,20 @@ impl MenuRow {
             detail: String::new(),
             is_group: true,
             disabled: false,
+            output_name: String::new(),
+            output_port: String::new(),
+        }
+    }
+
+    /// A selectable output row that routes to a concrete device/port.
+    pub fn output(label: &str, detail: &str, device: &str, port: &str, available: bool) -> Self {
+        Self {
+            label: label.to_string(),
+            detail: detail.to_string(),
+            is_group: false,
+            disabled: !available,
+            output_name: device.to_string(),
+            output_port: port.to_string(),
         }
     }
 }
@@ -275,14 +342,14 @@ impl SceneCatalog {
         let mut presets = vec![MenuRow::group("FACTORY")];
         let mut preset_values: Vec<Option<PresetFixture>> = vec![None];
         for fixture in factory {
-            presets.push(MenuRow::entry(&fixture.label, "factory"));
+            presets.push(MenuRow::entry(&fixture.label, ""));
             preset_values.push(Some(fixture.clone()));
         }
         if !saved.is_empty() {
             presets.push(MenuRow::group("CUSTOM"));
             preset_values.push(None);
             for fixture in saved {
-                presets.push(MenuRow::entry(&fixture.label, "saved"));
+                presets.push(MenuRow::entry(&fixture.label, "Custom"));
                 preset_values.push(Some(fixture.clone()));
             }
         }
@@ -379,9 +446,28 @@ impl SpectrumHistory {
     }
 }
 
+/// Forwarding sink for the real engine behind the binding. The preview and
+/// the tests run without one; the host binary installs an implementation
+/// that pushes every applied change to the DfxDsp/PipeWire engine. All calls
+/// stay on the Slint event-loop thread, like the fxpw_* contract.
+pub trait Engine: 'static {
+    /// Power (bypass) state.
+    fn apply_power(&mut self, on: bool);
+    /// One effect value on the UI's 0..10 scale.
+    fn apply_effect(&mut self, index: usize, value: f32);
+    /// One EQ gain in dB (the engine's band frequency is resolved by the
+    /// implementation's own band table).
+    fn apply_eq_gain(&mut self, index: usize, gain: f32);
+    /// Route to a physical output; an empty name selects automatic.
+    fn apply_output(&mut self, name: &str, port: &str);
+    /// Load a .fac file into the engine. Returns the resulting live effect
+    /// and EQ values so the view state mirrors the engine exactly.
+    fn load_preset(&mut self, path: &str) -> Option<([f32; EFFECT_COUNT], [f32; BAND_COUNT])>;
+}
+
 /// The whole preview state: applied audio settings plus view-only selection,
 /// dialog and synthetic spectrum data.
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub struct UiBinding {
     state: UiState,
     catalog: SceneCatalog,
@@ -401,6 +487,14 @@ pub struct UiBinding {
     save_name: String,
     active_eq_band: Option<usize>,
     toast: Option<String>,
+    /// Real engine sink, when the host installed one.
+    engine: Option<Rc<RefCell<dyn Engine>>>,
+    /// Last (rows, selection) pushed into each menu model, so sync() does
+    /// not replace the model instances on every spectrum tick. RefCell
+    /// because sync takes `&self`, matching the window's own interior
+    /// mutability.
+    menu_cache_preset: RefCell<(Vec<MenuRow>, usize)>,
+    menu_cache_output: RefCell<(Vec<MenuRow>, usize)>,
 }
 
 impl Default for UiBinding {
@@ -412,6 +506,7 @@ impl Default for UiBinding {
 impl UiBinding {
     /// A fresh preview: power on, flat EQ, `Default` preset, `Test speakers`.
     pub fn new() -> Self {
+        register_ui_fonts();
         Self {
             state: UiState::new(),
             catalog: SceneCatalog::default(),
@@ -431,6 +526,93 @@ impl UiBinding {
             save_name: String::new(),
             active_eq_band: None,
             toast: None,
+            engine: None,
+            menu_cache_preset: RefCell::new((Vec::new(), 0)),
+            menu_cache_output: RefCell::new((Vec::new(), 0)),
+        }
+    }
+
+    /// Install the real engine sink. After this, every applied power/effect/
+    /// EQ/output/preset change is forwarded to the engine as well.
+    pub fn set_engine(&mut self, engine: Rc<RefCell<dyn Engine>>) {
+        self.engine = Some(engine);
+    }
+
+    /// Replace the synthetic catalog with real preset/output rows. `factory`
+    /// carries the .fac library fixtures (real paths, zeroed values — the
+    /// engine loads them on selection); `outputs` are engine-provided rows.
+    pub fn install_catalog(
+        &mut self,
+        factory: Vec<PresetFixture>,
+        saved: Vec<PresetFixture>,
+        outputs: Vec<MenuRow>,
+        selected_output: usize,
+    ) {
+        self.catalog = SceneCatalog::build(&factory, &saved);
+        self.catalog.outputs = outputs;
+        self.selected_preset = 1;
+        self.selected_output = selected_output;
+    }
+
+    /// Path of the selected preset fixture ("" for synthetic rows).
+    pub fn selected_preset_path(&self) -> &str {
+        self.catalog
+            .preset_values
+            .get(self.selected_preset)
+            .and_then(|value| value.as_ref())
+            .map_or("", |fixture| fixture.path.as_str())
+    }
+
+    /// Index of the currently selected output row.
+    pub fn selected_output(&self) -> usize {
+        self.selected_output
+    }
+
+    /// Catalog index of the preset fixture with this exact .fac path.
+    pub fn find_preset_by_path(&self, path: &str) -> Option<usize> {
+        if path.is_empty() {
+            return None;
+        }
+        self.catalog
+            .preset_values
+            .iter()
+            .position(|value| value.as_ref().is_some_and(|fixture| fixture.path == path))
+    }
+
+    /// Catalog index of the preset whose .fac file name matches `basename`,
+    /// for the session's factory relocation rule.
+    pub fn find_preset_by_basename(&self, basename: &str) -> Option<usize> {
+        if basename.is_empty() {
+            return None;
+        }
+        self.catalog.preset_values.iter().position(|value| {
+            value.as_ref().is_some_and(|fixture| {
+                Path::new(&fixture.path)
+                    .file_name()
+                    .is_some_and(|name| name.eq_ignore_ascii_case(basename))
+            })
+        })
+    }
+
+    fn forward_power(&self) {
+        if let Some(engine) = &self.engine {
+            engine.borrow_mut().apply_power(self.state.power());
+        }
+    }
+
+    fn forward_effect(&self, index: usize) {
+        if let Some(engine) = &self.engine
+            && let Some(value) = self.state.effect(index)
+        {
+            engine.borrow_mut().apply_effect(index, value);
+        }
+    }
+
+    fn forward_eq_gain(&self, index: usize) {
+        if let Some(engine) = &self.engine
+            && let Some(gain) = self.state.eq_gain(index)
+        {
+            engine.borrow_mut().apply_eq_gain(index, gain);
         }
     }
 
@@ -476,7 +658,9 @@ impl UiBinding {
     }
 
     /// Apply captured preset values verbatim. The preset format stores floats,
-    /// while the view's own sliders stay on a 1 dB step.
+    /// while the view's own sliders stay on a 1 dB step. With an engine
+    /// installed the full applied set is forwarded, so a session restore or
+    /// preset load reaches the DSP as well.
     pub fn apply_captured_values(&mut self, effects: &[f32], eq: &[f32]) -> bool {
         for (band, gain) in eq.iter().take(BAND_COUNT).enumerate() {
             if self.state.set_eq_gain(band, *gain).is_err() {
@@ -489,6 +673,19 @@ impl UiBinding {
             }
         }
         self.state.mark_applied();
+        if let Some(engine) = &self.engine {
+            let mut sink = engine.borrow_mut();
+            for index in 0..EFFECT_COUNT {
+                if let Some(value) = self.state.effect(index) {
+                    sink.apply_effect(index, value);
+                }
+            }
+            for index in 0..BAND_COUNT {
+                if let Some(gain) = self.state.eq_gain(index) {
+                    sink.apply_eq_gain(index, gain);
+                }
+            }
+        }
         true
     }
 
@@ -515,6 +712,7 @@ impl UiBinding {
             self.output_open = false;
             self.history.clear();
         }
+        self.forward_power();
     }
 
     /// Change one effect on the UI's 0..10 scale.
@@ -527,7 +725,10 @@ impl UiBinding {
         }
         // The reference slider clamps at its ends instead of refusing the drag.
         match self.state.set_effect(index, value.round().clamp(0.0, 10.0)) {
-            Ok(()) => EditOutcome::Applied,
+            Ok(()) => {
+                self.forward_effect(index);
+                EditOutcome::Applied
+            }
             Err(error) => EditOutcome::from_error(error),
         }
     }
@@ -544,7 +745,10 @@ impl UiBinding {
             .state
             .set_eq_gain(index, gain.round().clamp(-12.0, 12.0))
         {
-            Ok(()) => EditOutcome::Applied,
+            Ok(()) => {
+                self.forward_eq_gain(index);
+                EditOutcome::Applied
+            }
             Err(error) => EditOutcome::from_error(error),
         }
     }
@@ -555,8 +759,10 @@ impl UiBinding {
             return;
         }
         for index in 0..EFFECT_COUNT {
-            if let Some(value) = self.state.applied_effect(index) {
-                let _ = self.state.set_effect(index, value);
+            if let Some(value) = self.state.applied_effect(index)
+                && self.state.set_effect(index, value).is_ok()
+            {
+                self.forward_effect(index);
             }
         }
     }
@@ -567,8 +773,10 @@ impl UiBinding {
             return;
         }
         for index in 0..BAND_COUNT {
-            if let Some(gain) = self.state.applied_eq_gain(index) {
-                let _ = self.state.set_eq_gain(index, gain);
+            if let Some(gain) = self.state.applied_eq_gain(index)
+                && self.state.set_eq_gain(index, gain).is_ok()
+            {
+                self.forward_eq_gain(index);
             }
         }
     }
@@ -600,7 +808,10 @@ impl UiBinding {
             return EditOutcome::OutOfRange;
         };
         match self.state.set_effect(index, value) {
-            Ok(()) => EditOutcome::Applied,
+            Ok(()) => {
+                self.forward_effect(index);
+                EditOutcome::Applied
+            }
             Err(error) => EditOutcome::from_error(error),
         }
     }
@@ -614,7 +825,10 @@ impl UiBinding {
             return EditOutcome::OutOfRange;
         };
         match self.state.set_eq_gain(index, gain.round()) {
-            Ok(()) => EditOutcome::Applied,
+            Ok(()) => {
+                self.forward_eq_gain(index);
+                EditOutcome::Applied
+            }
             Err(error) => EditOutcome::from_error(error),
         }
     }
@@ -658,6 +872,8 @@ impl UiBinding {
     }
 
     /// Pick a preset row. Group and disabled rows keep the current selection.
+    /// Real library rows (with a .fac path) load through the engine and
+    /// mirror the resulting live values; synthetic rows apply their fixture.
     pub fn choose_preset(&mut self, index: usize) -> bool {
         if !self.state.power() {
             return false;
@@ -676,6 +892,19 @@ impl UiBinding {
         let Some(Some(fixture)) = self.catalog.preset_values.get(index) else {
             return false;
         };
+        if !fixture.path.is_empty()
+            && let Some(engine) = &self.engine
+        {
+            let Some((effects, eq)) = engine.borrow_mut().load_preset(&fixture.path) else {
+                return false;
+            };
+            if !self.apply_captured_values(&effects, &eq) {
+                return false;
+            }
+            self.selected_preset = index;
+            self.preset_open = false;
+            return true;
+        }
         let effects = fixture.effects;
         let eq = fixture.eq;
         if !self.apply_captured_values(&effects, &eq) {
@@ -695,10 +924,16 @@ impl UiBinding {
             return false;
         }
         self.selected_output = index;
-        let name = row.label.clone();
-        self.state.set_output_preference(&name, "");
-        self.state.set_active_output(&name, "", true);
+        self.state
+            .set_output_preference(&row.output_name, &row.output_port);
+        self.state
+            .set_active_output(&row.output_name, &row.output_port, true);
         self.output_open = false;
+        if let Some(engine) = &self.engine {
+            engine
+                .borrow_mut()
+                .apply_output(&row.output_name, &row.output_port);
+        }
         true
     }
 
@@ -871,6 +1106,7 @@ impl UiBinding {
             factory: false,
             effects,
             eq,
+            path: String::new(),
         });
         self.catalog = SceneCatalog::build(&factory_fixtures(), &self.saved_presets);
         // The new custom preset becomes the current selection, as in the source.
@@ -1172,28 +1408,43 @@ impl UiBinding {
             },
         );
         window.set_output_name(self.output_name().into());
-        window.set_preset_entries(
-            self.menu_entries(&self.catalog.presets, self.selected_preset)
-                .as_slice()
-                .into(),
-        );
-        window.set_output_entries(
-            self.menu_entries(&self.catalog.outputs, self.selected_output)
-                .as_slice()
-                .into(),
-        );
-        window
-            .set_preset_entry_offsets(Self::menu_offsets(&self.catalog.presets).as_slice().into());
-        window
-            .set_output_entry_offsets(Self::menu_offsets(&self.catalog.outputs).as_slice().into());
-        let (preset_first, preset_last) = Self::menu_enabled_bounds(&self.catalog.presets);
-        window.set_preset_first_enabled(preset_first);
-        window.set_preset_last_enabled(preset_last);
-        window.set_preset_initial_highlight(self.selected_preset as i32);
-        let (output_first, output_last) = Self::menu_enabled_bounds(&self.catalog.outputs);
-        window.set_output_first_enabled(output_first);
-        window.set_output_last_enabled(output_last);
-        window.set_output_initial_highlight(self.selected_output as i32);
+        // Menu models are pushed only when their content or selection
+        // changed: the sync runs on every spectrum tick, and replacing the
+        // model instance resets every open dropdown's repeater rows.
+        let mut preset_cache = self.menu_cache_preset.borrow_mut();
+        if preset_cache.0 != self.catalog.presets || preset_cache.1 != self.selected_preset {
+            window.set_preset_entries(
+                self.menu_entries(&self.catalog.presets, self.selected_preset)
+                    .as_slice()
+                    .into(),
+            );
+            window.set_preset_entry_offsets(
+                Self::menu_offsets(&self.catalog.presets).as_slice().into(),
+            );
+            let (first, last) = Self::menu_enabled_bounds(&self.catalog.presets);
+            window.set_preset_first_enabled(first);
+            window.set_preset_last_enabled(last);
+            window.set_preset_initial_highlight(self.selected_preset as i32);
+            *preset_cache = (self.catalog.presets.clone(), self.selected_preset);
+        }
+        drop(preset_cache);
+        let mut output_cache = self.menu_cache_output.borrow_mut();
+        if output_cache.0 != self.catalog.outputs || output_cache.1 != self.selected_output {
+            window.set_output_entries(
+                self.menu_entries(&self.catalog.outputs, self.selected_output)
+                    .as_slice()
+                    .into(),
+            );
+            window.set_output_entry_offsets(
+                Self::menu_offsets(&self.catalog.outputs).as_slice().into(),
+            );
+            let (first, last) = Self::menu_enabled_bounds(&self.catalog.outputs);
+            window.set_output_first_enabled(first);
+            window.set_output_last_enabled(last);
+            window.set_output_initial_highlight(self.selected_output as i32);
+            *output_cache = (self.catalog.outputs.clone(), self.selected_output);
+        }
+        drop(output_cache);
         window.set_preset_open(self.preset_open);
         window.set_output_open(self.output_open);
         window.set_settings_open(self.settings_open);

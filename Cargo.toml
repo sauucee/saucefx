@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/saucefx-core", "crates/saucefx-ui"]
+members = ["crates/saucefx-core", "crates/saucefx-ui", "crates/saucefx-host"]
 
 [workspace.package]
 # Tracks the shipped SauceFX application version (frontend/package.json),

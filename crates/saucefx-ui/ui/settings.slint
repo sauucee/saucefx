@@ -100,9 +100,9 @@ export component SettingsDialog inherits Rectangle {
     // A fresh open focuses the Close button, as the Base UI dialog does.
     changed visible => { if (self.visible) { root.select(0); } }
     // Re-edits that the host rejected (or canonicalised) restore the bound
-    // text, because the first typed edit breaks the `text:` binding above.
+    // text, because the first typed edit breaks the `text:` binding on the
+    // input below.
     changed custom-hex-text => { hex-input.text = root.custom-hex-text; }
-
     width: 604px;
     height: content.preferred-height;
     border-radius: 14px;
@@ -265,9 +265,7 @@ export component SettingsDialog inherits Rectangle {
                     width: Layout.icon-button;
                     height: Layout.icon-button;
                     border-radius: 7px;
-                    background: close-ta.has-hover || root.focus-index == 0 ? Palette.surface-hover : transparent;
-                    border-width: 1px;
-                    border-color: root.focus-index == 0 ? Palette.accent : transparent;
+                    background: close-ta.has-hover ? Palette.surface-hover : transparent;
                     // lucide `X` (24-unit grid at 15px, 1.9 stroke), as the
                     // reference Dialog.Close renders.
                     Path {
@@ -435,7 +433,11 @@ export component SettingsDialog inherits Rectangle {
                         // Hex field for the custom accent, matching the
                         // reference colour input (`#rrggbb`, applied as
                         // typed; invalid or unfinished text is not applied).
+                        // Only revealed while custom mode is active;
+                        // `visible` (not a conditional) so the field stays
+                        // addressable from the text-restore handler.
                         Rectangle {
+                            visible: root.custom-accent;
                             width: 78px;
                             height: 24px;
                             border-radius: 6px;
@@ -529,11 +531,15 @@ export component SettingsDialog inherits Rectangle {
                                 stroke-line-cap: round;
                                 stroke-line-join: round;
                                 stroke: i == 2 ? Palette.text : Palette.text-soft;
+                                // Import/Export keep their arc-free tray
+                                // glyphs; the save glyph is the lucide save
+                                // icon redrawn with cubics (Slint paths have
+                                // no arc command).
                                 commands: i == 0
-                                    ? "M 21 15 L 21 19 A 2 2 0 0 1 19 21 L 5 21 A 2 2 0 0 1 3 19 L 3 15 M 17 8 L 12 3 L 7 8 M 12 3 L 12 15"
+                                    ? "M 21 15 L 21 19 C 21 20.1 20.1 21 19 21 L 5 21 C 3.9 21 3 20.1 3 19 L 3 15 M 17 8 L 12 3 L 7 8 M 12 3 L 12 15"
                                     : (i == 1
-                                        ? "M 21 15 L 21 19 A 2 2 0 0 1 19 21 L 5 21 A 2 2 0 0 1 3 19 L 3 15 M 7 10 L 12 15 L 17 10 M 12 15 L 12 3"
-                                        : "M 15.2 3 A 2 2 0 0 1 16.6 3.6 L 20.4 7.4 A 2 2 0 0 1 21 8.8 L 21 18 A 2 2 0 0 1 19 20 L 5 20 A 2 2 0 0 1 3 18 L 3 5 A 2 2 0 0 1 5 3 L 15.2 3 Z M 17 21 L 17 14 A 1 1 0 0 0 16 13 L 8 13 A 1 1 0 0 0 7 14 L 7 21 M 7 3 L 7 7 A 1 1 0 0 0 8 8 L 15 8 A 1 1 0 0 0 16 7 L 16 3");
+                                        ? "M 21 15 L 21 19 C 21 20.1 20.1 21 19 21 L 5 21 C 3.9 21 3 20.1 3 19 L 3 15 M 7 10 L 12 15 L 17 10 M 12 15 L 12 3"
+                                        : "M 15 3 L 16.5 3 C 17 3 17.4 3.2 17.7 3.5 L 20.5 6.3 C 20.8 6.6 21 7 21 7.5 L 21 19 C 21 20.1 20.1 21 19 21 L 5 21 C 3.9 21 3 20.1 3 19 L 3 5 C 3 3.9 3.9 3 5 3 Z M 17 21 L 17 14 C 17 13.4 16.6 13 16 13 L 8 13 C 7.4 13 7 13.4 7 14 L 7 21 M 7 3 L 7 7 C 7 7.6 7.4 8 8 8 L 15 8 C 15.6 8 16 7.6 16 7 L 16 3");
                             }
                             Text {
                                 text: i == 0 ? "Import" : (i == 1 ? "Export" : "Save preset");
@@ -598,15 +604,15 @@ export component SettingsDialog inherits Rectangle {
                     height: 20px;
                     border-radius: 10px;
                     border-width: 1px;
-                    border-color: root.focus-index == 10 ? Palette.accent : transparent;
-                    background: root.autostart ? Palette.accent : Palette.track;
+                    border-color: root.focus-index == 10 ? Palette.accent : Palette.border;
+                    background: Palette.track;
                     Rectangle {
                         width: 14px;
                         height: 14px;
-                        y: 3px;
-                        x: root.autostart ? parent.width - 17px : 3px;
+                        y: 2px;
+                        x: root.autostart ? parent.width - 17px : 2px;
                         border-radius: 7px;
-                        background: #ffffff;
+                        background: Palette.muted-2;
                     }
                     TouchArea {
                         mouse-cursor: pointer;

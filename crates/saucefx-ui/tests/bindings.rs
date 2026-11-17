@@ -1,11 +1,14 @@
 //! Behavioural tests for the preview binding against the protected reference
 //! semantics (`frontend/src/App.tsx`, `Spectrum.tsx`, `Equalizer.tsx`).
 
+use std::cell::RefCell;
+use std::rc::Rc;
+
 use saucefx_core::state::{BAND_COUNT, EFFECT_COUNT};
 use saucefx_ui::binding::{
-    ACCENT_ROSE, EditOutcome, FACTORY_PRESET_COUNT, SPECTRUM_BANDS, SPECTRUM_HISTORY,
-    SPECTRUM_SLOTS, SpectrumHistory, UiBinding, argb_to_color, color_to_argb, eq_curve_commands,
-    factory_fixtures, format_gain,
+    ACCENT_ROSE, EditOutcome, FACTORY_PRESET_COUNT, PresetFixture, SPECTRUM_BANDS,
+    SPECTRUM_HISTORY, SPECTRUM_SLOTS, SpectrumHistory, UiBinding, argb_to_color, color_to_argb,
+    eq_curve_commands, factory_fixtures, format_gain,
 };
 
 const BLUE: u32 = 0xff3b82f6;
@@ -608,4 +611,102 @@ fn custom_hex_applies_valid_input_and_keeps_the_accent_on_invalid_text() {
 
     assert!(binding.set_custom_hex("0a0b0c"), "the # prefix is optional");
     assert_eq!(binding.display_accent(), 0xff0a_0b0c);
+}
+
+/// Records every forwarded change, standing in for the real engine.
+#[derive(Default)]
+struct MockEngine {
+    power: Vec<bool>,
+    effects: Vec<(usize, f32)>,
+    eq: Vec<(usize, f32)>,
+    outputs: Vec<(String, String)>,
+    loaded: Vec<String>,
+}
+
+impl saucefx_ui::binding::Engine for MockEngine {
+    fn apply_power(&mut self, on: bool) {
+        self.power.push(on);
+    }
+    fn apply_effect(&mut self, index: usize, value: f32) {
+        self.effects.push((index, value));
+    }
+    fn apply_eq_gain(&mut self, index: usize, gain: f32) {
+        self.eq.push((index, gain));
+    }
+    fn apply_output(&mut self, name: &str, port: &str) {
+        self.outputs.push((name.to_string(), port.to_string()));
+    }
+    fn load_preset(&mut self, path: &str) -> Option<([f32; EFFECT_COUNT], [f32; BAND_COUNT])> {
+        self.loaded.push(path.to_string());
+        let mut effects = [0.0; EFFECT_COUNT];
+        effects[0] = 7.5;
+        let mut eq = [0.0; BAND_COUNT];
+        eq[17] = -4.25;
+        Some((effects, eq))
+    }
+}
+
+#[test]
+fn engine_sink_forwards_applied_changes_and_real_preset_paths() {
+    let engine = Rc::new(RefCell::new(MockEngine::default()));
+    let mut binding = UiBinding::default();
+    binding.set_engine(Rc::clone(&engine) as Rc<RefCell<dyn saucefx_ui::binding::Engine>>);
+
+    // Effects, EQ, power and output changes all reach the engine.
+    assert_eq!(binding.set_effect(1, 4.5), EditOutcome::Applied);
+    assert_eq!(binding.set_eq_gain(17, -3.0), EditOutcome::Applied);
+    binding.toggle_power();
+    binding.choose_output(2);
+    // The forwarded value is the applied one: the view rounds to its 1.0 step.
+    assert_eq!(engine.borrow().effects, vec![(1, 5.0)]);
+    assert_eq!(engine.borrow().eq, vec![(17, -3.0)]);
+    assert_eq!(engine.borrow().power, vec![false]);
+    assert_eq!(engine.borrow().outputs.len(), 1);
+
+    // Power off blocks edits without forwarding anything.
+    let before = engine.borrow().effects.len();
+    assert_eq!(binding.set_effect(2, 1.0), EditOutcome::PoweredOff);
+    assert_eq!(engine.borrow().effects.len(), before);
+
+    // A catalog row with a real .fac path loads through the engine instead
+    // of applying synthetic fixture values, and mirrors the live result.
+    binding.toggle_power();
+    let mut real = PresetFixture::flat("Factsoft 1", true);
+    real.path = "/library/Factsoft 1.fac".to_string();
+    binding.install_catalog(vec![real], Vec::new(), Vec::new(), 1);
+    assert!(binding.choose_preset(1), "the real row loads");
+    assert_eq!(
+        engine.borrow().loaded,
+        vec!["/library/Factsoft 1.fac".to_string()]
+    );
+    assert_eq!(binding.preset_name(), "Factsoft 1");
+    assert_eq!(binding.effects()[0], 7.5, "engine values mirror the view");
+    assert_eq!(binding.eq_gains()[17], -4.25);
+    assert!(!binding.edited(), "the loaded preset is the new baseline");
+
+    // Synthetic rows (no path) keep applying their fixture values.
+    let synthetic = PresetFixture::flat("Music", true);
+    binding.install_catalog(vec![synthetic], Vec::new(), Vec::new(), 1);
+    assert!(binding.choose_preset(1));
+    assert_eq!(
+        binding.effects()[0],
+        0.0,
+        "fixture values, not engine reads"
+    );
+    assert_eq!(engine.borrow().loaded.len(), 1, "no second engine load");
+}
+
+#[test]
+fn install_catalog_resets_selection_and_reports_paths() {
+    let mut binding = UiBinding::default();
+    let mut real = PresetFixture::flat("Library 1", true);
+    real.path = "/library/1.fac".to_string();
+    binding.install_catalog(vec![real], Vec::new(), Vec::new(), 1);
+    assert_eq!(binding.preset_name(), "Library 1");
+    assert_eq!(binding.selected_preset_path(), "/library/1.fac");
+    assert_eq!(binding.selected_output(), 1);
+    assert!(binding.find_preset_by_path("/library/1.fac").is_some());
+    assert!(binding.find_preset_by_path("").is_none());
+    assert_eq!(binding.find_preset_by_basename("1.FAC"), Some(1));
+    assert!(binding.find_preset_by_basename("missing.fac").is_none());
 }
