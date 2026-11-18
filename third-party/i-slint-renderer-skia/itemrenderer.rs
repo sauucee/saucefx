@@ -19,6 +19,22 @@ fn saucefx_font_hinting() -> skia_safe::FontHinting {
     })
 }
 
+// SAUCEFX PATCH: fractional glyph positioning toggle (default off = integer
+// snapping). Integer snapping rounds every advance, which makes
+// letter-spaced labels (APPEARANCE) visibly uneven; the reference browser
+// keeps fractional positions AND hints. SAUCEFX_SKIA_SUBPIXEL=1 restores
+// fractional positioning to compare that combination live.
+fn saucefx_subpixel() -> bool {
+    use std::sync::OnceLock;
+    static SUBPIXEL: OnceLock<bool> = OnceLock::new();
+    *SUBPIXEL.get_or_init(|| {
+        matches!(
+            std::env::var("SAUCEFX_SKIA_SUBPIXEL").as_deref(),
+            Ok("1") | Ok("on") | Ok("true")
+        )
+    })
+}
+
 use super::{PhysicalBorderRadius, PhysicalLength, PhysicalPoint, PhysicalRect, PhysicalSize};
 use i_slint_core::graphics::ApproxEq;
 use i_slint_core::graphics::ResolvedBrush;
@@ -1113,13 +1129,13 @@ impl GlyphRenderer for SkiaItemRenderer<'_> {
             return;
         };
         let mut font = skia_safe::Font::from_typeface(type_face, font_size.get());
-        // SAUCEFX PATCH: subpixel positioning disables FreeType hinting and
-        // renders every glyph at a fractional x, which spreads each stem
-        // across two pixels at 1x scale — the small UI text read as blurry.
-        // Integer glyph positions plus SLIGHT hinting (the FreeType
-        // autohinter; Figtree ships unhinted so Normal would do nothing)
-        // align stems the way the reference browser does.
-        font.set_subpixel(false);
+        // SAUCEFX PATCH: default snaps glyphs to integer pixels and relies
+        // on SLIGHT hinting (the FreeType autohinter; Figtree ships unhinted
+        // so Normal would do nothing) — fractional x with no effective
+        // hinting smeared every stem across two pixels at 1x scale.
+        // SAUCEFX_SKIA_SUBPIXEL=1 keeps fractional positions instead, the
+        // browser's combination with hinting, for even letter-spacing.
+        font.set_subpixel(saucefx_subpixel());
         font.set_hinting(saucefx_font_hinting());
 
         let (glyph_ids, glyph_positions): (Vec<_>, Vec<_>) = glyphs_it
