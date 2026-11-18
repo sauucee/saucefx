@@ -82,12 +82,24 @@ jobs:
           Xvfb :99 -screen 0 1280x800x24 -noreset &
           XVFB_PID=$!
           sleep 1
+          # Warm up the software GL driver: the first Skia window can take
+          # several seconds to draw its first frame (llvmpipe cold start).
+          env DISPLAY=:99 SAUCEFX_PREVIEW_SCENE=settings SAUCEFX_PREVIEW_EXIT_MS=8000 ci-bin/preview-skia >gallery/warmup.log 2>&1 &
+          warm=$!
+          sleep 6
+          kill "$warm" 2>/dev/null || true
+          wait "$warm" 2>/dev/null || true
           render() {
             name=$1; bin=$2; shift 2
             env DISPLAY=:99 SAUCEFX_PREVIEW_SCENE=settings SAUCEFX_PREVIEW_EXIT_MS=15000 "$@" "$bin" >"gallery/$name.log" 2>&1 &
             pid=$!
-            sleep 3
+            sleep 4
             xwd -root -display :99 -silent | convert xwd:- "gallery/$name.png" || echo "capture failed: $name"
+            # A black 1280x800 frame compresses to <1 KB; retry once.
+            if [ "$(stat -c %s "gallery/$name.png" 2>/dev/null || echo 0)" -lt 5000 ]; then
+              sleep 3
+              xwd -root -display :99 -silent | convert xwd:- "gallery/$name.png" || true
+            fi
             kill "$pid" 2>/dev/null || true
             wait "$pid" 2>/dev/null || true
           }
