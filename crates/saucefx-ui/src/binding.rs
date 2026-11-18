@@ -137,7 +137,7 @@ pub const SPECTRUM_IDLE_ALPHA: f32 = 0.78;
 pub const SPECTRUM_ACTIVE_MS: u64 = 1200;
 
 /// The Rose accent App.tsx falls back to when custom accents are off/invalid.
-pub const ACCENT_ROSE: u32 = 0xfff2_486f;
+pub const ACCENT_ROSE: u32 = 0xffff_2e57;
 
 /// The six accents shipped by `frontend/src/data.ts`.
 pub const ACCENTS: [(u32, &str); 6] = [

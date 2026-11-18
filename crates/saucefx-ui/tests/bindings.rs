@@ -257,9 +257,9 @@ fn spectrum_bars_go_idle_after_the_reference_timeout_and_clear_when_off() {
 fn spectrum_colours_follow_the_source_gradient_maths() {
     let binding = UiBinding::default();
     let (edge, centre) = binding.spectrum_colours();
-    // Rose #f2486f: edge = channel * 0.82, centre = channel + (255-channel) * 0.16.
-    assert_eq!(edge, 0xffc63b5b);
-    assert_eq!(centre, 0xfff46586);
+    // Pulse red #ff2e57: edge = channel * 0.82, centre = channel + (255-channel) * 0.16.
+    assert_eq!(edge, 0xffd12547);
+    assert_eq!(centre, 0xffff4f72);
 
     let mut binding = binding;
     binding.set_custom_accent(true);
