@@ -23,11 +23,12 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
 
       # clang/ninja for the skia-bindings C++ build; fontconfig headers for
-      # fontique; xvfb for the Slint tests that need a live display.
+      # fontique; xvfb plus the xkbcommon X11 runtime for the Slint tests that
+      # need a live display (winit panics without libxkbcommon-x11).
       - name: Install build prerequisites
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build pkg-config libfontconfig1-dev libxkbcommon-dev xvfb
+          sudo apt-get install -y ninja-build pkg-config libfontconfig1-dev libxkbcommon-dev libxkbcommon-x11-0 xvfb
 
       - uses: Swatinem/rust-cache@v2
         with:
