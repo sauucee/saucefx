@@ -57,3 +57,52 @@ jobs:
             target/release/preview-skia
             target/release/capture
           if-no-files-found: error
+
+  # Renders the Settings scene in every Skia text variant on a private
+  # Xvfb and uploads the captures, so text-quality verdicts happen against
+  # real pixels without anyone building locally.
+  text-gallery:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: saucefx-ui-${{ github.sha }}
+          path: ci-bin
+
+      - name: Install capture prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y xvfb imagemagick x11-apps libfontconfig1 libxkbcommon-x11-0 libgl1 libgl1-mesa-dri libegl1
+
+      - name: Render Settings text variants
+        run: |
+          chmod +x ci-bin/preview-skia ci-bin/preview-femtovg
+          mkdir -p gallery
+          Xvfb :99 -screen 0 1280x800x24 -noreset &
+          XVFB_PID=$!
+          sleep 1
+          render() {
+            name=$1; bin=$2; shift 2
+            env DISPLAY=:99 SAUCEFX_PREVIEW_SCENE=settings SAUCEFX_PREVIEW_EXIT_MS=15000 "$@" "$bin" >"gallery/$name.log" 2>&1 &
+            pid=$!
+            sleep 3
+            xwd -root -display :99 -silent | convert xwd:- "gallery/$name.png" || echo "capture failed: $name"
+            kill "$pid" 2>/dev/null || true
+            wait "$pid" 2>/dev/null || true
+          }
+          render skia-slight-lcd  ci-bin/preview-skia
+          render skia-full-lcd    ci-bin/preview-skia SAUCEFX_SKIA_HINTING=full
+          render skia-slight-gray ci-bin/preview-skia SAUCEFX_SKIA_LCD=0
+          render skia-full-gray   ci-bin/preview-skia SAUCEFX_SKIA_HINTING=full SAUCEFX_SKIA_LCD=0
+          render skia-off-gray    ci-bin/preview-skia SAUCEFX_SKIA_HINTING=off SAUCEFX_SKIA_LCD=0
+          render femtovg-base     ci-bin/preview-femtovg
+          kill "$XVFB_PID" 2>/dev/null || true
+          ls -la gallery
+
+      - name: Upload text gallery
+        uses: actions/upload-artifact@v4
+        with:
+          name: text-gallery-${{ github.sha }}
+          path: gallery/*.png
+          if-no-files-found: error
