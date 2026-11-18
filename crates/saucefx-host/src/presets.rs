@@ -70,3 +70,113 @@ pub fn fixtures(engine: &super::fxpw::FxpwEngine, scanned: &[ScannedPreset]) -> 
         })
         .collect()
 }
+
+/// Sanitize a raw Save-dialog name into a safe .fac display name, mirroring
+/// `sanitizedPresetName` in Main.cpp: trim, replace filename-unsafe
+/// punctuation with `_`, control characters with spaces, cap at 80 chars,
+/// and reject `.` / `..`. Empty means "invalid".
+pub fn sanitized_preset_name(raw: &str) -> String {
+    let mut name = raw.trim().to_string();
+    if name.is_empty() {
+        return String::new();
+    }
+    for ch in ['/', '\\', ':', '*', '?', '"', '<', '>', '|'] {
+        name = name.replace(ch, "_");
+    }
+    name = name.replace(['\t', '\r', '\n'], " ");
+    name = name
+        .chars()
+        .map(|c| if (c as u32) < 32 { ' ' } else { c })
+        .collect();
+    name = name.chars().take(80).collect::<String>().trim().to_string();
+    if name == "." || name == ".." {
+        return String::new();
+    }
+    name
+}
+
+/// The display-name-uniqueness path from `uniqueCustomPresetName` in
+/// Main.cpp: neither an existing user file nor any catalog display name
+/// (case-insensitive) may be shadowed, so colliding names get
+/// `" (2)"`…" (999)"` suffixes and a hex timestamp as the last resort.
+pub fn unique_custom_preset_name(base: &str, user_dir: &Path, display_labels: &[String]) -> String {
+    let is_taken = |name: &str| -> bool {
+        user_dir.join(format!("{name}.fac")).is_file()
+            || display_labels
+                .iter()
+                .any(|label| label.eq_ignore_ascii_case(name))
+    };
+    if !is_taken(base) {
+        return base.to_string();
+    }
+    for n in 2..1000 {
+        let candidate = format!("{base} ({n})");
+        if !is_taken(&candidate) {
+            return candidate;
+        }
+    }
+    let stamp = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|elapsed| elapsed.as_millis() as u64)
+        .unwrap_or(0);
+    format!("{base} {stamp:x}")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn sanitization_trims_and_replaces_unsafe_characters() {
+        assert_eq!(sanitized_preset_name("  Evening  "), "Evening");
+        assert_eq!(sanitized_preset_name("a/b:c*d"), "a_b_c_d");
+        assert_eq!(sanitized_preset_name("tab\tname"), "tab name");
+        assert_eq!(sanitized_preset_name("q\"x<y>|z"), "q_x_y__z");
+    }
+
+    #[test]
+    fn sanitization_rejects_invalid_names() {
+        assert_eq!(sanitized_preset_name("   "), "");
+        assert_eq!(sanitized_preset_name("."), "");
+        assert_eq!(sanitized_preset_name(".."), "");
+    }
+
+    #[test]
+    fn sanitization_caps_at_eighty_characters() {
+        let long = "x".repeat(100);
+        assert_eq!(sanitized_preset_name(&long).chars().count(), 80);
+    }
+
+    #[test]
+    fn unique_names_pass_through_when_free() {
+        let dir = std::env::temp_dir().join("saucefx-unique-free");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        assert_eq!(unique_custom_preset_name("Evening", &dir, &[]), "Evening");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn unique_names_suffix_existing_files_then_labels() {
+        let dir = std::env::temp_dir().join("saucefx-unique-taken");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("Evening.fac"), "x").unwrap();
+        // A file collision gets the (2) suffix.
+        assert_eq!(
+            unique_custom_preset_name("Evening", &dir, &[]),
+            "Evening (2)"
+        );
+        // A display-name collision (case-insensitive) suffixes too.
+        assert_eq!(
+            unique_custom_preset_name("evening", &dir, &["Evening".into()]),
+            "evening (2)"
+        );
+        std::fs::write(dir.join("Evening (2).fac"), "x").unwrap();
+        assert_eq!(
+            unique_custom_preset_name("Evening", &dir, &[]),
+            "Evening (3)"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+}

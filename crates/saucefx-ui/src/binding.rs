@@ -1158,6 +1158,44 @@ impl UiBinding {
         true
     }
 
+    /// Display labels of the selectable preset rows, for the host's
+    /// unique-name check (the reference compares against the preset box).
+    pub fn preset_labels(&self) -> Vec<String> {
+        self.catalog
+            .presets
+            .iter()
+            .filter(|row| !row.is_group)
+            .map(|row| row.label.clone())
+            .collect()
+    }
+
+    /// Apply a REAL save: the host has already written `path` through the
+    /// engine and rescanned the library, so `factory` is the fresh fixture
+    /// list (factory + user files). Mirrors the tail of the preview's
+    /// confirm_save — values become the applied baseline, the saved preset
+    /// is selected, both layers close and the reference toast shows —
+    /// without re-loading the file (the engine state IS the saved state).
+    pub fn apply_saved_preset(&mut self, name: &str, path: &str, factory: Vec<PresetFixture>) {
+        self.state.mark_applied();
+        self.catalog = SceneCatalog::build(&factory, &self.saved_presets);
+        if let Some(index) = self.find_preset_by_path(path) {
+            self.selected_preset = index;
+        }
+        self.save_open = false;
+        self.settings_open = false;
+        self.toast = Some(format!("Saved preset \"{name}\"."));
+    }
+
+    /// Push a toast from the host (save errors, status messages).
+    pub fn show_toast(&mut self, message: &str) {
+        self.toast = Some(message.to_string());
+    }
+
+    /// The current toast message, when one is showing.
+    pub fn toast_message(&self) -> Option<&str> {
+        self.toast.as_deref()
+    }
+
     /// Import is not wired in the preview: it explains itself in a toast.
     pub fn import_presets(&mut self) {
         self.toast = Some("Preview only: preset import is not wired.".into());

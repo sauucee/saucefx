@@ -339,6 +339,45 @@ fn save_dialog_validates_names_and_suggests_the_reference_title() {
 }
 
 #[test]
+fn apply_saved_preset_installs_selects_and_closes_the_layers() {
+    let mut binding = UiBinding::default();
+    binding.open_save();
+    binding.set_save_name("Evening listen");
+
+    // The host rescans the library after the engine writes the file; the
+    // scanned fixtures carry the real path and the CUSTOM group.
+    let scanned = vec![PresetFixture {
+        label: "Evening listen".into(),
+        factory: false,
+        effects: [0.0; EFFECT_COUNT],
+        eq: [0.0; BAND_COUNT],
+        path: "/home/u/.local/share/saucefx/presets/Evening listen.fac".into(),
+    }];
+    let saved_path = scanned[0].path.clone();
+    binding.apply_saved_preset("Evening listen", &saved_path, scanned);
+
+    assert!(!binding.save_open(), "the save layer closes");
+    assert!(
+        !binding.settings_open(),
+        "an in-settings save closes both layers"
+    );
+    assert_eq!(
+        binding.selected_preset_path(),
+        "/home/u/.local/share/saucefx/presets/Evening listen.fac",
+        "the saved preset becomes the selection"
+    );
+    let labels = binding.preset_labels();
+    assert!(
+        labels.iter().any(|label| label == "Evening listen"),
+        "the saved preset joins the catalog: {labels:?}"
+    );
+    match binding.toast_message() {
+        Some(message) => assert!(message.contains("Evening listen"), "{message}"),
+        None => panic!("the save announces itself in a toast"),
+    }
+}
+
+#[test]
 fn settings_actions_explain_themselves_without_touching_files() {
     let mut binding = UiBinding::default();
     binding.open_settings();

@@ -275,6 +275,64 @@ fn main() {
         });
     }
 
+    // Save dialog -> confirm: the engine writes the live state as
+    // <name>.fac into the user preset directory (sanitized, never
+    // overwriting an existing file or display name), the library is
+    // rescanned, the saved preset is selected and both layers close —
+    // the reference webSavePreset/writeCustomPreset semantics.
+    {
+        let binding = Rc::clone(&binding);
+        let engine = Rc::clone(&engine);
+        let factory_dir = factory_dir.clone();
+        let state = state.clone();
+        let last_written = Rc::new(RefCell::new((String::new(), String::new())));
+        window.on_save_confirmed(move || {
+            let raw = binding.borrow().save_name().to_string();
+            let name = presets::sanitized_preset_name(&raw);
+            if name.is_empty() {
+                binding
+                    .borrow_mut()
+                    .show_toast("Enter a valid preset name.");
+                return;
+            }
+            let labels = binding.borrow().preset_labels();
+            let unique = presets::unique_custom_preset_name(&name, &user_preset_dir(), &labels);
+            if std::fs::create_dir_all(user_preset_dir()).is_err() {
+                binding
+                    .borrow_mut()
+                    .show_toast("Could not create the preset folder.");
+                return;
+            }
+            if !engine.borrow().save_preset(&unique, &user_preset_dir()) {
+                binding
+                    .borrow_mut()
+                    .show_toast(&format!("Could not save preset \"{unique}\"."));
+                return;
+            }
+            let target = user_preset_dir().join(format!("{unique}.fac"));
+            let written =
+                target.is_file() && std::fs::metadata(&target).is_ok_and(|meta| meta.len() > 0);
+            if !written {
+                binding
+                    .borrow_mut()
+                    .show_toast(&format!("Could not save preset \"{unique}\"."));
+                return;
+            }
+            let scanned = presets::scan(&factory_dir, &user_preset_dir());
+            let factory = presets::fixtures(&engine.borrow(), &scanned);
+            binding
+                .borrow_mut()
+                .apply_saved_preset(&unique, &target.to_string_lossy(), factory);
+            save_state(
+                &binding,
+                &engine.borrow(),
+                &state,
+                &factory_dir,
+                &last_written,
+            );
+        });
+    }
+
     window.show().expect("show the SauceFX window");
 
     // Live spectrum: the engine's analyzer feeds the view's history.

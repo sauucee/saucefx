@@ -252,9 +252,7 @@ impl FxpwEngine {
         if name.is_empty() { None } else { Some(name) }
     }
 
-    /// Write the live engine state as `<name>.fac` into `dir`. Wired into
-    /// the Save dialog once it talks to the real library.
-    #[allow(dead_code)]
+    /// Write the live engine state as `<name>.fac` into `dir`.
     pub fn save_preset(&self, name: &str, dir: &Path) -> bool {
         if self.handle.is_null() {
             return false;
