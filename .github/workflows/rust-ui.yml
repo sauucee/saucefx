@@ -96,6 +96,8 @@ jobs:
           render skia-slight-gray ci-bin/preview-skia SAUCEFX_SKIA_LCD=0
           render skia-full-gray   ci-bin/preview-skia SAUCEFX_SKIA_HINTING=full SAUCEFX_SKIA_LCD=0
           render skia-off-gray    ci-bin/preview-skia SAUCEFX_SKIA_HINTING=off SAUCEFX_SKIA_LCD=0
+          render skia-slight-gray-sub ci-bin/preview-skia SAUCEFX_SKIA_LCD=0 SAUCEFX_SKIA_SUBPIXEL=1
+          render skia-slight-lcd-sub  ci-bin/preview-skia SAUCEFX_SKIA_SUBPIXEL=1
           render femtovg-base     ci-bin/preview-femtovg
           kill "$XVFB_PID" 2>/dev/null || true
           ls -la gallery
