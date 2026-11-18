@@ -18,4 +18,5 @@ slint = { version = "=1.18.1", default-features = false, features = [
     "unstable-winit-030",
 ] }
 saucefx-core = { path = "../saucefx-core" }
+libc = "0.2"
 saucefx-ui = { path = "../saucefx-ui" }

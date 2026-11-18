@@ -5,6 +5,7 @@
 mod autostart;
 mod fxpw;
 mod presets;
+mod single_instance;
 
 use std::cell::RefCell;
 use std::path::{Path, PathBuf};
@@ -289,6 +290,38 @@ fn save_state(
 fn main() {
     let state = state_dir();
     let factory_dir = preset_library_dir();
+
+    // Single instance: the first launch holds an flock on app.lock for the
+    // process lifetime. A second launch drops a show.request marker and
+    // leaves without starting a second engine/sink — silently when the
+    // launch came from login autostart (Main.cpp's instance lock).
+    std::fs::create_dir_all(&state).ok();
+    let auto_start_launch = std::env::args().any(|arg| arg == "--autostart");
+    let lock = std::fs::File::create(single_instance::lock_file(&state))
+        .expect("create the app.lock file");
+    {
+        use std::os::fd::AsRawFd;
+        let taken = unsafe { libc::flock(lock.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) != 0 };
+        if taken {
+            if !auto_start_launch {
+                if !single_instance::write_show_request(&state) {
+                    eprintln!(
+                        "saucefx: could not write {}",
+                        single_instance::show_request_file(&state).display()
+                    );
+                }
+                eprintln!(
+                    "saucefx: another SauceFX instance is running - asked it to show its window"
+                );
+            } else {
+                eprintln!("saucefx: autostart launch ignored; another instance is running");
+            }
+            std::process::exit(0);
+        }
+    }
+    // A stale show marker belongs to a previous session.
+    let _ = std::fs::remove_file(single_instance::show_request_file(&state));
+    // The lock file handle stays open for the process lifetime.
     let settings = read_file(&state.join("settings.txt"))
         .map(|text| parse_settings(&text))
         .unwrap_or_default();
@@ -547,6 +580,24 @@ fn main() {
                 );
             },
         );
+    }
+
+    // A second launch dropped a show.request marker: bring the (possibly
+    // hidden) window back and refresh its state.
+    let restore_timer = Timer::default();
+    {
+        let binding = Rc::clone(&binding);
+        let window_weak = window.as_weak();
+        let state = state.clone();
+        restore_timer.start(TimerMode::Repeated, Duration::from_millis(200), move || {
+            if single_instance::consume_show_request(&state) {
+                if let Some(window) = window_weak.upgrade() {
+                    window.show().expect("show the SauceFX window");
+                    binding.borrow().sync(&window);
+                }
+                eprintln!("saucefx: window restored from background");
+            }
+        });
     }
 
     slint::run_event_loop_until_quit().expect("run the SauceFX event loop");
