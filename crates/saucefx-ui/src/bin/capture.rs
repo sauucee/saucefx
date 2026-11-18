@@ -8,11 +8,11 @@
 
 use std::rc::Rc;
 
-use slint::PhysicalSize;
 use slint::platform::software_renderer::{
     MinimalSoftwareWindow, PremultipliedRgbaColor, RepaintBufferType,
 };
 use slint::platform::{Platform, PlatformError, WindowAdapter};
+use slint::{ComponentHandle, PhysicalSize};
 
 use saucefx_ui::{AppWindow, binding::UiBinding};
 
@@ -21,7 +21,7 @@ const HEIGHT: usize = 568;
 
 thread_local! {
     static WINDOW: Rc<MinimalSoftwareWindow> =
-        MinimalSoftwareWindow::new(RepaintBufferType::ReusedBuffer);
+        MinimalSoftwareWindow::new(RepaintBufferType::NewBuffer);
 }
 
 fn window() -> Rc<MinimalSoftwareWindow> {
@@ -50,6 +50,7 @@ fn apply_scene(binding: &mut UiBinding, scene: &str) {
     }
     match scene {
         "menu" => binding.toggle_preset_menu(),
+        "outputs" => binding.toggle_output_menu(),
         "settings" => binding.open_settings(),
         "save" => {
             binding.open_settings();
@@ -77,6 +78,50 @@ fn apply_scene(binding: &mut UiBinding, scene: &str) {
     }
 }
 
+/// Pointer-event helpers for the interaction probes below. Offscreen pointer
+/// edits go through the same `Window::dispatch_event` path the save-field
+/// focus click uses; programmatic focus is refused on this window.
+fn pointer(app: &AppWindow, event: slint::platform::WindowEvent) {
+    app.window().dispatch_event(event);
+}
+
+fn move_pointer(app: &AppWindow, x: f32, y: f32) {
+    pointer(
+        app,
+        slint::platform::WindowEvent::PointerMoved {
+            position: slint::LogicalPosition::new(x, y),
+        },
+    );
+}
+
+fn press(app: &AppWindow, x: f32, y: f32) {
+    pointer(
+        app,
+        slint::platform::WindowEvent::PointerPressed {
+            position: slint::LogicalPosition::new(x, y),
+            button: slint::platform::PointerEventButton::Left,
+        },
+    );
+}
+
+fn release(app: &AppWindow, x: f32, y: f32) {
+    pointer(
+        app,
+        slint::platform::WindowEvent::PointerReleased {
+            position: slint::LogicalPosition::new(x, y),
+            button: slint::platform::PointerEventButton::Left,
+        },
+    );
+}
+
+/// Render one more full frame into the reused buffer after pointer work.
+fn render_frame(window: &Rc<MinimalSoftwareWindow>, buffer: &mut [PremultipliedRgbaColor]) {
+    window.request_redraw();
+    window.draw_if_needed(|renderer| {
+        renderer.render(buffer, WIDTH);
+    });
+}
+
 fn main() {
     let mut args = std::env::args().skip(1);
     let scene = args.next().unwrap_or_else(|| "default".into());
@@ -87,9 +132,18 @@ fn main() {
     window.set_size(PhysicalSize::new(WIDTH as u32, HEIGHT as u32));
 
     let app = AppWindow::new().expect("create the SauceFX window");
+    // Show the window before the scene so dialog-open focus (the Save dialog
+    // autofocuses its name field) lands like it does in the shown real app;
+    // the reference captures render the focused state. MinimalSoftwareWindow
+    // never reports activation by itself, so mirror the winit "window gained
+    // focus" event or Slint refuses programmatic focus on the inactive window.
+    app.show().expect("show the capture window");
+    app.window()
+        .dispatch_event(slint::platform::WindowEvent::WindowActiveChanged(true));
     let binding = UiBinding::install(&app);
     apply_scene(&mut binding.borrow_mut(), &scene);
     binding.borrow().sync(&app);
+    eprintln!("capture: focus={}", app.get_focus_report());
 
     window.request_redraw();
     let mut buffer = vec![PremultipliedRgbaColor::default(); WIDTH * HEIGHT];
@@ -103,6 +157,43 @@ fn main() {
         if drawn {
             break;
         }
+    }
+    // Drag probe for the effect sliders: press on the Clarity track, drag
+    // right, and render mid-drag plus at rest, so a drag that stops
+    // following the pointer is visible in the PNG and in the value dump.
+    if scene == "eff-drag" {
+        press(&app, 160.0, 353.0);
+        move_pointer(&app, 200.0, 353.0);
+        slint::platform::update_timers_and_animations();
+        render_frame(&window, &mut buffer);
+        move_pointer(&app, 230.0, 353.0);
+        slint::platform::update_timers_and_animations();
+        render_frame(&window, &mut buffer);
+        eprintln!("capture: eff-drag values={:?}", app.get_effect_values());
+        release(&app, 230.0, 353.0);
+    }
+
+    // The Save scene must show the focused name field (the reference fixture
+    // fills the input, which focuses it). Programmatic focus is refused on
+    // this window (focus stays "save:none"), so click into the field the way
+    // a user does; the dialog auto-focus path covers the interactive app.
+    if scene == "save" {
+        app.window()
+            .dispatch_event(slint::platform::WindowEvent::PointerPressed {
+                position: slint::LogicalPosition::new(523.0, 330.0),
+                button: slint::platform::PointerEventButton::Left,
+            });
+        app.window()
+            .dispatch_event(slint::platform::WindowEvent::PointerReleased {
+                position: slint::LogicalPosition::new(523.0, 330.0),
+                button: slint::platform::PointerEventButton::Left,
+            });
+        slint::platform::update_timers_and_animations();
+        window.request_redraw();
+        window.draw_if_needed(|renderer| {
+            renderer.render(&mut buffer, WIDTH);
+        });
+        eprintln!("capture: focus after click={}", app.get_focus_report());
     }
     if !drawn {
         eprintln!("capture: the window never rendered");

@@ -10,6 +10,11 @@ component SwatchButton inherits Rectangle {
     in property <bool> custom: false;
     callback picked();
 
+    // styles.css .swatch-button:hover scales the button 1.06; Slint has no
+    // transform, so the visible ink (dot, glyph, check) grows around the
+    // centre of the fixed 24px slot instead.
+    property <float> hover-scale: touch.has-hover ? 1.06 : 1.0;
+
     width: 24px;
     height: 24px;
     border-radius: 12px;
@@ -18,10 +23,17 @@ component SwatchButton inherits Rectangle {
     border-color: Palette.border;
 
     if pressed || focused : Rectangle {
-        width: parent.width + 4px;
-        height: parent.height + 4px;
-        x: -2px;
-        y: -2px;
+        // Reference .swatch-button[data-pressed] uses a 3.5px accent ring
+        // outside a 2px surface gap (`0 0 0 2px`, then `0 0 0 3.5px`).
+        // Width/x stay at the exact left/right edges (x580/763). The height
+        // is 1px taller than the width because the reference's bottom
+        // anti-aliased band has 4 coloured pixels at y258 while a 31px box
+        // ends at y257; the extra row is added downward only, so the top
+        // row (y227) and the card/separators do not move.
+        width: parent.width + 7px;
+        height: parent.height + 8px;
+        x: -3.5px;
+        y: -3.5px;
         border-radius: (parent.width + 4px) / 2;
         border-width: 1.5px;
         border-color: Palette.accent;
@@ -29,35 +41,36 @@ component SwatchButton inherits Rectangle {
     }
 
     Rectangle {
-        width: 16px;
-        height: 16px;
-        x: 4px;
-        y: 4px;
-        border-radius: 8px;
+        width: 16px * hover-scale;
+        height: 16px * hover-scale;
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        border-radius: self.width / 2;
         background: custom ? (root.pressed ? root.swatch : Palette.surface-2) : swatch;
     }
 
     // The reference custom label shows the lucide `Palette` glyph on the
-    // neutral dot until a custom colour is active (then the check replaces it).
+    // neutral dot until a custom colour is active (then the check replaces
+    // it). Its hover brightens with `.swatch-button-custom:hover .swatch-custom`.
     if custom && !pressed : Path {
-        width: 11px;
-        height: 11px;
-        x: (parent.width - 11px) / 2;
-        y: (parent.height - 11px) / 2;
+        width: 11px * hover-scale;
+        height: 11px * hover-scale;
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
         viewbox-width: 24;
         viewbox-height: 24;
-        stroke-width: 1.9px;
+        stroke-width: 0.87px;
         stroke-line-cap: round;
-        stroke: Palette.muted;
+        stroke: touch.has-hover ? Palette.text-soft : Palette.muted;
         commands: "M 12 2 C 6.49 2 2 6.49 2 12 C 2 17.51 6.49 22 12 22 C 12.93 22 13.65 21.25 13.65 20.31 C 13.65 19.87 13.47 19.48 13.21 19.19 C 12.92 18.9 12.77 18.54 12.77 18.06 C 12.77 17.14 13.52 16.39 14.44 16.39 L 16.44 16.39 C 19.49 16.39 22 13.89 22 10.83 C 22 6.01 17.46 2 12 2 Z M 13.5 6.13 L 13.5 6.87 M 17.5 10.13 L 17.5 10.87 M 8.5 7.13 L 8.5 7.87 M 6.5 12.13 L 6.5 12.87";
     }
 
     if pressed : Text {
         text: "\u{2713}";
-        width: 16px;
-        height: 16px;
-        x: 4px;
-        y: 4px;
+        width: 16px * hover-scale;
+        height: 16px * hover-scale;
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
         color: custom ? #ffffff : #ffffff;
         font-size: 9px;
         font-weight: 700;
@@ -96,7 +109,9 @@ export component SettingsDialog inherits Rectangle {
     out property <bool> modal-focused: fs.has-focus;
     private property <int> focus-index: 0;
     changed focus-index => { root.focus-changed("settings:" + root.focus-index); }
-    changed refocus-count => { root.focus-modal(); }
+    // Only restore focus when the dialog is actually on screen; a Save that
+    // was opened outside Settings must not pull focus into a hidden dialog.
+    changed refocus-count => { if (self.visible) { root.focus-modal(); } }
     // A fresh open focuses the Close button, as the Base UI dialog does.
     changed visible => { if (self.visible) { root.select(0); } }
     // Re-edits that the host rejected (or canonicalised) restore the bound
@@ -142,6 +157,26 @@ export component SettingsDialog inherits Rectangle {
             }
             if (event.text == "\u{000a}" || event.text == "\u{0020}") {
                 root.activate(root.focus-index);
+                return accept;
+            }
+            if (event.text == "\u{001b}") {
+                root.closed();
+                return accept;
+            }
+            reject
+        }
+
+        // Capture runs window -> focused item before key-pressed. It handles
+        // the modal navigation keys only (Escape/Tab/Backtab), so an embedded
+        // text field cannot consume them, while Enter/Space still reach the
+        // focused control first and keep their normal meaning there.
+        capture-key-pressed(event) => {
+            if (event.text == "\u{0009}" && !event.modifiers.shift) {
+                root.focus-index = root.next-focus(root.focus-index);
+                return accept;
+            }
+            if (event.text == "\u{0019}" || (event.text == "\u{0009}" && event.modifiers.shift)) {
+                root.focus-index = root.prev-focus(root.focus-index);
                 return accept;
             }
             if (event.text == "\u{001b}") {
@@ -237,9 +272,13 @@ export component SettingsDialog inherits Rectangle {
 
             HorizontalLayout {
                 padding-left: 21px;
-                padding-right: 21px;
+                // The 1px dialog border is not an inset in Slint; 22px here
+                // puts the 28px close button at the reference x772.
+                padding-right: 22px;
                 padding-top: 19px;
-                padding-bottom: 14px;
+                // Rendered header was 72px vs the reference 71px, so 15px
+                // bottom padding (one less than round 6) restores the boundary.
+                padding-bottom: 15px;
                 spacing: 20px;
                 VerticalLayout {
                     spacing: 4px;
@@ -266,16 +305,20 @@ export component SettingsDialog inherits Rectangle {
                     height: Layout.icon-button;
                     border-radius: 7px;
                     background: close-ta.has-hover ? Palette.surface-hover : transparent;
-                    // lucide `X` (24-unit grid at 15px, 1.9 stroke), as the
-                    // reference Dialog.Close renders.
+                    // lucide `X` (24-unit grid). Slint fits the glyph into
+                    // width - stroke, so a 16.19px box (15 + 1.19 stroke)
+                    // gives the reference 15px icon's ink and origin; it
+                    // stays centred in the 28x28 button.
                     Path {
-                        width: 15px;
-                        height: 15px;
+                        x: (parent.width - 16.19px) / 2;
+                        y: (parent.height - 16.19px) / 2;
+                        width: 16.19px;
+                        height: 16.19px;
                         viewbox-width: 24;
                         viewbox-height: 24;
-                        stroke-width: 1.9px;
+                        stroke-width: 1.19px;
                         stroke-line-cap: round;
-                        stroke: Palette.muted;
+                        stroke: close-ta.has-hover ? Palette.text : Palette.muted;
                         commands: "M 18 6 L 6 18 M 6 6 L 18 18";
                     }
                     close-ta := TouchArea {
@@ -301,8 +344,15 @@ export component SettingsDialog inherits Rectangle {
                 padding-left: 21px;
                 padding-right: 21px;
                 padding-top: 14px;
-                padding-bottom: 12px;
-                spacing: 7px;
+                // Rendered appearance section was 115px vs the reference
+                // 116px, and removing the accent row's 3px failed pad drops
+                // another 1px, so 14px restores both (separator 275 vs 273).
+                padding-bottom: 14px;
+                // Reference: .settings-section-head has margin-bottom 7px,
+                // but .settings-row has no gap between rows. Slint spacing
+                // applies to every pair, so the head/theme gap is an explicit
+                // 7px spacer below and the rows sit flush.
+                spacing: 0px;
 
                 HorizontalLayout {
                     Text {
@@ -323,6 +373,8 @@ export component SettingsDialog inherits Rectangle {
                         vertical-alignment: center;
                     }
                 }
+
+                Rectangle { height: 7px; }
 
                 // Theme row.
                 HorizontalLayout {
@@ -387,6 +439,12 @@ export component SettingsDialog inherits Rectangle {
 
                 // Accent row.
                 HorizontalLayout {
+                    // Round-5 render: the group sat at x~588 and the coloured
+                    // bbox at 585..767, i.e. +4.5px from the target. The row
+                    // content edge is fixed, so 5.5px right padding (1px + the
+                    // measured 4.5px) puts the custom button back on x776..800
+                    // and the first swatch button on x584.
+                    padding-right: 5.5px;
                     height: 35px;
                     spacing: 20px;
                     VerticalLayout {
@@ -408,8 +466,12 @@ export component SettingsDialog inherits Rectangle {
                     }
                     Rectangle { horizontal-stretch: 1; }
                     HorizontalLayout {
-                        spacing: 8px;
+                        spacing: 0px;
                         alignment: end;
+                        // Reference .settings-row aligns its items on the
+                        // cross axis; Slint stretches children by default,
+                        // which top-aligned the 24px swatches in the 35px row.
+                        cross-axis-self-alignment: center;
                         for swatch[i] in [
                             { n: 0, c: #f2486f },
                             { n: 1, c: #3b82f6 },
@@ -417,11 +479,18 @@ export component SettingsDialog inherits Rectangle {
                             { n: 3, c: #12a8a0 },
                             { n: 4, c: #d4922a },
                             { n: 5, c: #8b7cf6 },
-                        ] : SwatchButton {
-                            swatch: swatch.c;
-                            pressed: !root.custom-accent && root.accent-index == swatch.n;
-                            focused: root.focus-index == swatch.n + 3;
-                            picked => { root.select(swatch.n + 3); root.accent-chosen(swatch.n); }
+                        ] : Rectangle {
+                            // 24px control + the reference 8px gap, so the
+                            // gaps do not rely on layout `spacing` (the hidden
+                            // hex field must contribute no gap at all).
+                            width: 32px;
+                            height: 24px;
+                            SwatchButton {
+                                swatch: swatch.c;
+                                pressed: !root.custom-accent && root.accent-index == swatch.n;
+                                focused: root.focus-index == swatch.n + 3;
+                                picked => { root.select(swatch.n + 3); root.accent-chosen(swatch.n); }
+                            }
                         }
                         SwatchButton {
                             swatch: Palette.accent;
@@ -433,28 +502,36 @@ export component SettingsDialog inherits Rectangle {
                         // Hex field for the custom accent, matching the
                         // reference colour input (`#rrggbb`, applied as
                         // typed; invalid or unfinished text is not applied).
-                        // Only revealed while custom mode is active;
-                        // `visible` (not a conditional) so the field stays
-                        // addressable from the text-restore handler.
+                        // `visible` (not a conditional) keeps the field
+                        // addressable from the text-restore handler. The
+                        // wrapper is 0 wide unless custom mode is active: a
+                        // `visible: false` layout child still reserves its
+                        // 78px + 8px gap, which pushed the seven swatches
+                        // 86px left of the reference row.
                         Rectangle {
-                            visible: root.custom-accent;
-                            width: 78px;
+                            width: root.custom-accent ? 86px : 0px;
                             height: 24px;
-                            border-radius: 6px;
-                            border-width: 1px;
-                            border-color: hex-input.has-focus ? Palette.accent : Palette.border;
-                            background: Palette.surface-2;
-                            hex-input := TextInput {
+                            Rectangle {
+                                visible: root.custom-accent;
                                 x: 8px;
-                                width: parent.width - 12px;
-                                height: parent.height;
-                                vertical-alignment: center;
-                                text: root.custom-hex-text;
-                                color: Palette.text;
-                                font-family: Typography.family;
-                                font-size: 10.5px;
-                                edited => { root.custom-accent-text-changed(self.text); }
-                                accepted => { root.custom-accent-text-changed(self.text); }
+                                width: 78px;
+                                height: 24px;
+                                border-radius: 6px;
+                                border-width: 1px;
+                                border-color: hex-input.has-focus ? Palette.accent : Palette.border;
+                                background: Palette.surface-2;
+                                hex-input := TextInput {
+                                    x: 8px;
+                                    width: parent.width - 12px;
+                                    height: parent.height;
+                                    vertical-alignment: center;
+                                    text: root.custom-hex-text;
+                                    color: Palette.text;
+                                    font-family: Typography.family;
+                                    font-size: 10.5px;
+                                    edited => { root.custom-accent-text-changed(self.text); }
+                                    accepted => { root.custom-accent-text-changed(self.text); }
+                                }
                             }
                         }
                     }
@@ -476,7 +553,9 @@ export component SettingsDialog inherits Rectangle {
                 padding-left: 21px;
                 padding-right: 21px;
                 padding-top: 14px;
-                padding-bottom: 12px;
+                // Rendered presets section was 100px vs the reference 101px
+                // (separator 375 vs 374); 13px restores the 1px.
+                padding-bottom: 13px;
                 spacing: 9px;
                 HorizontalLayout {
                     Text {
@@ -513,13 +592,20 @@ export component SettingsDialog inherits Rectangle {
                         border-width: 1px;
                         border-color: root.focus-index == 11 + i
                             ? Palette.accent
-                            : (i == 2 ? Palette.accent-border : Palette.border);
+                            : (i == 2 ? Palette.accent-border
+                                : (action-ta.has-hover ? Palette.border-strong : Palette.border));
+                        // styles.css .action-button:hover / .action-button-accent:hover.
                         background: action-ta.has-hover || root.focus-index == 11 + i
                             ? (i == 2 ? Palette.accent-wash : Palette.surface-hover)
                             : Palette.surface-2;
                         HorizontalLayout {
                             spacing: 6px;
                             alignment: center;
+                            // `cross-axis-alignment: center`: without it the
+                            // fixed-height 14px icon is pinned to the button's
+                            // top edge while the text stays centred, which read
+                            // as the icon floating above the label.
+                            cross-axis-alignment: center;
                             // lucide `Upload` / `Download` / `Save`, as the
                             // reference action buttons render them.
                             Path {
@@ -527,7 +613,9 @@ export component SettingsDialog inherits Rectangle {
                                 height: 14px;
                                 viewbox-width: 24;
                                 viewbox-height: 24;
-                                stroke-width: 1.9px;
+                                // lucide Upload/Download/Save are 14px with a
+                                // 1.9-unit stroke; Slint takes px, so 1.11.
+                                stroke-width: 1.11px;
                                 stroke-line-cap: round;
                                 stroke-line-join: round;
                                 stroke: i == 2 ? Palette.text : Palette.text-soft;
@@ -542,6 +630,7 @@ export component SettingsDialog inherits Rectangle {
                                         : "M 15 3 L 16.5 3 C 17 3 17.4 3.2 17.7 3.5 L 20.5 6.3 C 20.8 6.6 21 7 21 7.5 L 21 19 C 21 20.1 20.1 21 19 21 L 5 21 C 3.9 21 3 20.1 3 19 L 3 5 C 3 3.9 3.9 3 5 3 Z M 17 21 L 17 14 C 17 13.4 16.6 13 16 13 L 8 13 C 7.4 13 7 13.4 7 14 L 7 21 M 7 3 L 7 7 C 7 7.6 7.4 8 8 8 L 15 8 C 15.6 8 16 7.6 16 7 L 16 3");
                             }
                             Text {
+                                height: 16px;
                                 text: i == 0 ? "Import" : (i == 1 ? "Export" : "Save preset");
                                 color: i == 2 ? Palette.text : Palette.text-soft;
                                 font-family: Typography.family;
@@ -574,49 +663,60 @@ export component SettingsDialog inherits Rectangle {
                 background: Palette.border-subtle;
             }
 
-            HorizontalLayout {
+            // Reference: .settings-section-last owns the 14px/13px padding
+            // and the 35px row sits inside it. Putting both on one layout made
+            // the row 35px *including* the 27px padding, clipping the two text
+            // lines into a grey bar and losing 7px of dialog height.
+            VerticalLayout {
                 padding-left: 21px;
                 padding-right: 21px;
-                padding-top: 14px;
+                // 14px below the 1px section divider (the divider overlays the
+                // first row of the padding).
+                padding-top: 15px;
+                // Rendered autostart section was 62px vs the reference 63px
+                // (footer separator 437); round 6's 12px was a failed guess,
+                // so this returns to the reference 13px.
                 padding-bottom: 13px;
-                height: 35px;
-                spacing: 20px;
-                VerticalLayout {
-                    spacing: 2px;
-                    Text {
-                        text: "Start at login";
-                        color: Palette.text-soft;
-                        font-family: Typography.family;
-                        font-size: 12px;
-                        vertical-alignment: center;
+                HorizontalLayout {
+                    height: 35px;
+                    spacing: 20px;
+                    VerticalLayout {
+                        spacing: 2px;
+                        Text {
+                            text: "Start at login";
+                            color: Palette.text-soft;
+                            font-family: Typography.family;
+                            font-size: 12px;
+                            vertical-alignment: center;
+                        }
+                        Text {
+                            text: "Keep the engine ready in the background.";
+                            color: Palette.muted-2;
+                            font-family: Typography.family;
+                            font-size: 10px;
+                            vertical-alignment: center;
+                        }
                     }
-                    Text {
-                        text: "Keep the engine ready in the background.";
-                        color: Palette.muted-2;
-                        font-family: Typography.family;
-                        font-size: 10px;
-                        vertical-alignment: center;
-                    }
-                }
-                Rectangle { horizontal-stretch: 1; }
-                switch := Rectangle {
-                    width: 34px;
-                    height: 20px;
-                    border-radius: 10px;
-                    border-width: 1px;
-                    border-color: root.focus-index == 10 ? Palette.accent : Palette.border;
-                    background: Palette.track;
-                    Rectangle {
-                        width: 14px;
-                        height: 14px;
-                        y: 2px;
-                        x: root.autostart ? parent.width - 17px : 2px;
-                        border-radius: 7px;
-                        background: Palette.muted-2;
-                    }
-                    TouchArea {
-                        mouse-cursor: pointer;
-                        clicked => { root.select(10); root.autostart-changed(!root.autostart); }
+                    Rectangle { horizontal-stretch: 1; }
+                    switch := Rectangle {
+                        width: 34px;
+                        height: 20px;
+                        border-radius: 10px;
+                        border-width: 1px;
+                        border-color: root.focus-index == 10 ? Palette.accent : Palette.border;
+                        background: Palette.track;
+                        Rectangle {
+                            width: 14px;
+                            height: 14px;
+                            y: 2px;
+                            x: root.autostart ? parent.width - 17px : 2px;
+                            border-radius: 7px;
+                            background: Palette.muted-2;
+                        }
+                        TouchArea {
+                            mouse-cursor: pointer;
+                            clicked => { root.select(10); root.autostart-changed(!root.autostart); }
+                        }
                     }
                 }
             }
@@ -635,8 +735,11 @@ export component SettingsDialog inherits Rectangle {
             HorizontalLayout {
                 padding-left: 21px;
                 padding-right: 21px;
-                padding-top: 12px;
-                padding-bottom: 12px;
+                // 12px below the 1px footer divider, as .settings-footer. The
+                // rendered footer was 42px vs the reference 44px; 13px top and
+                // 13px bottom restore the two missing pixels.
+                padding-top: 13px;
+                padding-bottom: 13px;
                 spacing: 7px;
                 Text {
                     text: "SauceFX " + root.version;
@@ -678,5 +781,19 @@ export component SettingsDialog inherits Rectangle {
                 }
             }
         }
+    }
+
+    // The section backgrounds are painted over the root's own border, so draw
+    // the reference 1px card outline last, on top of the content. It is
+    // absolutely placed and does not affect the layout or focus.
+    Rectangle {
+        x: 0;
+        y: 0;
+        width: parent.width;
+        height: parent.height;
+        border-radius: 14px;
+        border-width: 1px;
+        border-color: Palette.border;
+        background: transparent;
     }
 }

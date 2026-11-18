@@ -1360,10 +1360,12 @@ fn scenario_preset_menu_keyboard(
     settle();
     press(window, "\u{000a}");
     settle();
+    // End lands on the last selectable row: Direct playback in the
+    // reference contract.
     checks.eq(
-        "End + Return selects System default",
+        "End + Return selects Direct playback",
         binding.borrow().output_name().to_string(),
-        "System default".to_string(),
+        "Direct playback".to_string(),
     );
 
     // Escape dismisses and returns focus to the trigger.

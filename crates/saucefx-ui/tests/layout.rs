@@ -17,6 +17,8 @@ fn shell_uses_the_reference_dimensions_and_spacing() {
         "window-height: 568px",
         "shell-radius: 14px",
         "header-height: 52px",
+        "header-pad-left: 18px",
+        "header-pad-right: 12px",
         "select-height: 42px",
         "spectrum-height: 128px",
         "effects-width: 276px",
@@ -54,6 +56,23 @@ fn shell_uses_the_reference_dimensions_and_spacing() {
     for label in ["SauceFX", "AUDIO ENHANCER"] {
         assert!(header.contains(label), "header keeps `{label}`");
     }
+    assert!(
+        header.contains("width: 58px"),
+        "the power pill is the reference 58px, not the earlier 62px"
+    );
+    assert!(
+        header.contains("text: root.on ? \"ON\" : \"OFF\""),
+        "the power label renders in the reference upper case"
+    );
+    assert!(
+        header.contains("button-width: 30px"),
+        "minimize and close keep the reference 30px button boxes"
+    );
+    let selectors = ui("selectors.slint");
+    assert!(
+        selectors.contains("padding-right: 13px"),
+        "selector chevrons sit at the reference 15px icon box offset"
+    );
 }
 
 #[test]
@@ -192,11 +211,58 @@ fn dialogs_carry_the_full_reference_controls() {
     for needle in [
         "Save preset",
         "Creates a new custom preset. Factory presets are never overwritten.",
-        "Preset name",
+        // The reference label text is "Preset name" uppercased by CSS
+        // (.field-label text-transform); Slint has no text-transform, so the
+        // source carries the already-uppercased string.
+        "PRESET NAME",
+        "letter-spacing: 1.1px",
         "Cancel",
         "root.error",
     ] {
         assert!(save.contains(needle), "save dialog keeps `{needle}`");
     }
     assert!(save.contains("width: 424px"));
+    // styles.css .text-input:focus: accent border plus the 3px accent-wash
+    // box-shadow ring; the dialog auto-focuses the field on open.
+    assert!(
+        save.contains("field.has-focus ? Palette.accent-border")
+            && save.contains("Palette.accent-wash"),
+        "the focused save input keeps the accent border and wash ring"
+    );
+}
+
+#[test]
+fn header_icons_keep_the_measured_boxes() {
+    let palette = ui("palette.slint");
+    let header = ui("header.slint");
+
+    // measure/default.json `logo`: 15.1x29 at x18 y12. The mark sits on the
+    // 18px titlebar padding edge and is centred in the 52px bar, so
+    // (52 - 29) / 2 = 11.5, which the reference reports as 12.
+    assert!(
+        palette.contains("brand-mark-width: 15px;")
+            && palette.contains("brand-mark-height: 29px;")
+            && palette.contains("header-pad-left: 18px;")
+            && header.contains("x: Layout.header-pad-left - 1px;")
+            && header.contains("width: Layout.brand-mark-width;")
+            && header.contains("height: Layout.brand-mark-height;")
+            && header.contains("y: (parent.height - 1px - Layout.brand-mark-height) / 2;"),
+        "the brand mark keeps the measured 15x29 box at x18, centred to y12"
+    );
+
+    // measure/default.json `power`: a 58x30 pill at x857 y11.5, i.e.
+    // 1040 - 171 - 12 = 857 and (52 - 30) / 2 = 11 centred in the bar;
+    // measure/icons.json `lucide-power`: a 13x13 glyph centred in the pill.
+    assert!(
+        header.contains("width: 58px;")
+            && header.contains("height: Layout.power-control-height;")
+            && header.contains("width: 13px;")
+            && header.contains("height: 13px;")
+            && header.contains("y: (parent.height - 13px) / 2")
+            && header.contains("x: parent.width - self.width - (Layout.header-pad-right - 1px);")
+            && header.contains("width: 171px;")
+            && header
+                .contains("y: (Layout.header-height - Layout.power-control-height) / 2 - 0.5px;"),
+        "the power glyph stays 13x13 inside the 58x30 pill anchored at x857 and centred to y11.5"
+    );
 }

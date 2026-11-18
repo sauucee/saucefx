@@ -68,10 +68,14 @@ export component SelectorField inherits Rectangle {
             height: Layout.select-height;
             border-radius: Layout.select-radius;
             opacity: root.enabled ? 1 : 0.48;
-            background: root.open ? Palette.surface-2 : Palette.surface;
+            // styles.css .select-trigger:hover: surface-hover + border-strong;
+            // open and keyboard focus keep their stronger states.
+            background: root.open ? Palette.surface-2
+                : (ta.has-hover ? Palette.surface-hover : Palette.surface);
             border-width: 1px;
             border-color: root.open ? Palette.accent-border
-                : (trigger-focus.has-focus ? Palette.accent : Palette.border);
+                : (trigger-focus.has-focus ? Palette.accent
+                : (ta.has-hover ? Palette.border-strong : Palette.border));
             trigger-focus := FocusScope {
                 enabled: root.enabled;
                 width: parent.width;
@@ -92,7 +96,7 @@ export component SelectorField inherits Rectangle {
             }
             HorizontalLayout {
                 padding-left: 13px;
-                padding-right: 12px;
+                padding-right: 13px;
                 spacing: 10px;
                 alignment: stretch;
                 VerticalLayout {
@@ -127,14 +131,18 @@ export component SelectorField inherits Rectangle {
                         y: (parent.height - 15px) / 2;
                         width: 15px;
                         height: 15px;
-                        viewbox-width: 15;
-                        viewbox-height: 15;
-                        fit: preserve;
-                        stroke-width: 1.9px;
+                        viewbox-width: 24;
+                        viewbox-height: 24;
+                        // Fit the 24-unit viewbox into the 15px icon box. Do
+                        // NOT use `fit: preserve`: it bypasses the viewbox
+                        // fit and draws the commands as 24 device pixels,
+                        // clipping/offsetting the chevron.
+                        // lucide ChevronDown at size 15 / strokeWidth 1.9.
+                        stroke-width: 1.19px;
                         stroke-line-cap: round;
                         stroke-line-join: round;
                         stroke: Palette.muted;
-                        commands: root.open ? "M 3.75 9.375 L 7.5 5.625 L 11.25 9.375" : "M 3.75 5.625 L 7.5 9.375 L 11.25 5.625";
+                        commands: root.open ? "M 6 15 L 12 9 L 18 15" : "M 6 9 L 12 15 L 18 9";
                     }
                 }
             }
@@ -160,11 +168,24 @@ export component MenuPopup inherits Rectangle {
     private property <int> highlight: -1;
 
     width: 292px;
-    height: list.height + 10px;
+    // Hug the list, but cap at the reference popup max-height (320px) so a
+    // long list scrolls inside the flick instead of clipping at the window
+    // edge.
+    height: min(list.preferred-height, Layout.menu-max-height) + 10px;
     border-radius: 10px;
     background: Palette.surface;
     border-width: 1px;
     border-color: Palette.border;
+    // styles.css .select-popup carries a 38px-blur drop shadow; imitate the
+    // soft dark halo with an offset translucent layer behind the panel.
+    Rectangle {
+        x: -12px;
+        y: -2px;
+        width: parent.width + 24px;
+        height: parent.height + 24px;
+        border-radius: 16px;
+        background: #00000045;
+    }
 
     keyboard := FocusScope {
         width: parent.width;
@@ -290,6 +311,13 @@ export component MenuPopup inherits Rectangle {
 
                     if !entry.is-group && !entry.disabled : TouchArea {
                         mouse-cursor: pointer;
+                        // Base UI marks the row under the pointer
+                        // data-highlighted exactly like the keyboard highlight,
+                        // so hovering moves the shared highlight and the row
+                        // background above paints it.
+                        changed has-hover => {
+                            if (self.has-hover) { root.highlight = i; }
+                        }
                         clicked => { root.activated(i); }
                     }
                 }

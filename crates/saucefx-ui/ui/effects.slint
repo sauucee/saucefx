@@ -162,7 +162,12 @@ export component EffectRow inherits Rectangle {
             // Base UI positions the thumb centre at value/10 of the track and
             // translates it by -50%, so it overflows the track ends by 6px and
             // is never clamped. Clamping pushed the value-0 disk +3px right.
-            property <length> thumb-centre-x: parent.width * (root.value / 10);
+            // `width` (not `parent.width`): this property lives on the slider
+            // column itself, and `parent` here is the HorizontalLayout, whose
+            // 244px row width sent every non-zero thumb past the panel edge
+            // while the fill (whose own `parent.width` IS the column) stayed
+            // under the pointer.
+            property <length> thumb-centre-x: self.width * (root.value / 10);
             Rectangle {
                 visible: show-wash;
                 x: thumb-centre-x - (thumb-size + 10px) * thumb-scale / 2;

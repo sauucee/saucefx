@@ -87,6 +87,8 @@ unsafe extern "C" {
         dir: *const c_wchar_t,
     ) -> c_int;
     fn fxpw_set_output(handle: *mut c_void, name: *const c_char, port: *const c_char) -> c_int;
+    fn fxpw_route_default(handle: *mut c_void, on: c_int) -> c_int;
+    fn fxpw_is_routed_default(handle: *mut c_void) -> c_int;
     fn fxpw_get_outputs(handle: *mut c_void, outputs: *mut FxpwOutputRaw, capacity: usize)
     -> usize;
     fn fxpw_get_output_state(handle: *mut c_void, state: *mut FxpwOutputStateRaw);
@@ -209,7 +211,9 @@ impl FxpwEngine {
             .collect()
     }
 
-    /// Current preferred/active output and routing state.
+    /// Current preferred/active output and routing state. Wired into the
+    /// status readout later.
+    #[allow(dead_code)]
     pub fn output_state(&self) -> (String, String, bool) {
         let mut state: FxpwOutputStateRaw = unsafe { std::mem::zeroed() };
         if self.handle.is_null() {
@@ -330,7 +334,13 @@ impl Engine for FxpwEngine {
         if self.handle.is_null() {
             return;
         }
-        // An empty name means automatic routing for fxpw_set_output.
+        // Main.cpp webSetOutput: "direct" unroutes the system default;
+        // automatic (empty) clears the preferred device; otherwise select
+        // the device and route the default through the sink.
+        if name == "direct" {
+            unsafe { fxpw_route_default(self.handle, 0) };
+            return;
+        }
         let name = CString::new(name).unwrap_or_default();
         let port = CString::new(port).unwrap_or_default();
         let (name, port) = if name.as_bytes().is_empty() {
@@ -338,7 +348,10 @@ impl Engine for FxpwEngine {
         } else {
             (name.as_ptr(), port.as_ptr())
         };
-        unsafe { fxpw_set_output(self.handle, name, port) };
+        unsafe {
+            fxpw_set_output(self.handle, name, port);
+            fxpw_route_default(self.handle, 1);
+        }
     }
 
     fn load_preset(&mut self, path: &str) -> Option<([f32; EFFECT_COUNT], [f32; BAND_COUNT])> {

@@ -76,13 +76,16 @@ fn read_file(path: &Path) -> Option<String> {
 /// Output menu rows from the engine, with the saved/preferred selection.
 /// Row 1 is Automatic; an empty device name routes automatically.
 fn output_rows(engine: &fxpw::FxpwEngine, settings: &GuiSettings) -> (Vec<MenuRow>, usize) {
-    let mut rows = vec![MenuRow::output(
+    // The reference output menu: WITH SAUCEFX EFFECTS (automatic + devices),
+    // WITHOUT EFFECTS (direct playback), matching webSetOutput's ids.
+    let mut rows = vec![MenuRow::group("WITH SAUCEFX EFFECTS")];
+    rows.push(MenuRow::output(
         "Automatic",
-        "Follow the system output",
+        "Chooses a connected headset or speakers",
         "",
         "",
         true,
-    )];
+    ));
     for entry in engine.outputs() {
         let label = if entry.port_description.is_empty() {
             entry.description.clone()
@@ -102,23 +105,30 @@ fn output_rows(engine: &fxpw::FxpwEngine, settings: &GuiSettings) -> (Vec<MenuRo
             entry.available,
         ));
     }
-    let (engine_preferred, engine_port, _) = engine.output_state();
-    let preferred_device = if settings.output_device.is_empty() {
-        engine_preferred
+    rows.push(MenuRow::group("WITHOUT EFFECTS"));
+    rows.push(MenuRow::output(
+        "Direct playback",
+        "Use system output without SauceFX",
+        "direct",
+        "",
+        true,
+    ));
+    // Saved selection: an unrouted preference points at Direct playback; a
+    // routed one at the saved device, or Automatic when none was saved.
+    let saved_row: Option<&str> = if !settings.output_routed {
+        Some("direct")
+    } else if settings.output_device.is_empty() {
+        Some("")
     } else {
-        settings.output_device.clone()
+        Some(settings.output_device.as_str())
     };
-    let preferred_port = if settings.output_device.is_empty() {
-        engine_port
-    } else {
-        settings.output_port.clone()
-    };
-    let selected = rows
-        .iter()
-        .position(|row| {
-            !row.is_group
-                && row.output_name == preferred_device
-                && row.output_port == preferred_port
+    let selected = saved_row
+        .and_then(|device| {
+            rows.iter().position(|row| {
+                !row.is_group
+                    && (row.output_name == device
+                        || (device != "direct" && !device.is_empty() && row.output_name == device))
+            })
         })
         .unwrap_or(1);
     (rows, selected)

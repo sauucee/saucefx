@@ -52,6 +52,28 @@ export component SavePresetDialog inherits Rectangle {
         root.focus-changed("save:input");
     }
 
+    // One routing table for the modal keys. `capture-key-pressed` on the scope
+    // and the per-control `key-pressed` fallbacks all call it, so Escape and
+    // Tab/Backtab behave the same no matter which descendant is focused (or
+    // which of the two dispatch paths the backend delivers).
+    public function handle-modal-key(text: string, shift: bool) -> bool {
+        if (text == "\u{001b}") {
+            root.cancelled();
+            return true;
+        }
+        if (text == "\u{0009}" && !shift) {
+            root.step-focus(1);
+            return true;
+        }
+        // winit/X11 reports Shift+Tab as "\t" plus the shift modifier; other
+        // backends deliver the Backtab code point instead.
+        if (text == "\u{0019}" || (text == "\u{0009}" && shift)) {
+            root.step-focus(-1);
+            return true;
+        }
+        return false;
+    }
+
     public pure function report() -> string {
         return save-focus.has-focus ? "save:save"
             : cancel-focus.has-focus ? "save:cancel"
@@ -78,17 +100,18 @@ export component SavePresetDialog inherits Rectangle {
         // Backtab are handled here instead of the window's built-in focus walk
         // (which used to escape into the background EQ).
         capture-key-pressed(event) => {
-            if (event.text == "\u{001b}") {
-                root.cancelled();
+            if (root.handle-modal-key(event.text, event.modifiers.shift)) {
                 return accept;
             }
-            if (event.text == "\u{0009}" && !event.modifiers.shift) {
-                root.step-focus(1);
-                return accept;
-            }
-            // winit/X11 reports Shift+Tab as "\t" plus the shift modifier.
-            if event.text == "\u{0019}" || (event.text == "\u{0009}" && event.modifiers.shift) {
-                root.step-focus(-1);
+            reject
+        }
+
+        // Bubbling fallback: fs is the ancestor of every focusable descendant,
+        // so even when a control consumes Tab or capture is skipped this still
+        // receives Escape/Tab/Backtab before the window's built-in focus walk
+        // can move focus into the equalizer behind the modal.
+        key-pressed(event) => {
+            if (root.handle-modal-key(event.text, event.modifiers.shift)) {
                 return accept;
             }
             reject
@@ -112,12 +135,20 @@ export component SavePresetDialog inherits Rectangle {
                 background: Palette.surface;
 
                 HorizontalLayout {
+                    // The 424px dialog is wider than this row's content; the
+                    // layout must own the full width or the close button is
+                    // pushed left/right by the description width (rendered X
+                    // sat at x700 instead of x692).
+                    width: parent.width;
                     padding-left: 21px;
-                    padding-right: 21px;
+                    // Compensate for the 1px dialog border not being an
+                    // inset (reference close button x682).
+                    padding-right: 22px;
                     padding-top: 19px;
                     padding-bottom: 14px;
                     spacing: 20px;
                     VerticalLayout {
+                        horizontal-stretch: 1;
                         spacing: 4px;
                         Text {
                             text: "Save preset";
@@ -136,7 +167,6 @@ export component SavePresetDialog inherits Rectangle {
                             vertical-alignment: center;
                         }
                     }
-                    Rectangle { horizontal-stretch: 1; }
                     Rectangle {
                         width: Layout.icon-button;
                         height: Layout.icon-button;
@@ -144,12 +174,20 @@ export component SavePresetDialog inherits Rectangle {
                         background: close-ta.has-hover || close-focus.has-focus ? Palette.surface-hover : transparent;
                         border-width: 1px;
                         border-color: close-focus.has-focus ? Palette.accent : transparent;
-                        Text {
-                            text: "\u{00d7}";
-                            color: Palette.muted;
-                            font-size: 15px;
-                            horizontal-alignment: center;
-                            vertical-alignment: center;
+                        // lucide `X`; the 16.19px box (15 + 1.19 stroke)
+                        // restores the reference glyph ink and origin under
+                        // Slint's stroke-inset viewbox fit.
+                        Path {
+                            x: (parent.width - 16.19px) / 2;
+                            y: (parent.height - 16.19px) / 2;
+                            width: 16.19px;
+                            height: 16.19px;
+                            viewbox-width: 24;
+                            viewbox-height: 24;
+                            stroke-width: 1.19px;
+                            stroke-line-cap: round;
+                            stroke: close-ta.has-hover ? Palette.text : Palette.muted;
+                            commands: "M 18 6 L 6 18 M 6 6 L 18 18";
                         }
                         close-focus := FocusScope {
                             width: parent.width;
@@ -158,6 +196,9 @@ export component SavePresetDialog inherits Rectangle {
                                 if (self.has-focus) { root.focus-changed("save:close"); }
                             }
                             key-pressed(event) => {
+                                if (root.handle-modal-key(event.text, event.modifiers.shift)) {
+                                    return accept;
+                                }
                                 if (event.text == "\u{000a}" || event.text == "\u{0020}") {
                                     root.cancelled();
                                     return accept;
@@ -186,20 +227,44 @@ export component SavePresetDialog inherits Rectangle {
                     padding-top: 2px;
                     padding-bottom: 18px;
                     spacing: 0px;
+                    // styles.css .field-label: 10px/600 uppercase with 0.11em
+                    // letter-spacing (1.1px at this size).
                     Text {
-                        text: "Preset name";
+                        text: "PRESET NAME";
                         color: Palette.muted;
                         font-family: Typography.family;
                         font-size: 10px;
                         font-weight: 600;
+                        letter-spacing: 1.1px;
                         vertical-alignment: center;
                     }
                     Rectangle {
                         height: 38px;
                         border-radius: 7px;
                         border-width: 1px;
-                        border-color: root.error != "" ? Palette.danger : Palette.border;
+                        // styles.css .text-input:hover adds border-strong, and
+                        // the later :focus rule wins when both apply; the
+                        // hover TouchArea sits *behind* the TextInput so the
+                        // input keeps every click for cursor placement.
+                        border-color: root.error != "" ? Palette.danger
+                            : field.has-focus ? Palette.accent-border
+                            : (hover-ta.has-hover ? Palette.border-strong : Palette.border);
                         background: Palette.input-bg;
+                        hover-ta := TouchArea { }
+                        // styles.css .text-input:focus adds a 3px accent-wash
+                        // box-shadow outside the border. Drawn as a ring over
+                        // the field: its stroke lands in the 3px band outside
+                        // the 7px-radius box, its inner area stays transparent.
+                        if field.has-focus && root.error == "" : Rectangle {
+                            x: 0px - 3px;
+                            y: 0px - 3px;
+                            width: parent.width + 6px;
+                            height: parent.height + 6px;
+                            border-radius: 10px;
+                            border-width: 3px;
+                            border-color: Palette.accent-wash;
+                            background: transparent;
+                        }
                         field := TextInput {
                             x: 10px;
                             width: parent.width - 20px;
@@ -218,15 +283,22 @@ export component SavePresetDialog inherits Rectangle {
                                 if (root.valid) { root.confirmed(); }
                             }
                             key-pressed(event) => {
-                                if (event.text == "\u{001b}") {
-                                    root.cancelled();
+                                // Escape/Tab are modal keys even while the text
+                                // field owns focus; everything else is typed.
+                                if (root.handle-modal-key(event.text, event.modifiers.shift)) {
                                     return accept;
                                 }
                                 reject
                             }
                         }
                     }
+                    // styles.css .field-help: 7px top margin and line-height
+                    // 1.4. Without it the dialog is ~10px shorter than the
+                    // reference, so centring puts the whole header (and the
+                    // close X) 5px too low.
+                    Rectangle { height: 7px; }
                     Text {
+                        height: 14px;
                         text: root.error != "" ? root.error : root.help;
                         color: root.error != "" ? Palette.danger : Palette.muted-2;
                         font-family: Typography.family;
@@ -254,7 +326,10 @@ export component SavePresetDialog inherits Rectangle {
                         height: 31px;
                         border-radius: 6px;
                         border-width: 1px;
-                        border-color: cancel-focus.has-focus ? Palette.accent : Palette.border;
+                        // styles.css .button-secondary:hover also lifts the
+                        // border to border-strong.
+                        border-color: cancel-focus.has-focus ? Palette.accent
+                            : (cancel-ta.has-hover ? Palette.border-strong : Palette.border);
                         background: cancel-ta.has-hover ? Palette.surface-hover : Palette.surface-2;
                         cancel-text := Text {
                             text: "Cancel";
@@ -272,6 +347,9 @@ export component SavePresetDialog inherits Rectangle {
                                 if (self.has-focus) { root.focus-changed("save:cancel"); }
                             }
                             key-pressed(event) => {
+                                if (root.handle-modal-key(event.text, event.modifiers.shift)) {
+                                    return accept;
+                                }
                                 if (event.text == "\u{000a}" || event.text == "\u{0020}") {
                                     root.cancelled();
                                     return accept;
@@ -291,7 +369,11 @@ export component SavePresetDialog inherits Rectangle {
                         width: save-text.preferred-width + 24px;
                         height: 31px;
                         border-radius: 6px;
-                        background: Palette.accent;
+                        // styles.css .button-primary:hover mixes 12% white into
+                        // the accent.
+                        background: save-ta.has-hover
+                            ? Palette.accent.mix(#ffffff, 0.12)
+                            : Palette.accent;
                         opacity: root.valid ? 1 : 0.46;
                         border-width: 1px;
                         border-color: save-focus.has-focus ? Palette.accent-ink : transparent;
@@ -311,6 +393,9 @@ export component SavePresetDialog inherits Rectangle {
                                 if (self.has-focus) { root.focus-changed("save:save"); }
                             }
                             key-pressed(event) => {
+                                if (root.handle-modal-key(event.text, event.modifiers.shift)) {
+                                    return accept;
+                                }
                                 if ((event.text == "\u{000a}" || event.text == "\u{0020}") && root.valid) {
                                     root.confirmed();
                                     return accept;
@@ -331,6 +416,19 @@ export component SavePresetDialog inherits Rectangle {
                 }
             }
         }
+    }
+
+    // The body backgrounds are painted over the root's border; draw the 1px
+    // card outline last so the Save dialog frame stays visible all round.
+    Rectangle {
+        x: 0;
+        y: 0;
+        width: parent.width;
+        height: parent.height;
+        border-radius: 14px;
+        border-width: 1px;
+        border-color: Palette.border;
+        background: transparent;
     }
 
     // Focus is granted by AppWindow when the dialog becomes visible, so the

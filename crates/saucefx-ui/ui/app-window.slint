@@ -37,6 +37,17 @@ export component AppWindow inherits Window {
         : "none";
     property <int> settings-refocus: 0;
 
+    // Closing the top modal is atomic: Save goes away, Settings stays open and
+    // its keyboard target (normally the Save opener) is restored. Nothing in
+    // this path touches the layer underneath.
+    public function dismiss-save() {
+        if (!root.save-open) { return; }
+        root.save-closed();
+        if (root.settings-open) {
+            root.settings-refocus = root.settings-refocus + 1;
+        }
+    }
+
     changed settings-open => {
         if (self.settings-open) { settings-dialog.focus-modal(); }
     }
@@ -297,11 +308,18 @@ export component AppWindow inherits Window {
             background: Palette.overlay;
 
             // Clicking the backdrop dismisses the dialog; the card itself has
-            // its own blocking TouchArea so inside clicks stay inside.
+            // its own blocking TouchArea so inside clicks stay inside. While
+            // Save owns the top layer a stray event here must be a no-op.
             backdrop-ta := TouchArea {
+                x: 0;
+                y: 0;
+                width: parent.width;
+                height: parent.height;
                 clicked => {
-                    root.settings-closed();
-                    app-header.focus-settings-opener();
+                    if (!root.save-open) {
+                        root.settings-closed();
+                        app-header.focus-settings-opener();
+                    }
                 }
             }
         }
@@ -328,8 +346,12 @@ export component AppWindow inherits Window {
             save-opened => { root.save-opened(); }
             quit-clicked => { root.quit-clicked(); }
             closed => {
-                root.settings-closed();
-                app-header.focus-settings-opener();
+                // A Settings-level dismissal may never close the layer that is
+                // underneath an open Save dialog.
+                if (!root.save-open) {
+                    root.settings-closed();
+                    app-header.focus-settings-opener();
+                }
             }
         }
 
@@ -337,15 +359,21 @@ export component AppWindow inherits Window {
         // closes Save only (Settings stays open) and never reaches the Settings
         // dismiss layer or the preset trigger underneath.
         if root.save-open : Rectangle {
+            x: 0;
+            y: 0;
             width: parent.width;
             height: parent.height;
             background: Palette.overlay.with-alpha(0.82);
 
+            // Owns the pointer press for the whole window while Save is the
+            // top modal, so the Settings dismiss layer and the preset trigger
+            // underneath never see it.
             save-backdrop := TouchArea {
-                clicked => {
-                    root.save-closed();
-                    root.settings-refocus = root.settings-refocus + 1;
-                }
+                x: 0;
+                y: 0;
+                width: parent.width;
+                height: parent.height;
+                clicked => { root.dismiss-save(); }
             }
         }
 
@@ -359,10 +387,7 @@ export component AppWindow inherits Window {
             help: root.save-help;
             name-changed(n) => { root.save-name-changed(n); }
             confirmed => { root.save-confirmed(); }
-            cancelled => {
-                root.save-closed();
-                root.settings-refocus = root.settings-refocus + 1;
-            }
+            cancelled => { root.dismiss-save(); }
         }
 
         if root.toast-visible : Toast {

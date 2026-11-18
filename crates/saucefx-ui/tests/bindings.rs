@@ -22,7 +22,8 @@ fn default_binding_starts_powered_with_a_clean_session() {
     assert_eq!(binding.eq_gains(), [0.0; BAND_COUNT]);
     assert!(!binding.edited());
     assert_eq!(binding.preset_name(), "Default");
-    assert_eq!(binding.output_name(), "Test speakers");
+    // The reference starts unrouted on Automatic until the user chooses.
+    assert_eq!(binding.output_name(), "Automatic");
     assert!(!binding.settings_open());
     assert!(!binding.save_open());
 }
@@ -95,10 +96,10 @@ fn power_off_blocks_preset_effect_eq_and_reset_but_not_output_or_settings() {
     assert_eq!(binding.preset_name(), "Default");
 
     assert!(
-        binding.choose_output(4),
+        binding.choose_output(5),
         "output routing stays available while paused"
     );
-    assert_eq!(binding.output_name(), "System default");
+    assert_eq!(binding.output_name(), "Direct playback");
     binding.open_settings();
     assert!(
         binding.settings_open(),
@@ -661,7 +662,10 @@ fn engine_sink_forwards_applied_changes_and_real_preset_paths() {
     assert_eq!(engine.borrow().effects, vec![(1, 5.0)]);
     assert_eq!(engine.borrow().eq, vec![(17, -3.0)]);
     assert_eq!(engine.borrow().power, vec![false]);
-    assert_eq!(engine.borrow().outputs.len(), 1);
+    assert_eq!(
+        engine.borrow().outputs,
+        vec![("alsa_output.test-speakers".to_string(), "".to_string())]
+    );
 
     // Power off blocks edits without forwarding anything.
     let before = engine.borrow().effects.len();

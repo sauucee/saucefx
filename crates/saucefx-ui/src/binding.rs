@@ -302,7 +302,8 @@ impl MenuRow {
         }
     }
 
-    fn group(label: &str) -> Self {
+    /// Group heading row.
+    pub fn group(label: &str) -> Self {
         Self {
             label: label.to_string(),
             detail: String::new(),
@@ -367,15 +368,36 @@ impl SceneCatalog {
             presets,
             preset_values,
             outputs: vec![
-                MenuRow::group("OUTPUT DEVICES"),
-                MenuRow::entry("Test speakers", "stereo"),
-                MenuRow::entry("Test headphones", "stereo"),
-                MenuRow::group("SYSTEM"),
-                MenuRow::entry("System default", ""),
-                MenuRow {
-                    disabled: true,
-                    ..MenuRow::entry("Test HDMI", "unavailable")
-                },
+                MenuRow::group("WITH SAUCEFX EFFECTS"),
+                MenuRow::output(
+                    "Automatic",
+                    "Chooses a connected headset or speakers",
+                    "",
+                    "",
+                    true,
+                ),
+                MenuRow::output(
+                    "Test speakers",
+                    "Built-in audio",
+                    "alsa_output.test-speakers",
+                    "",
+                    true,
+                ),
+                MenuRow::output(
+                    "Test headphones",
+                    "Built-in headphone jack",
+                    "alsa_output.test-headphones",
+                    "",
+                    true,
+                ),
+                MenuRow::group("WITHOUT EFFECTS"),
+                MenuRow::output(
+                    "Direct playback",
+                    "Use system output without SauceFX",
+                    "direct",
+                    "",
+                    true,
+                ),
             ],
         }
     }
@@ -924,11 +946,20 @@ impl UiBinding {
             return false;
         }
         self.selected_output = index;
-        self.state
-            .set_output_preference(&row.output_name, &row.output_port);
-        self.state
-            .set_active_output(&row.output_name, &row.output_port, true);
         self.output_open = false;
+        // Main.cpp webSetOutput: "direct" unroutes and keeps the saved
+        // device; Automatic clears the preference; a device routes into the
+        // sink with that device selected.
+        let direct = row.output_name == "direct";
+        if !direct {
+            self.state
+                .set_output_preference(&row.output_name, &row.output_port);
+        }
+        self.state.set_active_output(
+            if direct { "" } else { &row.output_name },
+            if direct { "" } else { &row.output_port },
+            !direct,
+        );
         if let Some(engine) = &self.engine {
             engine
                 .borrow_mut()

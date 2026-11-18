@@ -9,7 +9,6 @@ publish = false
 slint = { version = "=1.18.1", default-features = false, features = [
     "std",
     "backend-winit",
-    "renderer-femtovg",
     "renderer-software",
     "compat-1-2",
     "unstable-fontique-011",
@@ -19,6 +18,16 @@ slint = { version = "=1.18.1", default-features = false, features = [
 # PNG output for the offscreen UI capture tool.
 image = { version = "0.25", default-features = false, features = ["png"] }
 saucefx-core = { path = "../saucefx-core" }
+
+[features]
+default = ["renderer-femtovg"]
+# GPU renderers for the live window. The winit backend prefers femtovg when
+# both are compiled in, so the Skia build drops femtovg instead of layering
+# behind it: `cargo build --no-default-features --features renderer-skia`.
+# renderer-software stays on unconditionally: the offscreen capture tool and
+# the tests render through it without a GPU.
+renderer-femtovg = ["slint/renderer-femtovg"]
+renderer-skia = ["slint/renderer-skia"]
 
 [build-dependencies]
 slint-build = "=1.18.1"
