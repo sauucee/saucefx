@@ -19,18 +19,18 @@ fn saucefx_font_hinting() -> skia_safe::FontHinting {
     })
 }
 
-// SAUCEFX PATCH: fractional glyph positioning toggle (default off = integer
-// snapping). Integer snapping rounds every advance, which makes
-// letter-spaced labels (APPEARANCE) visibly uneven; the reference browser
-// keeps fractional positions AND hints. SAUCEFX_SKIA_SUBPIXEL=1 restores
-// fractional positioning to compare that combination live.
+// SAUCEFX PATCH: fractional glyph positioning (default ON — the verified
+// 2026-11-19 combo). Integer snapping rounds every advance, which made
+// letter-spaced labels (APPEARANCE) visibly uneven and fattened stems over
+// the reference weight; the browser keeps fractional positions AND hints.
+// SAUCEFX_SKIA_SUBPIXEL=0 restores integer snapping for A/B comparisons.
 fn saucefx_subpixel() -> bool {
     use std::sync::OnceLock;
     static SUBPIXEL: OnceLock<bool> = OnceLock::new();
     *SUBPIXEL.get_or_init(|| {
-        matches!(
+        !matches!(
             std::env::var("SAUCEFX_SKIA_SUBPIXEL").as_deref(),
-            Ok("1") | Ok("on") | Ok("true")
+            Ok("0") | Ok("off") | Ok("false")
         )
     })
 }
@@ -1129,12 +1129,11 @@ impl GlyphRenderer for SkiaItemRenderer<'_> {
             return;
         };
         let mut font = skia_safe::Font::from_typeface(type_face, font_size.get());
-        // SAUCEFX PATCH: default snaps glyphs to integer pixels and relies
-        // on SLIGHT hinting (the FreeType autohinter; Figtree ships unhinted
-        // so Normal would do nothing) — fractional x with no effective
-        // hinting smeared every stem across two pixels at 1x scale.
-        // SAUCEFX_SKIA_SUBPIXEL=1 keeps fractional positions instead, the
-        // browser's combination with hinting, for even letter-spacing.
+        // SAUCEFX PATCH: fractional glyph positions + SLIGHT hinting (the
+        // FreeType autohinter; Figtree ships unhinted so Normal would do
+        // nothing) — the verified browser-like combo. Unhinted fractional x
+        // smeared stems at 1x; integer snapping fixed stems but broke
+        // letter-spacing. SAUCEFX_SKIA_SUBPIXEL=0 snaps for A/B.
         font.set_subpixel(saucefx_subpixel());
         font.set_hinting(saucefx_font_hinting());
 
