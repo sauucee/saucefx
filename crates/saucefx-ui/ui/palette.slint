@@ -69,9 +69,13 @@ export global Palette {
     in property <bool> light: false;
     in property <color> accent: #ff2e57;
 
-    out property <color> bg: light ? #f3f0eb : #0d0e10;
-    out property <color> bg-elevated: light ? #f6f3ee : #101215;
-    out property <color> surface: light ? #fbfaf7 : #141619;
+    // Light theme sits on the reference canvas beige (#e7e1d8): the native
+    // window fills the whole screen, so the browser's --canvas backdrop
+    // becomes the window background and every surface steps up one level
+    // from it (panel #f3f0eb -> card #f6f3ee).
+    out property <color> bg: light ? #e7e1d8 : #0d0e10;
+    out property <color> bg-elevated: light ? #f3f0eb : #101215;
+    out property <color> surface: light ? #f6f3ee : #141619;
     out property <color> surface-2: light ? #f4f1eb : #191c20;
     out property <color> surface-hover: light ? #f0ece5 : #202329;
     out property <color> text: light ? #25221f : #f2f0ed;

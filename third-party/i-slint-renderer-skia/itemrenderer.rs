@@ -5,6 +5,20 @@
 
 use std::pin::Pin;
 
+// SAUCEFX PATCH: the glyph hinting mode, fixed once per process from the
+// environment so rendered text quality can be compared live without
+// rebuilding (SAUCEFX_SKIA_HINTING=off|normal|slight|full, default slight).
+fn saucefx_font_hinting() -> skia_safe::FontHinting {
+    use std::sync::OnceLock;
+    static HINTING: OnceLock<skia_safe::FontHinting> = OnceLock::new();
+    *HINTING.get_or_init(|| match std::env::var("SAUCEFX_SKIA_HINTING").as_deref() {
+        Ok("off") => skia_safe::FontHinting::None,
+        Ok("normal") => skia_safe::FontHinting::Normal,
+        Ok("full") => skia_safe::FontHinting::Full,
+        _ => skia_safe::FontHinting::Slight,
+    })
+}
+
 use super::{PhysicalBorderRadius, PhysicalLength, PhysicalPoint, PhysicalRect, PhysicalSize};
 use i_slint_core::graphics::ApproxEq;
 use i_slint_core::graphics::ResolvedBrush;
@@ -1106,7 +1120,7 @@ impl GlyphRenderer for SkiaItemRenderer<'_> {
         // autohinter; Figtree ships unhinted so Normal would do nothing)
         // align stems the way the reference browser does.
         font.set_subpixel(false);
-        font.set_hinting(skia_safe::FontHinting::Slight);
+        font.set_hinting(saucefx_font_hinting());
 
         let (glyph_ids, glyph_positions): (Vec<_>, Vec<_>) = glyphs_it
             .into_iter()

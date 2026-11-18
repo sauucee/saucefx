@@ -141,7 +141,7 @@ pub const ACCENT_ROSE: u32 = 0xffff_2e57;
 
 /// The six accents shipped by `frontend/src/data.ts`.
 pub const ACCENTS: [(u32, &str); 6] = [
-    (ACCENT_ROSE, "Rose"),
+    (ACCENT_ROSE, "Red"),
     (0xff3b_82f6, "Blue"),
     (0xff2f_a572, "Green"),
     (0xff12_a8a0, "Teal"),

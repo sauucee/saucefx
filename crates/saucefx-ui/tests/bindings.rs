@@ -126,7 +126,7 @@ fn accent_display_forces_rose_unless_a_valid_custom_hex_is_enabled() {
         ROSE,
         "App.tsx uses ACCENTS[0] when customAccent is false, even for a known hex"
     );
-    assert_eq!(binding.accent_name(), "Rose");
+    assert_eq!(binding.accent_name(), "Red");
 
     binding.set_custom_accent(true);
     assert_eq!(binding.display_accent(), BLUE);
@@ -156,7 +156,7 @@ fn stale_accent_hex_is_not_trusted_when_the_custom_flag_is_off() {
     assert_eq!(binding.display_accent(), 0xff12a8a0);
     binding.set_custom_accent(false);
     assert_eq!(binding.display_accent(), ROSE);
-    assert_eq!(binding.accent_name(), "Rose");
+    assert_eq!(binding.accent_name(), "Red");
 }
 
 #[test]
@@ -364,7 +364,7 @@ fn settings_actions_explain_themselves_without_touching_files() {
 fn accent_swatches_select_shipped_colours_and_custom_mode_is_separate() {
     let mut binding = UiBinding::default();
     assert_eq!(binding.accent_index(), 0, "Rose is selected by default");
-    assert_eq!(binding.accent_label(), "Rose");
+    assert_eq!(binding.accent_label(), "Red");
     binding.choose_accent(3);
     assert_eq!(binding.accent_label(), "Teal");
     assert_eq!(binding.accent_index(), 3);

@@ -497,9 +497,14 @@ impl OpenGLSurface {
             // SAUCEFX PATCH: request LCD (subpixel-coverage) text rendering
             // against the standard RGB horizontal stripe layout, matching the
             // browser's font smoothing instead of grayscale masks.
+            // SAUCEFX_SKIA_LCD=0 falls back to grayscale for A/B comparisons.
             Some(&skia_safe::SurfaceProps::new(
                 skia_safe::SurfacePropsFlags::empty(),
-                skia_safe::PixelGeometry::RGBH,
+                if std::env::var("SAUCEFX_SKIA_LCD").as_deref() == Ok("0") {
+                    skia_safe::PixelGeometry::Unknown
+                } else {
+                    skia_safe::PixelGeometry::RGBH
+                },
             )),
         ) {
             Some(surface) => Ok(surface),
