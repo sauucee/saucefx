@@ -39,16 +39,21 @@ jobs:
         run: xvfb-run -a cargo test -p saucefx-core -p saucefx-ui -- --test-threads=1
 
       - name: Build release (femtovg, default)
-        run: cargo build --release -p saucefx-ui
+        run: |
+          cargo build --release -p saucefx-ui
+          cp target/release/preview target/release/preview-femtovg
 
       - name: Build release (skia)
-        run: cargo build --release -p saucefx-ui --no-default-features --features renderer-skia
+        run: |
+          cargo build --release -p saucefx-ui --no-default-features --features renderer-skia
+          cp target/release/preview target/release/preview-skia
 
       - name: Upload binaries
         uses: actions/upload-artifact@v4
         with:
           name: saucefx-ui-${{ github.sha }}
           path: |
-            target/release/preview
+            target/release/preview-femtovg
+            target/release/preview-skia
             target/release/capture
           if-no-files-found: error
