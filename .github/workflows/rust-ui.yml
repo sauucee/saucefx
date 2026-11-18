@@ -1,0 +1,53 @@
+# Builds the Rust/Slint UI on CI: runs the test suite under Xvfb and produces
+# release binaries of both GPU renderers. Skia's glyph rasterization is the
+# quality fix for the soft text femtovg produces (no hinting, grayscale AA),
+# and its C++ build is what makes CI worthwhile — the local machine cannot
+# spare the RAM for skia-bindings.
+#
+# The host binary is NOT built here: it links the prebuilt DSP archives in
+# src/build/, which are deliberately not in git (protected audio baseline).
+
+name: rust-ui
+
+on:
+  push:
+    branches: [rust-native-ui]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      # clang/ninja for the skia-bindings C++ build; fontconfig headers for
+      # fontique; xvfb for the Slint tests that need a live display.
+      - name: Install build prerequisites
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build pkg-config libfontconfig1-dev libxkbcommon-dev xvfb
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            .
+
+      - name: Test (core + ui, host needs untracked DSP archives)
+        run: xvfb-run -a cargo test -p saucefx-core -p saucefx-ui -- --test-threads=1
+
+      - name: Build release (femtovg, default)
+        run: cargo build --release -p saucefx-ui
+
+      - name: Build release (skia)
+        run: cargo build --release -p saucefx-ui --no-default-features --features renderer-skia
+
+      - name: Upload binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: saucefx-ui-${{ github.sha }}
+          path: |
+            target/release/preview
+            target/release/capture
+          if-no-files-found: error

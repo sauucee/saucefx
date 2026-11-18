@@ -1,0 +1,90 @@
+{
+  "schema": "rust-anything/bridge@1",
+  "root": "/mnt/b03727c2-dbe5-4ef3-903f-4f20f161b450/projects/saucefx-native-ui/frontend",
+  "unit": "src/data.ts",
+  "language": "ts",
+  "kind": "napi",
+  "crate_name": "data-rs",
+  "exports": [
+    {
+      "name": "formatFrequency",
+      "file": "src/data.ts",
+      "line": 51,
+      "params": [
+        {
+          "name": "frequency",
+          "ts_type": "number",
+          "optional": false,
+          "rest": false
+        },
+        {
+          "name": "compact",
+          "ts_type": "boolean",
+          "optional": true,
+          "rest": false
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "formatGain",
+      "file": "src/data.ts",
+      "line": 60,
+      "params": [
+        {
+          "name": "value",
+          "ts_type": "number",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "string",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "getAccent",
+      "file": "src/data.ts",
+      "line": 260,
+      "params": [
+        {
+          "name": "id",
+          "ts_type": "(| 'rose'\n  | 'blue'\n  | 'green'\n  | 'amber'\n  | 'violet'\n  | 'teal'\n  | 'custom')",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "Accent | undefined",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    },
+    {
+      "name": "accentIdFor",
+      "file": "src/data.ts",
+      "line": 264,
+      "params": [
+        {
+          "name": "value",
+          "ts_type": "string",
+          "optional": false,
+          "rest": false
+        }
+      ],
+      "returns": "(| 'rose'\n  | 'blue'\n  | 'green'\n  | 'amber'\n  | 'violet'\n  | 'teal'\n  | 'custom')",
+      "is_async": false,
+      "is_generator": false,
+      "type_params": [],
+      "uses_instanceof": false
+    }
+  ],
+  "classes": [],
+  "js_only": []
+}
