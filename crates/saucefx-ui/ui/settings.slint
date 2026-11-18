@@ -618,7 +618,9 @@ export component SettingsDialog inherits Rectangle {
                                 stroke-width: 1.11px;
                                 stroke-line-cap: round;
                                 stroke-line-join: round;
-                                stroke: i == 2 ? Palette.text : Palette.text-soft;
+                                // styles.css .action-button-accent > svg colors
+                                // the save glyph with the accent.
+                                stroke: i == 2 ? Palette.accent : Palette.text-soft;
                                 // Import/Export keep their arc-free tray
                                 // glyphs; the save glyph is the lucide save
                                 // icon redrawn with cubics (Slint paths have
@@ -748,11 +750,15 @@ export component SettingsDialog inherits Rectangle {
                     font-size: 9.5px;
                     vertical-alignment: center;
                 }
-                Rectangle {
-                    width: 2.5px;
-                    height: 2.5px;
-                    border-radius: 2px;
-                    background: Palette.muted-2;
+                // The reference footer separates the version and licence with
+                // a text "·" whose font metrics centre it; a fixed-height
+                // rectangle in this layout gets pinned to the row top.
+                Text {
+                    text: "\u{00b7}";
+                    color: Palette.muted-2;
+                    font-family: Typography.family;
+                    font-size: 9.5px;
+                    vertical-alignment: center;
                 }
                 Text {
                     text: "AGPL-3.0";
