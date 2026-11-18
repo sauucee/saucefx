@@ -1102,9 +1102,11 @@ impl GlyphRenderer for SkiaItemRenderer<'_> {
         // SAUCEFX PATCH: subpixel positioning disables FreeType hinting and
         // renders every glyph at a fractional x, which spreads each stem
         // across two pixels at 1x scale — the small UI text read as blurry.
-        // Integer glyph positions let the default SkFont hinting (Normal)
-        // align stems like a browser does.
+        // Integer glyph positions plus SLIGHT hinting (the FreeType
+        // autohinter; Figtree ships unhinted so Normal would do nothing)
+        // align stems the way the reference browser does.
         font.set_subpixel(false);
+        font.set_hinting(skia_safe::FontHinting::Slight);
 
         let (glyph_ids, glyph_positions): (Vec<_>, Vec<_>) = glyphs_it
             .into_iter()

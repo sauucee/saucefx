@@ -494,7 +494,13 @@ impl OpenGLSurface {
             skia_safe::gpu::SurfaceOrigin::BottomLeft,
             skia_safe::ColorType::RGBA8888,
             crate::attachment_color_space(crate::TextureEncoding::Unorm),
-            None,
+            // SAUCEFX PATCH: request LCD (subpixel-coverage) text rendering
+            // against the standard RGB horizontal stripe layout, matching the
+            // browser's font smoothing instead of grayscale masks.
+            Some(&skia_safe::SurfaceProps::new(
+                skia_safe::SurfacePropsFlags::empty(),
+                skia_safe::PixelGeometry::RGBH,
+            )),
         ) {
             Some(surface) => Ok(surface),
             None => {
