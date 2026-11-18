@@ -2,6 +2,7 @@
 //! DfxDsp/PipeWire engine through fxpw, with the same on-disk contracts as
 //! the JUCE app (settings.txt, preset-session.txt, .fac library dirs).
 
+mod autostart;
 mod fxpw;
 mod presets;
 
@@ -45,6 +46,18 @@ fn data_dir() -> PathBuf {
 
 fn user_preset_dir() -> PathBuf {
     data_dir().join("presets")
+}
+
+/// The XDG config directory (`configDir()` in Main.cpp): XDG_CONFIG_HOME,
+/// else ~/.config — the autostart entry lives at
+/// `<config>/autostart/saucefx.desktop`.
+fn config_dir() -> PathBuf {
+    if let Ok(xdg) = std::env::var("XDG_CONFIG_HOME")
+        && !xdg.is_empty()
+    {
+        return PathBuf::from(xdg);
+    }
+    home_dir().join(".config")
 }
 
 /// The factory .fac library: `SAUCEFX_ROOT` override, else the repo checkout
@@ -458,6 +471,35 @@ fn main() {
             binding
                 .borrow_mut()
                 .show_toast(&presets::export_message(&target, ok));
+        });
+    }
+
+    // The autostart toggle registers/unregisters the XDG entry immediately,
+    // reverting the switch and warning when the registration fails — the
+    // reference applyAutostartSetting flow ("Could not update the login
+    // item.").
+    {
+        let binding = Rc::clone(&binding);
+        let window_weak = window.as_weak();
+        let launch = autostart::resolve_launch(
+            &std::env::current_exe().unwrap_or_else(|_| PathBuf::from("saucefx")),
+            std::env::var("FLATPAK_ID").ok().as_deref(),
+            std::env::var("APPIMAGE").ok().as_deref(),
+            &data_dir(),
+        );
+        let entry = autostart::autostart_entry(&launch.0, &launch.1);
+        let file = autostart::autostart_file(&config_dir());
+        window.on_autostart_changed(move |enabled| {
+            if autostart::apply_autostart(enabled, &file, &entry) {
+                binding.borrow_mut().set_autostart(enabled);
+            } else {
+                binding
+                    .borrow_mut()
+                    .show_toast("Could not update the login item.");
+            }
+            if let Some(window) = window_weak.upgrade() {
+                binding.borrow().sync(&window);
+            }
         });
     }
 
