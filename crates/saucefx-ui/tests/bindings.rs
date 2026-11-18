@@ -378,6 +378,45 @@ fn apply_saved_preset_installs_selects_and_closes_the_layers() {
 }
 
 #[test]
+fn preset_selection_by_path_selects_without_touching_the_engine() {
+    let mut binding = UiBinding::default();
+    let fixture = PresetFixture {
+        label: "Imported".into(),
+        factory: false,
+        effects: [1.0; EFFECT_COUNT],
+        eq: [2.0; BAND_COUNT],
+        path: "/x/Imported.fac".into(),
+    };
+    let refreshed_fixture = fixture.clone();
+    let saved_path = fixture.path.clone();
+    binding.apply_saved_preset("Imported", &saved_path, vec![fixture]);
+
+    // The host refreshes the preset rows after an import; the outputs and
+    // the current selection row stay intact across the reinstall.
+    let refreshed = vec![
+        PresetFixture {
+            label: "Factory".into(),
+            factory: true,
+            effects: [0.0; EFFECT_COUNT],
+            eq: [0.0; BAND_COUNT],
+            path: "/fac/Factory.fac".into(),
+        },
+        refreshed_fixture,
+    ];
+    binding.install_presets(refreshed);
+    assert!(binding.preset_labels().contains(&"Factory".to_string()));
+    assert_eq!(binding.selected_preset_path(), "/x/Imported.fac");
+    assert!(binding.select_preset_by_path("/x/Imported.fac"));
+    assert_eq!(binding.selected_preset_path(), "/x/Imported.fac");
+    assert_eq!(binding.selected_preset_label(), "Imported");
+    assert!(
+        !binding.select_preset_by_path("/x/absent.fac"),
+        "an unknown path keeps the current selection"
+    );
+    assert_eq!(binding.selected_preset_path(), "/x/Imported.fac");
+}
+
+#[test]
 fn settings_actions_explain_themselves_without_touching_files() {
     let mut binding = UiBinding::default();
     binding.open_settings();

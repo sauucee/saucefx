@@ -73,6 +73,55 @@ fn read_file(path: &Path) -> Option<String> {
     std::fs::read_to_string(path).ok()
 }
 
+/// Multiple-file chooser via zenity (the JUCE host used its own chooser;
+/// zenity ships with GNOME and needs no extra build dependency). Cancel
+/// yields an empty list.
+fn zenity_select_files(title: &str, start_dir: &Path) -> Vec<PathBuf> {
+    let output = std::process::Command::new("zenity")
+        .args([
+            "--file-selection",
+            "--multiple",
+            &format!("--title={title}"),
+            "--file-filter=Presets | *.fac *.FAC",
+            &format!("--filename={}/", start_dir.display()),
+        ])
+        .output();
+    let Ok(output) = output else {
+        return Vec::new();
+    };
+    if !output.status.success() {
+        return Vec::new();
+    }
+    String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .filter(|line| !line.is_empty())
+        .map(PathBuf::from)
+        .collect()
+}
+
+/// Save-mode chooser via zenity; cancel yields None.
+fn zenity_save_file(title: &str, start: &Path) -> Option<PathBuf> {
+    let output = std::process::Command::new("zenity")
+        .args([
+            "--file-selection",
+            "--save",
+            "--confirm-overwrite",
+            &format!("--title={title}"),
+            &format!("--filename={}", start.display()),
+        ])
+        .output()
+        .ok()?;
+    if !output.status.success() {
+        return None;
+    }
+    let text = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    if text.is_empty() {
+        None
+    } else {
+        Some(PathBuf::from(text))
+    }
+}
+
 /// Output menu rows from the engine, with the saved/preferred selection.
 /// Row 1 is Automatic; an empty device name routes automatically.
 fn output_rows(engine: &fxpw::FxpwEngine, settings: &GuiSettings) -> (Vec<MenuRow>, usize) {
@@ -330,6 +379,85 @@ fn main() {
                 &factory_dir,
                 &last_written,
             );
+        });
+    }
+
+    // Settings -> Import presets: choose .fac files, copy them into the
+    // user preset directory (never shadowing a display name), rescan and
+    // select the last import — the reference chooseImportPresets flow.
+    {
+        let binding = Rc::clone(&binding);
+        let engine = Rc::clone(&engine);
+        let factory_dir = factory_dir.clone();
+        let state = state.clone();
+        let last_written = Rc::new(RefCell::new((String::new(), String::new())));
+        window.on_import_clicked(move || {
+            let start = if user_preset_dir().is_dir() {
+                user_preset_dir()
+            } else {
+                home_dir()
+            };
+            let files = zenity_select_files("Import presets", &start);
+            if files.is_empty() {
+                return;
+            }
+            let entries: Vec<(PathBuf, Option<String>)> = files
+                .iter()
+                .map(|file| (file.clone(), engine.borrow().preset_display_name(file)))
+                .collect();
+            let labels = binding.borrow().preset_labels();
+            let outcome = presets::import_preset_files(&entries, &user_preset_dir(), &labels);
+            if outcome.imported > 0 {
+                let scanned = presets::scan(&factory_dir, &user_preset_dir());
+                let factory = presets::fixtures(&engine.borrow(), &scanned);
+                binding.borrow_mut().install_presets(factory);
+                if let Some(last) = outcome.last.as_deref() {
+                    binding
+                        .borrow_mut()
+                        .select_preset_by_path(&last.to_string_lossy());
+                }
+                save_state(
+                    &binding,
+                    &engine.borrow(),
+                    &state,
+                    &factory_dir,
+                    &last_written,
+                );
+            }
+            binding
+                .borrow_mut()
+                .show_toast(&presets::import_outcome_message(&outcome));
+        });
+    }
+
+    // Settings -> Export preset: save the live engine state under the
+    // chosen name in the chosen directory — chooseExportPreset +
+    // exportCurrentPreset in the reference.
+    {
+        let binding = Rc::clone(&binding);
+        let engine = Rc::clone(&engine);
+        window.on_export_clicked(move || {
+            let label = binding.borrow().selected_preset_label();
+            let suggested = presets::export_suggested_file(&label, &home_dir());
+            let Some(target) = zenity_save_file("Export current preset", &suggested) else {
+                return;
+            };
+            let target = match target.extension() {
+                Some(extension) if extension.eq_ignore_ascii_case("fac") => target,
+                _ => target.with_extension("fac"),
+            };
+            let name = target
+                .file_stem()
+                .map(|name| name.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            let dir = target.parent().map(Path::to_path_buf).unwrap_or_default();
+            let mut ok = engine.borrow().save_preset(&name, &dir);
+            if ok {
+                ok = target.is_file();
+            }
+            binding
+                .borrow_mut()
+                .show_toast(&presets::export_message(&target, ok));
         });
     }
 

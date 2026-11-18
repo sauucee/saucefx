@@ -1158,6 +1158,36 @@ impl UiBinding {
         true
     }
 
+    /// Install a refreshed preset list (the host's post-import rescan),
+    /// keeping the outputs untouched and the current selection when its
+    /// path still exists.
+    pub fn install_presets(&mut self, fixtures: Vec<PresetFixture>) {
+        let selected = self.selected_preset_path().to_string();
+        self.catalog = SceneCatalog::build(&fixtures, &self.saved_presets);
+        if let Some(index) = self.find_preset_by_path(&selected) {
+            self.selected_preset = index;
+        }
+    }
+
+    /// Select a preset row by its file path without loading it through the
+    /// engine (the import flow selects the last imported file; loading is
+    /// the caller's choice, and the power gate does not apply).
+    pub fn select_preset_by_path(&mut self, path: &str) -> bool {
+        if let Some(index) = self.find_preset_by_path(path) {
+            self.selected_preset = index;
+            return true;
+        }
+        false
+    }
+
+    /// Display label of the selected preset row ("" for synthetic rows).
+    pub fn selected_preset_label(&self) -> String {
+        self.catalog
+            .presets
+            .get(self.selected_preset)
+            .map_or_else(String::new, |row| row.label.clone())
+    }
+
     /// Display labels of the selectable preset rows, for the host's
     /// unique-name check (the reference compares against the preset box).
     pub fn preset_labels(&self) -> Vec<String> {
