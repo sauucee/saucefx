@@ -38,7 +38,7 @@ PIDS+=("$!")
 for ((i=0; i<100; ++i)); do if pactl info >/dev/null 2>&1; then break; fi; sleep 0.05; done
 pactl info >/dev/null
 
-flatpak run io.github.sauucee.SauceFX >"$WORK/app.log" 2>&1 &
+flatpak run --no-documents-portal io.github.sauucee.SauceFX >"$WORK/app.log" 2>&1 &
 APP_PID=$!
 PIDS+=("$APP_PID")
 for ((i=0; i<300; ++i)); do

@@ -87,12 +87,18 @@ jobs:
         run: |
           # The 26.08 SDK ships clang in the base; there is no llvm
           # extension for this branch. Discover the libclang directory and
-          # substitute it into the manifest.
-          flatpak run --command=sh org.gnome.Sdk//51 -c \
-            'command -v clang clang++; find /usr/lib -maxdepth 4 -name "libclang*.so*" 2>/dev/null | head -5; ls -d /usr/lib/llvm* 2>/dev/null' \
+          # substitute it into the manifest. --no-documents-portal: CI has
+          # no document portal service.
+          flatpak run --no-documents-portal --command=sh org.gnome.Sdk//51 -c \
+            'command -v clang clang++ gcc g++; find /usr/lib -maxdepth 4 -name "libclang*.so*" 2>/dev/null | head -5; ls -d /usr/lib/llvm* 2>/dev/null' \
             | tee /tmp/sdk-probe.txt
           LIBCLANG_DIR=$(grep -oE '/usr/lib[^ ]*libclang[^ ]*\.so[^ ]*' /tmp/sdk-probe.txt | head -1 | xargs -r dirname)
-          test -n "$LIBCLANG_DIR"
+          if [ -z "$LIBCLANG_DIR" ]; then
+            echo "libclang not found; SDK inventory:" >&2
+            flatpak run --no-documents-portal --command=sh org.gnome.Sdk//51 -c \
+              'ls /usr/bin | grep -iE "clang|llvm" | head; find /usr -name "libclang*" 2>/dev/null | head' >&2 || true
+            exit 1
+          fi
           echo "LIBCLANG_DIR=$LIBCLANG_DIR"
           sed -i "s|LIBCLANGDIR|$LIBCLANG_DIR|g" packaging/native/flatpak/github-bundle.yml
 
@@ -102,7 +108,7 @@ jobs:
       - name: Install bundle and launch-check
         run: |
           flatpak install --user -y --noninteractive release/SauceFX-*-x86_64.flatpak
-          flatpak run --command=sh io.github.sauucee.SauceFX -c 'command -v zenity'
+          flatpak run --no-documents-portal --command=sh io.github.sauucee.SauceFX -c 'command -v zenity'
           packaging/native/flatpak/smoke-test.sh
 
       - name: Upload Flatpak artifact
