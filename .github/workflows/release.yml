@@ -1,3 +1,8 @@
+# Release pipeline for the Rust/Slint native UI. A v* tag builds all five
+# package formats through the reusable native-packages workflow and attaches
+# them to the GitHub release. Publishing remains an explicit owner action:
+# it only happens when the owner pushes a tag. The legacy JUCE pipeline was
+# replaced when the native UI merged to main.
 name: Release packages
 
 on:
@@ -5,174 +10,41 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
-    inputs:
-      package:
-        description: Packages to build
-        type: choice
-        options: [all, appimage]
-        default: all
 
 permissions:
   contents: write
 
 jobs:
-  rpm:
-    name: Fedora RPM
-    if: github.event_name != 'workflow_dispatch' || inputs.package != 'appimage'
-    runs-on: ubuntu-24.04
-    container: fedora:44
-    steps:
-      - name: Install checkout prerequisites
-        run: dnf install -y git tar gzip nodejs
-
-      - name: Check out source
-        uses: actions/checkout@v7
-
-      - name: Install build dependencies
-        run: |
-          dnf install -y \
-            cmake gcc-c++ make pkgconf-pkg-config \
-            pipewire-devel pulseaudio-libs-devel libX11-devel libXext-devel libXinerama-devel \
-            libXrandr-devel libXcursor-devel libXcomposite-devel \
-            freetype-devel fontconfig-devel mesa-libGL-devel \
-            webkit2gtk4.1-devel gtk3-devel libsoup3-devel \
-            nodejs npm rpm-build curl
-
-      - name: Build frontend
-        run: |
-          cd frontend
-          npm ci --no-audit --no-fund
-          npm run build
-
-      - name: Build RPM
-        run: packaging/rpm/build-rpm.sh
-
-      - name: Upload RPM artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: saucefx-rpm
-          path: release/*.rpm
-          if-no-files-found: error
-
-  flatpak:
-    name: Flatpak bundle
-    if: github.event_name != 'workflow_dispatch' || inputs.package != 'appimage'
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Check out source
-        uses: actions/checkout@v7
-
-      - name: Set up Node
-        uses: actions/setup-node@v7
-        with:
-          node-version: '22'
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-
-      - name: Install Flatpak tooling
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y flatpak flatpak-builder \
-            appstream desktop-file-utils
-          flatpak remote-add --user --if-not-exists flathub \
-            https://dl.flathub.org/repo/flathub.flatpakrepo
-          flatpak install --user -y --noninteractive flathub \
-            org.gnome.Platform//51 org.gnome.Sdk//51 \
-            org.freedesktop.Sdk//26.08
-
-      - name: Build frontend
-        run: |
-          cd frontend
-          npm ci --no-audit --no-fund
-          npm run build
-
-      - name: Build Flatpak
-        run: packaging/flatpak/build-flatpak.sh
-
-      - name: Upload Flatpak artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: saucefx-flatpak
-          path: release/*.flatpak
-          if-no-files-found: error
-
-  appimage:
-    name: Portable AppImage
-    runs-on: ubuntu-22.04
-    env:
-      SAUCEFX_BUILD_JOBS: '2'
-    steps:
-      - name: Check out source
-        uses: actions/checkout@v7
-
-      - name: Set up Node
-        uses: actions/setup-node@v7
-        with:
-          node-version: '22'
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-
-      - name: Install build and smoke-test dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            cmake g++ make pkg-config curl file patchelf \
-            libpipewire-0.3-dev libpulse-dev libasound2-dev \
-            libx11-dev libxext-dev libxinerama-dev libxrandr-dev \
-            libxcursor-dev libxcomposite-dev libfreetype6-dev libfontconfig1-dev \
-            libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev \
-            libwebkit2gtk-4.1-dev librsvg2-dev libgirepository1.0-dev \
-            gobject-introspection libgtk-3-bin desktop-file-utils \
-            pipewire pipewire-pulse wireplumber pulseaudio-utils \
-            bubblewrap xdg-dbus-proxy dbus-x11 xvfb xauth
-
-      - name: Build frontend
-        run: |
-          npm --prefix frontend ci --no-audit --no-fund
-          npm --prefix frontend run build
-
-      - name: Test packaging helpers
-        run: python3 packaging/appimage/test-packaging.py
-
-      - name: Build AppImage
-        run: packaging/appimage/build-appimage.sh
-
-      - name: Test native audio buffering
-        run: make -C src -j2 test-audio-latency
-
-      - name: Smoke-test portable AppImage
-        run: packaging/appimage/smoke-test.sh release/SauceFX-*-x86_64.AppImage
-
-      - name: Upload AppImage artifact
-        uses: actions/upload-artifact@v7
-        with:
-          name: saucefx-appimage
-          path: release/*.AppImage
-          if-no-files-found: error
+  packages:
+    name: Build native packages
+    uses: ./.github/workflows/native-packages.yml
 
   publish:
     name: Publish GitHub release
-    needs: [rpm, flatpak, appimage]
+    needs: packages
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-24.04
     steps:
       - name: Download packages
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@v4
         with:
           path: release
           merge-multiple: true
 
-      - name: Generate checksums
+      - name: Drop debug packages and generate checksums
         run: |
           cd release
-          sha256sum *.rpm *.flatpak *.AppImage > SHA256SUMS
+          find . -name '*debug*' -delete
+          sha256sum *.AppImage *.flatpak *.pkg.tar.zst *.rpm *.deb > SHA256SUMS
 
       - name: Publish release assets
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            release/*.rpm
-            release/*.flatpak
             release/*.AppImage
+            release/*.flatpak
+            release/*.pkg.tar.zst
+            release/*.rpm
+            release/*.deb
             release/SHA256SUMS
           generate_release_notes: true

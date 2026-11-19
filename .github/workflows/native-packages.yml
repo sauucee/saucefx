@@ -1,12 +1,12 @@
 # Packages for the Rust/Slint native UI. Builds every format from source on
-# GitHub (the DSP archives are compiled here, never committed). During the
-# migration every push to rust-native-ui builds the packages; once the
-# migration merges, this becomes tag-triggered and replaces the JUCE
-# release workflow's publish job (publishing stays an explicit owner action).
+# GitHub (the DSP archives are compiled here, never committed). Reusable:
+# release.yml calls this on v* tags and publishes the artifacts. Pushes to
+# the development branch and manual dispatch also build all formats.
 name: Native packages
 
 on:
   workflow_dispatch:
+  workflow_call:
   push:
     branches: [rust-native-ui]
 
