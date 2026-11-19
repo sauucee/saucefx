@@ -60,7 +60,7 @@ modules:
       - install -Dm0644 LICENSE /app/share/licenses/io.github.sauucee.SauceFX/LICENSE
     sources:
       - type: dir
-        path: ../..
+        path: ../../..
         skip:
           - .git
           - .hermes
