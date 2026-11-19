@@ -53,5 +53,8 @@ appstreamcli validate --no-net \
 %license LICENSE
 
 %changelog
+* Thu Nov 19 2026 SauceFX <sauucee@users.noreply.github.com> - 0.3.0-1
+- Native Rust/Slint UI; five package formats; start at login on by default.
+
 * Thu Nov 19 2026 SauceFX <sauucee@users.noreply.github.com> - 0.2.4-1
 - Native Rust/Slint UI package.

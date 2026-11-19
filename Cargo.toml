@@ -3,9 +3,9 @@ resolver = "3"
 members = ["crates/saucefx-core", "crates/saucefx-ui", "crates/saucefx-host"]
 
 [workspace.package]
-# Tracks the shipped SauceFX application version (frontend/package.json),
-# which the Settings footer mirrors.
-version = "0.2.4"
+# Shipped SauceFX application version; the packaging scripts and the
+# Settings footer read it from here.
+version = "0.3.0"
 edition = "2024"
 license = "AGPL-3.0-only"
 

@@ -67,6 +67,14 @@
     <display_length compare="ge">768</display_length>
   </requires>
   <releases>
+    <release version="0.3.0" date="2026-11-19">
+      <description>
+        <p>Native Rust/Slint interface replaces the web-based UI, with crisp
+        native text rendering. The sound engine and PipeWire routing are
+        unchanged. Start at login is now on by default, and packages are
+        available as AppImage, Flatpak, Arch pacman, RPM and DEB.</p>
+      </description>
+    </release>
     <release version="0.2.4" date="2026-11-03">
       <description>
         <p>Add a portable AppImage download and keep factory preset sessions
