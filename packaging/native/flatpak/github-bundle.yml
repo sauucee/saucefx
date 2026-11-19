@@ -1,13 +1,13 @@
 # Native UI Flatpak bundle manifest. Same app-id as the released JUCE app
-# (upgrade path); the Rust host replaces the JUCE/WebKit build. LLVMVER is
-# substituted by CI with the llvm extension branch available for the SDK.
+# (upgrade path); the Rust host replaces the JUCE/WebKit build. The 26.08
+# SDK ships clang/libclang in the base (no llvm extension exists for this
+# branch); CI substitutes LIBCLANGDIR with the discovered library directory.
 app-id: io.github.sauucee.SauceFX
 runtime: org.gnome.Platform
 runtime-version: '51'
 sdk: org.gnome.Sdk
 sdk-extensions:
   - org.freedesktop.Sdk.Extension.rust-stable
-  - org.freedesktop.Sdk.Extension.LLVMVER
 command: SauceFX
 
 finish-args:
@@ -35,11 +35,11 @@ modules:
   - name: saucefx
     buildsystem: simple
     build-options:
-      append-path: /usr/lib/sdk/rust-stable/bin:/usr/lib/sdk/LLVMVER/bin
+      append-path: /usr/lib/sdk/rust-stable/bin
       env:
         CC: clang
         CXX: clang++
-        LIBCLANG_PATH: /usr/lib/sdk/LLVMVER/lib
+        LIBCLANG_PATH: LIBCLANGDIR
         CARGO_HOME: /run/build/saucefx/cargo-home
         CARGO_BUILD_JOBS: '2'
     build-commands:

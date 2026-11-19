@@ -82,17 +82,19 @@ jobs:
             org.gnome.Platform//51 org.gnome.Sdk//51 \
             org.freedesktop.Sdk//26.08 \
             org.freedesktop.Sdk.Extension.rust-stable//26.08
-          # The llvm extension branch varies per SDK release; pick the first
-          # available and substitute it into the manifest.
-          LLVM_EXT=
-          for v in 20 19 21 18; do
-            if flatpak install --user -y --noninteractive flathub \
-                "org.freedesktop.Sdk.Extension.llvm$v//26.08"; then
-              LLVM_EXT="llvm$v"; break
-            fi
-          done
-          test -n "$LLVM_EXT"
-          sed -i "s/LLVMVER/$LLVM_EXT/g" packaging/native/flatpak/github-bundle.yml
+
+      - name: Locate clang/libclang in the SDK
+        run: |
+          # The 26.08 SDK ships clang in the base; there is no llvm
+          # extension for this branch. Discover the libclang directory and
+          # substitute it into the manifest.
+          flatpak run --command=sh org.gnome.Sdk//51 -c \
+            'command -v clang clang++; find /usr/lib -maxdepth 4 -name "libclang*.so*" 2>/dev/null | head -5; ls -d /usr/lib/llvm* 2>/dev/null' \
+            | tee /tmp/sdk-probe.txt
+          LIBCLANG_DIR=$(grep -oE '/usr/lib[^ ]*libclang[^ ]*\.so[^ ]*' /tmp/sdk-probe.txt | head -1 | xargs -r dirname)
+          test -n "$LIBCLANG_DIR"
+          echo "LIBCLANG_DIR=$LIBCLANG_DIR"
+          sed -i "s|LIBCLANGDIR|$LIBCLANG_DIR|g" packaging/native/flatpak/github-bundle.yml
 
       - name: Build Flatpak
         run: packaging/native/flatpak/build-flatpak.sh
