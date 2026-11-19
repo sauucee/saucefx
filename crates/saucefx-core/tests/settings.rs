@@ -1,12 +1,14 @@
 use saucefx_core::settings::GuiSettings;
 
 #[test]
-fn blank_input_yields_the_source_defaults() {
+fn blank_input_yields_the_startup_defaults() {
     let expected = GuiSettings {
         theme: saucefx_core::settings::ThemeMode::Dark,
         custom_accent: false,
         accent: 0xffe6_3462,
-        autostart: false,
+        // Start at login is ON by default (owner decision 2026-11-19);
+        // the JUCE source defaulted it off.
+        autostart: true,
         output_routed: false,
         output_device: String::new(),
         output_port: String::new(),
@@ -146,7 +148,7 @@ fn encode_writes_the_exact_six_key_text() {
         encode_settings(&GuiSettings::default()).expect("representable names"),
         "theme=dark\n\
          accent=default\n\
-         autostart=off\n\
+         autostart=on\n\
          output=system\n\
          output-device=\n\
          output-port=\n"

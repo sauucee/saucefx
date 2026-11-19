@@ -539,7 +539,7 @@ impl UiBinding {
             accent: ACCENT_ROSE,
             custom_accent: false,
             selected_accent: 0,
-            autostart: false,
+            autostart: true,
             history: SpectrumHistory::default(),
             preset_open: false,
             output_open: false,

@@ -43,7 +43,7 @@ impl Default for GuiSettings {
             theme: ThemeMode::Dark,
             custom_accent: false,
             accent: 0xffe6_3462,
-            autostart: false,
+            autostart: true,
             output_routed: false,
             output_device: String::new(),
             output_port: String::new(),

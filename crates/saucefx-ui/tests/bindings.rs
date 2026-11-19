@@ -26,6 +26,10 @@ fn default_binding_starts_powered_with_a_clean_session() {
     assert_eq!(binding.output_name(), "Automatic");
     assert!(!binding.settings_open());
     assert!(!binding.save_open());
+    assert!(
+        binding.autostart(),
+        "start at login is on by default (owner decision 2026-11-19)"
+    );
 }
 
 #[test]

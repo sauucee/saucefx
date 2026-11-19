@@ -553,6 +553,27 @@ fn main() {
         });
     }
 
+    // Re-apply the login item at startup (the saved state, or on by default
+    // for new users) — registering it must not depend on the user toggling
+    // the switch, matching the reference's startup behaviour.
+    {
+        let enabled = binding.borrow().autostart();
+        let launch = autostart::resolve_launch(
+            &std::env::current_exe().unwrap_or_else(|_| PathBuf::from("saucefx")),
+            std::env::var("FLATPAK_ID").ok().as_deref(),
+            std::env::var("APPIMAGE").ok().as_deref(),
+            &data_dir(),
+        );
+        let entry = autostart::autostart_entry(&launch.0, &launch.1);
+        let file = autostart::autostart_file(&config_dir());
+        if !autostart::apply_autostart(enabled, &file, &entry) {
+            binding.borrow_mut().set_autostart(false);
+            binding
+                .borrow_mut()
+                .show_toast("Could not update the login item.");
+        }
+    }
+
     window.show().expect("show the SauceFX window");
 
     // Live spectrum: the engine's analyzer feeds the view's history.

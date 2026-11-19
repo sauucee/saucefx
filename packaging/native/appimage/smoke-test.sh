@@ -149,5 +149,8 @@ for ((i=0; i<50; ++i)); do
     sleep 0.1
 done
 grep -q 'factory-preset=Default.fac' "$XDG_STATE_HOME/saucefx/preset-session.txt"
+# Start at login is on by default and re-applied at startup: the portable
+# launch command is registered under the private config dir.
+grep -F "Exec=\"$IMAGE\" --autostart" "$XDG_CONFIG_HOME/autostart/saucefx.desktop"
 kill -0 "$APP_PID"
 echo "PASS: native AppImage starts from a relocated directory, restores its preset session, uses the bundled PipeWire, and processes audio end to end"
