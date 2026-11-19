@@ -64,3 +64,48 @@ jobs:
           name: saucefx-native-appimage
           path: release/*.AppImage
           if-no-files-found: error
+
+  flatpak:
+    name: Flatpak bundle (native UI)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Flatpak tooling and runtimes
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak flatpak-builder appstream desktop-file-utils \
+            pipewire pipewire-pulse wireplumber pulseaudio-utils dbus-x11 xvfb xauth
+          flatpak remote-add --user --if-not-exists flathub \
+            https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user -y --noninteractive flathub \
+            org.gnome.Platform//51 org.gnome.Sdk//51 \
+            org.freedesktop.Sdk//26.08 \
+            org.freedesktop.Sdk.Extension.rust-stable//26.08
+          # The llvm extension branch varies per SDK release; pick the first
+          # available and substitute it into the manifest.
+          LLVM_EXT=
+          for v in 20 19 21 18; do
+            if flatpak install --user -y --noninteractive flathub \
+                "org.freedesktop.Sdk.Extension.llvm$v//26.08"; then
+              LLVM_EXT="llvm$v"; break
+            fi
+          done
+          test -n "$LLVM_EXT"
+          sed -i "s/LLVMVER/$LLVM_EXT/g" packaging/native/flatpak/github-bundle.yml
+
+      - name: Build Flatpak
+        run: packaging/native/flatpak/build-flatpak.sh
+
+      - name: Install bundle and launch-check
+        run: |
+          flatpak install --user -y --noninteractive release/SauceFX-*-x86_64.flatpak
+          flatpak run --command=sh io.github.sauucee.SauceFX -c 'command -v zenity'
+          packaging/native/flatpak/smoke-test.sh
+
+      - name: Upload Flatpak artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: saucefx-native-flatpak
+          path: release/*.flatpak
+          if-no-files-found: error

@@ -1,0 +1,71 @@
+# Native UI Flatpak bundle manifest. Same app-id as the released JUCE app
+# (upgrade path); the Rust host replaces the JUCE/WebKit build. LLVMVER is
+# substituted by CI with the llvm extension branch available for the SDK.
+app-id: io.github.sauucee.SauceFX
+runtime: org.gnome.Platform
+runtime-version: '51'
+sdk: org.gnome.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
+  - org.freedesktop.Sdk.Extension.LLVMVER
+command: SauceFX
+
+finish-args:
+  - --share=ipc
+  - --socket=x11
+  - --socket=wayland
+  - --socket=pulseaudio
+  - --device=dri
+  - --filesystem=xdg-run/pipewire-0
+  - --filesystem=xdg-download
+  - --filesystem=xdg-config/autostart:create
+
+modules:
+  # The host's import/export choosers call zenity; build it so the sandbox
+  # is self-sufficient regardless of what the runtime ships.
+  - name: zenity
+    buildsystem: meson
+    config-opts:
+      - -Dbuildtype=release
+    sources:
+      - type: archive
+        url: https://gitlab.gnome.org/GNOME/zenity/-/archive/4.0.2/zenity-4.0.2.tar.gz
+        sha256: fdbb74e882a6a56bb2f1a2381b81e08b06c627cc7e944edb71d107092c70dd80
+
+  - name: saucefx
+    buildsystem: simple
+    build-options:
+      append-path: /usr/lib/sdk/rust-stable/bin:/usr/lib/sdk/LLVMVER/bin
+      env:
+        CC: clang
+        CXX: clang++
+        LIBCLANG_PATH: /usr/lib/sdk/LLVMVER/lib
+        CARGO_HOME: /run/build/saucefx/cargo-home
+        CARGO_BUILD_JOBS: '2'
+    build-commands:
+      - make -C src rt -j2
+      - cargo build --release -p saucefx-host --no-default-features --features renderer-skia
+      - install -Dm0755 target/release/saucefx /app/bin/SauceFX
+      - install -d /app/share/saucefx
+      - cp -a presets /app/share/saucefx/presets
+      - install -Dm0644 packaging/linux/io.github.sauucee.SauceFX.desktop
+          /app/share/applications/io.github.sauucee.SauceFX.desktop
+      - install -Dm0644 packaging/linux/io.github.sauucee.SauceFX.metainfo.xml
+          /app/share/metainfo/io.github.sauucee.SauceFX.metainfo.xml
+      - install -Dm0644 assets/Images/saucefx-logo-512.png
+          /app/share/icons/hicolor/512x512/apps/io.github.sauucee.SauceFX.png
+      - install -Dm0644 LICENSE /app/share/licenses/io.github.sauucee.SauceFX/LICENSE
+    sources:
+      - type: dir
+        path: ../..
+        skip:
+          - .git
+          - .hermes
+          - .flatpak-builder
+          - release
+          - target
+          - src/build
+          - frontend/node_modules
+          - site
+          - docs
+          - rust-anything
