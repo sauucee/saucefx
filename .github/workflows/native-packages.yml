@@ -167,3 +167,73 @@ jobs:
           name: saucefx-native-arch
           path: release/*.pkg.tar.zst
           if-no-files-found: error
+
+  rpm:
+    name: RPM package (native UI)
+    runs-on: ubuntu-24.04
+    container: fedora:42
+    steps:
+      - name: Install build dependencies
+        run: |
+          dnf install -y git nodejs gcc-c++ make rust cargo clang llvm-devel \
+            ninja-build pkgconf-pkg-config pipewire-devel pulseaudio-libs-devel \
+            fontconfig-devel freetype-devel libxkbcommon-devel mesa-libGL-devel \
+            mesa-libEGL-devel desktop-file-utils libappstream-glib rpm-build
+
+      - uses: actions/checkout@v4
+
+      - name: Build package
+        run: packaging/native/rpm/build-rpm.sh
+
+      - name: Upload RPM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: saucefx-native-rpm
+          path: release/*.rpm
+          if-no-files-found: error
+
+  deb:
+    name: DEB package (native UI)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install LLVM 18
+        run: |
+          curl -fsSL https://apt.llvm.org/llvm.sh | sudo bash -s 18
+          sudo apt-get install -y libclang-18-dev
+          sudo update-alternatives --install /usr/bin/clang clang /usr/bin/clang-18 100
+          sudo update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-18 100
+
+      - name: Install build and package dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            g++ make pkg-config ninja-build \
+            libpipewire-0.3-dev libpulse-dev libfreetype6-dev libfontconfig1-dev \
+            libgl1-mesa-dev libegl1-mesa-dev libxkbcommon-dev libxkbcommon-x11-0 \
+            desktop-file-utils dpkg-dev
+
+      - name: Build host (Skia)
+        env:
+          CC: clang-18
+          CXX: clang++-18
+          LIBCLANG_PATH: /usr/lib/llvm-18/lib
+        run: |
+          make -C src rt -j2
+          CARGO_BUILD_JOBS=2 cargo build --release -p saucefx-host \
+            --no-default-features --features renderer-skia
+
+      - name: Build package
+        run: packaging/native/deb/build-deb.sh
+
+      - name: Upload DEB artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: saucefx-native-deb
+          path: release/*.deb
+          if-no-files-found: error
