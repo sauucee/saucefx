@@ -112,15 +112,16 @@ with wave.open(sys.argv[1], 'wb') as w:
     w.writeframes(b''.join(struct.pack('<h', int(20000 * math.sin(2 * math.pi * 440 * t / rate)))
                            for t in range(rate * 3)))
 PY
-parecord --device=AppImageTestOutput.monitor --file-format=wav "$WORK/flow.wav" >"$WORK/rec.log" 2>&1 &
-REC_PID=$!
-PIDS+=("$REC_PID")
-sleep 0.5
-paplay --device=SauceFX "$WORK/tone440.wav" >"$WORK/play.log" 2>&1
-sleep 1
-kill "$REC_PID" 2>/dev/null || true
-wait "$REC_PID" 2>/dev/null || true
-python3 - "$WORK/flow.wav" <<'PY'
+audio_check() {
+    parecord --device=AppImageTestOutput.monitor --file-format=wav "$WORK/flow.wav" >"$WORK/rec.log" 2>&1 &
+    REC_PID=$!
+    PIDS+=("$REC_PID")
+    sleep 0.5
+    paplay --device=SauceFX "$WORK/tone440.wav" >"$WORK/play.log" 2>&1
+    sleep 1
+    kill "$REC_PID" 2>/dev/null || true
+    wait "$REC_PID" 2>/dev/null || true
+    python3 - "$WORK/flow.wav" <<'PY'
 import math, struct, sys, wave
 w = wave.open(sys.argv[1], 'rb')
 rate, ch = w.getframerate(), w.getnchannels()
@@ -128,7 +129,8 @@ data = w.readframes(w.getnframes())
 vals = struct.unpack(f'<{len(data)//2}h', data)
 xs = [v / 32768.0 for v in vals[::ch]]
 seg = xs[rate:2 * rate]
-assert len(seg) > rate // 2, f'capture too short: {len(xs)/rate:.2f}s'
+if len(seg) <= rate // 2:
+    sys.exit(f'capture too short: {len(xs)/rate:.2f}s')
 rms = math.sqrt(sum(x * x for x in seg) / len(seg))
 def goertzel(f):
     coeff = 2 * math.cos(2 * math.pi * f / rate)
@@ -138,10 +140,24 @@ def goertzel(f):
         s2, s1 = s1, s0
     return math.sqrt(s1 * s1 + s2 * s2 - coeff * s1 * s2) * 2 / len(seg)
 g440, g880 = goertzel(440), goertzel(880)
-assert rms > 0.05, f'no audio reached the output (rms={rms:.4f})'
-assert g440 > 10 * g880, f'440 Hz tone distorted (440={g440:.4f}, 880={g880:.4f})'
+if rms <= 0.05:
+    sys.exit(f'no audio reached the output (rms={rms:.4f})')
+if g440 <= 10 * g880:
+    sys.exit(f'440 Hz tone distorted (440={g440:.4f}, 880={g880:.4f})')
 print(f'audio chain ok: rms={rms:.3f} |440|={g440:.3f} |880|={g880:.5f}')
 PY
+}
+# The sink can exist before the engine's render path is fully settled; a
+# capture taken in that window is mostly startup transient (observed once
+# on a loaded runner). Retry with a settle delay before declaring failure.
+for attempt in 1 2 3; do
+    if audio_check; then break; fi
+    if [ "$attempt" = 3 ]; then
+        echo "audio chain check failed after 3 attempts" >&2
+        exit 1
+    fi
+    sleep 2
+done
 
 # The 2 s save timer persists the restored session under the portable name.
 for ((i=0; i<50; ++i)); do
