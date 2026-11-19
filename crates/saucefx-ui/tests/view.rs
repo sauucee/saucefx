@@ -172,7 +172,7 @@ fn scenario_startup(window: &AppWindow, binding: &Rc<RefCell<UiBinding>>, checks
     checks.eq(
         "startup version parity",
         window.get_app_version().to_string(),
-        "0.2.4".to_string(),
+        env!("CARGO_PKG_VERSION").to_string(),
     );
     checks.eq(
         "startup active band",
