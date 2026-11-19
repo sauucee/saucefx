@@ -742,13 +742,15 @@ impl UiBinding {
         )
     }
 
-    /// Apply captured preset values verbatim. The preset format stores floats,
-    /// while the view's own sliders stay on a 1 dB step. With an engine
-    /// installed the full applied set is forwarded, so a session restore or
-    /// preset load reaches the DSP as well.
+    /// Load preset/session EQ gains on the same whole-dB scale as manual
+    /// edits. Round before capturing the baseline and forwarding to the DSP,
+    /// keeping the readout, resets and saved values consistent.
     pub fn apply_captured_values(&mut self, effects: &[f32], eq: &[f32]) -> bool {
         for (band, gain) in eq.iter().take(BAND_COUNT).enumerate() {
-            if self.state.set_eq_gain(band, *gain).is_err() {
+            if !gain.is_finite()
+                || !(-12.0..=12.0).contains(gain)
+                || self.state.set_eq_gain(band, gain.round()).is_err()
+            {
                 return false;
             }
         }

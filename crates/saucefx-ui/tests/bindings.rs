@@ -628,21 +628,21 @@ fn format_gain_never_mutates_preset_or_session_state() {
     captured[4] = 1.15;
     assert!(binding.apply_captured_values(&[0.0; EFFECT_COUNT], &captured));
     let before = binding.eq_gains();
-    assert_eq!(before[17], -1.25, "captured floats keep their precision");
-    assert_eq!(before[4], 1.15);
+    assert_eq!(before[17], -1.0, "loaded EQ uses whole decibels");
+    assert_eq!(before[4], 1.0);
 
     binding.set_active_eq_band(Some(17));
-    assert_eq!(binding.eq_readout(), "1 kHz \u{b7} -1.2 dB");
+    assert_eq!(binding.eq_readout(), "1 kHz \u{b7} -1 dB");
     binding.set_active_eq_band(Some(4));
-    assert_eq!(binding.eq_readout(), "50 Hz \u{b7} +1.1 dB");
+    assert_eq!(binding.eq_readout(), "50 Hz \u{b7} +1 dB");
     binding.set_active_eq_band(None);
     assert_eq!(binding.eq_readout(), "");
 
     // Formatting is read-only: neither the live gains nor the applied
     // baseline moved.
     assert_eq!(binding.eq_gains(), before);
-    assert_eq!(binding.state().applied_eq_gain(17), Some(-1.25));
-    assert_eq!(binding.state().applied_eq_gain(4), Some(1.15));
+    assert_eq!(binding.state().applied_eq_gain(17), Some(-1.0));
+    assert_eq!(binding.state().applied_eq_gain(4), Some(1.0));
 }
 
 #[test]
@@ -664,14 +664,14 @@ fn eq_readout_uses_the_31_frequency_band_not_the_compact_caption_list() {
     binding.set_active_eq_band(Some(30));
     assert_eq!(binding.eq_readout(), "20 kHz \u{b7} 0 dB");
 
-    // A captured preset keeps fractional EQ values; the readout must not round.
+    // Loaded presets use the same whole-dB scale as manual edits.
     let mut music = UiBinding::default();
     let mut captured = [0.0f32; BAND_COUNT];
     captured[17] = 1.2;
     assert!(music.apply_captured_values(&[0.0; EFFECT_COUNT], &captured));
-    assert_eq!(music.eq_gains()[17], 1.2);
+    assert_eq!(music.eq_gains()[17], 1.0);
     music.set_active_eq_band(Some(17));
-    assert_eq!(music.eq_readout(), "1 kHz \u{b7} +1.2 dB");
+    assert_eq!(music.eq_readout(), "1 kHz \u{b7} +1 dB");
 
     music.set_active_eq_band(None);
     assert_eq!(music.eq_readout(), "");
@@ -767,7 +767,7 @@ fn engine_sink_forwards_applied_changes_and_real_preset_paths() {
     );
     assert_eq!(binding.preset_name(), "Factsoft 1");
     assert_eq!(binding.effects()[0], 7.5, "engine values mirror the view");
-    assert_eq!(binding.eq_gains()[17], -4.25);
+    assert_eq!(binding.eq_gains()[17], -4.0);
     assert!(!binding.edited(), "the loaded preset is the new baseline");
 
     // Synthetic rows (no path) keep applying their fixture values.
@@ -1051,7 +1051,7 @@ fn first_launch_loads_the_selected_preset_into_the_engine() {
         vec!["/library/Factsoft/Default.fac".to_string()]
     );
     assert_eq!(binding.effects()[0], 7.5, "engine values mirror the view");
-    assert_eq!(binding.eq_gains()[17], -4.25);
+    assert_eq!(binding.eq_gains()[17], -4.0);
     assert!(!binding.edited(), "the loaded preset is the new baseline");
 
     // Power off blocks the fallback without forwarding anything.
