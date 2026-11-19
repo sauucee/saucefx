@@ -1,0 +1,6 @@
+theme=light
+accent=#4c8dff
+autostart=on
+output=saucefx
+output-device=alsa_output.usb-SauceFX_Test_DAC-00.analog-stereo
+output-port=analog-output-speaker

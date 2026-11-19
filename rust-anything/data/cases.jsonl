@@ -1,0 +1,542 @@
+{"fn":"formatFrequency","args":[1,false],"ok":"1 Hz"}
+{"fn":"formatFrequency","args":[-2.5,false],"ok":"-2.5 Hz"}
+{"fn":"formatFrequency","args":[1000,true],"ok":"1k"}
+{"fn":"formatFrequency","args":[2147483648,false],"ok":"2147483.6 kHz"}
+{"fn":"formatFrequency","args":[42,{"$undefined":true}],"ok":"42 Hz"}
+{"fn":"formatFrequency","args":[1000000,true],"ok":"1000k"}
+{"fn":"formatFrequency","args":[0.5,true],"ok":"0.5"}
+{"fn":"formatFrequency","args":[2147483648,true],"ok":"2147483.6k"}
+{"fn":"formatFrequency","args":[9007199254740992],"ok":"9007199254741.0 kHz"}
+{"fn":"formatFrequency","args":[2,false],"ok":"2 Hz"}
+{"fn":"formatFrequency","args":[3,false],"ok":"3 Hz"}
+{"fn":"formatFrequency","args":[3,true],"ok":"3"}
+{"fn":"formatFrequency","args":[9007199254740992,true],"ok":"9007199254741.0k"}
+{"fn":"formatFrequency","args":[100,false],"ok":"100 Hz"}
+{"fn":"formatFrequency","args":[1],"ok":"1 Hz"}
+{"fn":"formatFrequency","args":[0],"ok":"0 Hz"}
+{"fn":"formatFrequency","args":[{"$num":"-Infinity"},false],"ok":"-Infinity Hz"}
+{"fn":"formatFrequency","args":[-1,true],"ok":"-1"}
+{"fn":"formatFrequency","args":[42,false],"ok":"42 Hz"}
+{"fn":"formatFrequency","args":[-1,false],"ok":"-1 Hz"}
+{"fn":"formatFrequency","args":[0.5,false],"ok":"0.5 Hz"}
+{"fn":"formatFrequency","args":[{"$num":"NaN"},false],"ok":"NaN Hz"}
+{"fn":"formatFrequency","args":[10,false],"ok":"10 Hz"}
+{"fn":"formatFrequency","args":[2,true],"ok":"2"}
+{"fn":"formatFrequency","args":[{"$num":"Infinity"},true],"ok":"Infinityk"}
+{"fn":"formatFrequency","args":[-1],"ok":"-1 Hz"}
+{"fn":"formatFrequency","args":[{"$num":"-Infinity"}],"ok":"-Infinity Hz"}
+{"fn":"formatFrequency","args":[-2.5,true],"ok":"-2.5"}
+{"fn":"formatFrequency","args":[0,true],"ok":"0"}
+{"fn":"formatFrequency","args":[{"$num":"-0"},false],"ok":"0 Hz"}
+{"fn":"formatFrequency","args":[2147483648,{"$undefined":true}],"ok":"2147483.6 kHz"}
+{"fn":"formatFrequency","args":[3],"ok":"3 Hz"}
+{"fn":"formatFrequency","args":[1000000,false],"ok":"1000 kHz"}
+{"fn":"formatFrequency","args":[1000,false],"ok":"1 kHz"}
+{"fn":"formatFrequency","args":[2,{"$undefined":true}],"ok":"2 Hz"}
+{"fn":"formatFrequency","args":[3,{"$undefined":true}],"ok":"3 Hz"}
+{"fn":"formatFrequency","args":[{"$num":"Infinity"},{"$undefined":true}],"ok":"Infinity kHz"}
+{"fn":"formatFrequency","args":[0.5,{"$undefined":true}],"ok":"0.5 Hz"}
+{"fn":"formatFrequency","args":[9007199254740992,{"$undefined":true}],"ok":"9007199254741.0 kHz"}
+{"fn":"formatFrequency","args":[100,true],"ok":"100"}
+{"fn":"formatFrequency","args":[0,false],"ok":"0 Hz"}
+{"fn":"formatFrequency","args":[0.5],"ok":"0.5 Hz"}
+{"fn":"formatFrequency","args":[{"$num":"-0"},true],"ok":"0"}
+{"fn":"formatFrequency","args":[{"$num":"NaN"}],"ok":"NaN Hz"}
+{"fn":"formatFrequency","args":[{"$num":"Infinity"},false],"ok":"Infinity kHz"}
+{"fn":"formatFrequency","args":[1,true],"ok":"1"}
+{"fn":"formatFrequency","args":[{"$num":"NaN"},true],"ok":"NaN"}
+{"fn":"formatFrequency","args":[1000000],"ok":"1000 kHz"}
+{"fn":"formatFrequency","args":[10,true],"ok":"10"}
+{"fn":"formatFrequency","args":[2],"ok":"2 Hz"}
+{"fn":"formatFrequency","args":[9007199254740992,false],"ok":"9007199254741.0 kHz"}
+{"fn":"formatFrequency","args":[-2.5,{"$undefined":true}],"ok":"-2.5 Hz"}
+{"fn":"formatFrequency","args":[{"$num":"-Infinity"},true],"ok":"-Infinity"}
+{"fn":"formatFrequency","args":[10,{"$undefined":true}],"ok":"10 Hz"}
+{"fn":"formatFrequency","args":[1000000,{"$undefined":true}],"ok":"1000 kHz"}
+{"fn":"formatFrequency","args":[42,true],"ok":"42"}
+{"fn":"formatFrequency","args":[{"$num":"NaN"},{"$undefined":true}],"ok":"NaN Hz"}
+{"fn":"formatFrequency","args":[1000],"ok":"1 kHz"}
+{"fn":"formatFrequency","args":[-2.5],"ok":"-2.5 Hz"}
+{"fn":"formatFrequency","args":[0,{"$undefined":true}],"ok":"0 Hz"}
+{"fn":"formatFrequency","args":[42],"ok":"42 Hz"}
+{"fn":"formatFrequency","args":[1000,{"$undefined":true}],"ok":"1 kHz"}
+{"fn":"formatFrequency","args":[{"$num":"-0"}],"ok":"0 Hz"}
+{"fn":"formatFrequency","args":[{"$num":"Infinity"}],"ok":"Infinity kHz"}
+{"fn":"formatFrequency","args":[100,{"$undefined":true}],"ok":"100 Hz"}
+{"fn":"formatFrequency","args":[{"$num":"-Infinity"},{"$undefined":true}],"ok":"-Infinity Hz"}
+{"fn":"formatFrequency","args":[1,{"$undefined":true}],"ok":"1 Hz"}
+{"fn":"formatFrequency","args":[100],"ok":"100 Hz"}
+{"fn":"formatFrequency","args":[-1,{"$undefined":true}],"ok":"-1 Hz"}
+{"fn":"formatFrequency","args":[10],"ok":"10 Hz"}
+{"fn":"formatFrequency","args":[{"$num":"-0"},{"$undefined":true}],"ok":"0 Hz"}
+{"fn":"formatFrequency","args":[2147483648],"ok":"2147483.6 kHz"}
+{"fn":"formatFrequency","args":[-7.5,false],"ok":"-7.5 Hz"}
+{"fn":"formatFrequency","args":[0.1,false],"ok":"0.1 Hz"}
+{"fn":"formatFrequency","args":[0.30000000000000004,false],"ok":"0.30000000000000004 Hz"}
+{"fn":"formatFrequency","args":[1e+21,false],"ok":"1000000000000000000 kHz"}
+{"fn":"formatFrequency","args":[1e-7,false],"ok":"1e-7 Hz"}
+{"fn":"formatFrequency","args":[5e-324,false],"ok":"5e-324 Hz"}
+{"fn":"formatFrequency","args":[1.7976931348623157e+308,false],"ok":"1.7976931348623156e+305 kHz"}
+{"fn":"formatGain","args":[{"$num":"-0"}],"ok":"0"}
+{"fn":"formatGain","args":[0.5],"ok":"+0.5"}
+{"fn":"formatGain","args":[{"$num":"Infinity"}],"ok":"+Infinity"}
+{"fn":"formatGain","args":[10],"ok":"+10"}
+{"fn":"formatGain","args":[-1],"ok":"-1"}
+{"fn":"formatGain","args":[9007199254740992],"ok":"+9007199254740992"}
+{"fn":"formatGain","args":[{"$num":"-Infinity"}],"ok":"-Infinity"}
+{"fn":"formatGain","args":[2],"ok":"+2"}
+{"fn":"formatGain","args":[1000000],"ok":"+1000000"}
+{"fn":"formatGain","args":[-2.5],"ok":"-2.5"}
+{"fn":"formatGain","args":[{"$num":"NaN"}],"ok":"NaN"}
+{"fn":"formatGain","args":[0],"ok":"0"}
+{"fn":"formatGain","args":[2147483648],"ok":"+2147483648"}
+{"fn":"formatGain","args":[42],"ok":"+42"}
+{"fn":"formatGain","args":[3],"ok":"+3"}
+{"fn":"formatGain","args":[1000],"ok":"+1000"}
+{"fn":"formatGain","args":[1],"ok":"+1"}
+{"fn":"formatGain","args":[100],"ok":"+100"}
+{"fn":"formatGain","args":[-7.5],"ok":"-7.5"}
+{"fn":"formatGain","args":[0.1],"ok":"+0.1"}
+{"fn":"formatGain","args":[0.30000000000000004],"ok":"+0.3"}
+{"fn":"formatGain","args":[1e+21],"ok":"+1e+21"}
+{"fn":"formatGain","args":[1e-7],"ok":"0"}
+{"fn":"formatGain","args":[5e-324],"ok":"0"}
+{"fn":"formatGain","args":[1.7976931348623157e+308],"ok":"+Infinity"}
+{"fn":"getAccent","args":["./x/**/*.json"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["abc"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["tab\tseparated"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["ns:key.path"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["line1\nline2"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":[".leading﻿bom"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["a.b.c"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["HELLO"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["a:b:c"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":[""],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["trailing.ab"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["emoji 👍🏽 mixa"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["tab\tseparatedΣΊΣΥΦΟΣ"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["ΣΊΣΥΦΟΣ"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["  padded  "],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["tab\tseparateda"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["./x/**/*.jsonünïcödé"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["trailing.a😀b😀c"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["é"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["./x/**/*.jsona:b:c"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["emoji 👍🏽 mix"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["tab\tseparatedline1\nline2"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["trailing.é"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["hello world"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["😀"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":[".leading"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":[":tab\tseparated"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["trailing."],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["ünïcödé"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["hello"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["key_name-1"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["Hello Worldsrc/a/b.ts"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["a😀b😀c"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["{name} has {count} items"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["日本語のテキスト"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["İstanbul"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["Hello World"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["ab"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["ns:key.path.leading"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["straße"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["a.leading"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["ns:key.patha:b:c"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":[":a"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["key_name-1ΣΊΣΥΦΟΣ"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["a..b"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":[":"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["src/a/b.ts"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["ΣΊΣΥΦΟΣΣΊΣΥΦΟΣ"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["abca😀b😀c"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":[".leadinghello"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["key_name-1straße"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["src/a/b.tssrc/a/b.ts"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["key_name-1a.b.c"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["line1\nline2abc"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["./x/**/*.json.leading"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["ababc"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["abc  padded  "],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["﻿bom"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["ünïcödéΣΊΣΥΦΟΣ"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["a"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["日本語のテキストns:key.path"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["a😀b😀c./x/**/*.json"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["ünïcödéé"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["İstanbul﻿bom"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["src/a/b.tsa😀b😀c"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["a:b:cHELLO"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["abcline1\nline2"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["./x/**/*.jsonΣΊΣΥΦΟΣ"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["key_name-1é"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["a😀b😀c{name} has {count} items"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["Hello Worlda"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["line1\nline2a"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["src/a/b.tstab\tseparated"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["﻿bomsrc/a/b.ts"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":[":src/a/b.ts"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["﻿bom.leading"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["Hello Worldstraße"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["HELLOline1\nline2"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["﻿bomabc"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["ünïcödéhello world"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["src/a/b.ts﻿bom"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["{name} has {count} itemskey_name-1"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["hello worldabc"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["emoji 👍🏽 mixhello"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["ns:key.pathline1\nline2"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["İstanbul  padded  "],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["straßeΣΊΣΥΦΟΣ"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["aba:b:c"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["😀a..b"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["ΣΊΣΥΦΟΣ./x/**/*.json"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["abc./x/**/*.json"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["a..bünïcödé"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["a..bİstanbul"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["src/a/b.tsHello World"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["src/a/b.tsa"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["😀a:b:c"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["  padded  😀"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["﻿bomtab\tseparated"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["İstanbula😀b😀c"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["a.b.cΣΊΣΥΦΟΣ"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["a😀b😀cİstanbul"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["emoji 👍🏽 mix{name} has {count} items"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["emoji 👍🏽 mixkey_name-1"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["a.b.cstraße"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["HELLOhello world"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["  padded  key_name-1"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["trailing.a"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["ünïcödéa:b:c"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["﻿bom./x/**/*.json"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["ab日本語のテキスト"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["😀hello world"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["hellons:key.path"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["./x/**/*.json{name} has {count} items"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":[":emoji 👍🏽 mix"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["./x/**/*.jsona.b.c"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["ns:key.path日本語のテキスト"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["akey_name-1"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["日本語のテキストa"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["line1\nline2HELLO"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["ΣΊΣΥΦΟΣtab\tseparated"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["HELLOa..b"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["Hello World﻿bom"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["HELLOstraße"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["ünïcödé日本語のテキスト"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["éstraße"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["emoji 👍🏽 mixa.b.c"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["﻿boma.b.c"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["😀ünïcödé"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["ΣΊΣΥΦΟΣkey_name-1"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["ünïcödésrc/a/b.ts"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["  padded  trailing."],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":[":é"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["key_name-1./x/**/*.json"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["trailing.a.b.c"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["ünïcödéns:key.path"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["hello worldé"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["src/a/b.ts{name} has {count} items"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["İstanbulabc"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["hello worldkey_name-1"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["src/a/b.ts日本語のテキスト"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["a.b.cab"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["key_name-1.leading"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["straßestraße"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["./x/**/*.json./x/**/*.json"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["src/a/b.tskey_name-1"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["日本語のテキスト日本語のテキスト"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["straßehello world"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["abİstanbul"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["HELLOa"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["hello worlda.b.c"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["a..ba😀b😀c"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["line1\nline2{name} has {count} items"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["日本語のテキスト  padded  "],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["trailing.HELLO"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["tab\tseparated😀"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["a日本語のテキスト"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":[".leadingHELLO"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["key_name-1ab"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":[".leadingline1\nline2"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["a..ba..b"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["abcstraße"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["key_name-1tab\tseparated"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["a:b:cstraße"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["./x/**/*.json:"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["a😀b😀ca.b.c"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["a.b.cünïcödé"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["a:b:ca.b.c"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["{name} has {count} itemsa😀b😀c"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["trailing.{name} has {count} items"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["line1\nline2hello"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["😀abc"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["a..b{name} has {count} items"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":[".leadingkey_name-1"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["a..btab\tseparated"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["a.b.ca😀b😀c"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["  padded  abc"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["Hello Worldkey_name-1"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["emoji 👍🏽 mixab"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["HELLOa.b.c"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["abé"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["hello./x/**/*.json"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["src/a/b.tsé"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["ünïcödétab\tseparated"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["a..babc"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["line1\nline2é"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["src/a/b.ts./x/**/*.json"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["a.b.cİstanbul"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["emoji 👍🏽 mixΣΊΣΥΦΟΣ"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["ΣΊΣΥΦΟΣhello world"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["./x/**/*.json﻿bom"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["﻿bomkey_name-1"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["﻿boma:b:c"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["ns:key.patha.b.c"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["tab\tseparated./x/**/*.json"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["﻿bomİstanbul"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["日本語のテキストΣΊΣΥΦΟΣ"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["ns:key.pathİstanbul"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["hello worldhello world"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":[":straße"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":[".leading{name} has {count} items"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["héllo wörld"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["👍🏽 thumbs"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["日本語"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["ılık ırmak"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["👨‍👩‍👧 family"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["a b"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["a😀b"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["Iı İi"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["K K k"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["ſ s S"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["x‍y 👨‍👩‍👧"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["a b c　d"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["١٢٣ ٤٥"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["𝟘𝟙 ²³"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["snake_case foo-bar o'neil"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["ǅungla Ǆ"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["one\r\ntwo threefour"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["café café"],"ok":{"$undefined":true}}
+{"fn":"getAccent","args":["ΣΑΣ σας ς"],"ok":{"$undefined":true}}
+{"fn":"accentIdFor","args":["line1\nline2"],"ok":"custom"}
+{"fn":"accentIdFor","args":["{name} has {count} itemsa😀b😀c"],"ok":"custom"}
+{"fn":"accentIdFor","args":["ΣΊΣΥΦΟΣ"],"ok":"custom"}
+{"fn":"accentIdFor","args":["abc"],"ok":"custom"}
+{"fn":"accentIdFor","args":["abc./x/**/*.json"],"ok":"custom"}
+{"fn":"accentIdFor","args":["a"],"ok":"custom"}
+{"fn":"accentIdFor","args":["hello worldhello world"],"ok":"custom"}
+{"fn":"accentIdFor","args":["key_name-1:"],"ok":"custom"}
+{"fn":"accentIdFor","args":["Hello World"],"ok":"custom"}
+{"fn":"accentIdFor","args":["a😀b😀c"],"ok":"custom"}
+{"fn":"accentIdFor","args":["hello"],"ok":"custom"}
+{"fn":"accentIdFor","args":["src/a/b.ts:"],"ok":"custom"}
+{"fn":"accentIdFor","args":["emoji 👍🏽 mixa:b:c"],"ok":"custom"}
+{"fn":"accentIdFor","args":["﻿bom"],"ok":"custom"}
+{"fn":"accentIdFor","args":["ns:key.path"],"ok":"custom"}
+{"fn":"accentIdFor","args":["HELLO"],"ok":"custom"}
+{"fn":"accentIdFor","args":["trailing."],"ok":"custom"}
+{"fn":"accentIdFor","args":["key_name-1"],"ok":"custom"}
+{"fn":"accentIdFor","args":["hello world"],"ok":"custom"}
+{"fn":"accentIdFor","args":["a..b"],"ok":"custom"}
+{"fn":"accentIdFor","args":["a.b.c"],"ok":"custom"}
+{"fn":"accentIdFor","args":["tab\tseparatedΣΊΣΥΦΟΣ"],"ok":"custom"}
+{"fn":"accentIdFor","args":["ab"],"ok":"custom"}
+{"fn":"accentIdFor","args":[".leading"],"ok":"custom"}
+{"fn":"accentIdFor","args":["trailing.tab\tseparated"],"ok":"custom"}
+{"fn":"accentIdFor","args":[""],"ok":"custom"}
+{"fn":"accentIdFor","args":["😀"],"ok":"custom"}
+{"fn":"accentIdFor","args":[":.leading"],"ok":"custom"}
+{"fn":"accentIdFor","args":[".leading日本語のテキスト"],"ok":"custom"}
+{"fn":"accentIdFor","args":["İstanbul"],"ok":"custom"}
+{"fn":"accentIdFor","args":["emoji 👍🏽 mix:"],"ok":"custom"}
+{"fn":"accentIdFor","args":["emoji 👍🏽 mix"],"ok":"custom"}
+{"fn":"accentIdFor","args":[":"],"ok":"custom"}
+{"fn":"accentIdFor","args":["src/a/b.ts"],"ok":"custom"}
+{"fn":"accentIdFor","args":["tab\tseparated"],"ok":"custom"}
+{"fn":"accentIdFor","args":["a:b:c"],"ok":"custom"}
+{"fn":"accentIdFor","args":["ünïcödé"],"ok":"custom"}
+{"fn":"accentIdFor","args":["😀tab\tseparated"],"ok":"custom"}
+{"fn":"accentIdFor","args":["emoji 👍🏽 mix  padded  "],"ok":"custom"}
+{"fn":"accentIdFor","args":[".leadinga.b.c"],"ok":"custom"}
+{"fn":"accentIdFor","args":["straße"],"ok":"custom"}
+{"fn":"accentIdFor","args":["é"],"ok":"custom"}
+{"fn":"accentIdFor","args":["  padded  "],"ok":"custom"}
+{"fn":"accentIdFor","args":["ns:key.patha.b.c"],"ok":"custom"}
+{"fn":"accentIdFor","args":["{name} has {count} items"],"ok":"custom"}
+{"fn":"accentIdFor","args":["./x/**/*.json"],"ok":"custom"}
+{"fn":"accentIdFor","args":["key_name-1é"],"ok":"custom"}
+{"fn":"accentIdFor","args":["日本語のテキスト"],"ok":"custom"}
+{"fn":"accentIdFor","args":["ns:key.patha..b"],"ok":"custom"}
+{"fn":"accentIdFor","args":["é  padded  "],"ok":"custom"}
+{"fn":"accentIdFor","args":["é﻿bom"],"ok":"custom"}
+{"fn":"accentIdFor","args":["a﻿bom"],"ok":"custom"}
+{"fn":"accentIdFor","args":["ünïcödétrailing."],"ok":"custom"}
+{"fn":"accentIdFor","args":["hello worldns:key.path"],"ok":"custom"}
+{"fn":"accentIdFor","args":["./x/**/*.json﻿bom"],"ok":"custom"}
+{"fn":"accentIdFor","args":["ΣΊΣΥΦΟΣab"],"ok":"custom"}
+{"fn":"accentIdFor","args":["tab\tseparated  padded  "],"ok":"custom"}
+{"fn":"accentIdFor","args":[":﻿bom"],"ok":"custom"}
+{"fn":"accentIdFor","args":["a.b.ca:b:c"],"ok":"custom"}
+{"fn":"accentIdFor","args":["ns:key.path  padded  "],"ok":"custom"}
+{"fn":"accentIdFor","args":["İstanbul  padded  "],"ok":"custom"}
+{"fn":"accentIdFor","args":["İstanbul:"],"ok":"custom"}
+{"fn":"accentIdFor","args":["a.b.ctrailing."],"ok":"custom"}
+{"fn":"accentIdFor","args":["helloünïcödé"],"ok":"custom"}
+{"fn":"accentIdFor","args":["abcabc"],"ok":"custom"}
+{"fn":"accentIdFor","args":["ab日本語のテキスト"],"ok":"custom"}
+{"fn":"accentIdFor","args":["ünïcödéa..b"],"ok":"custom"}
+{"fn":"accentIdFor","args":["src/a/b.tsünïcödé"],"ok":"custom"}
+{"fn":"accentIdFor","args":["{name} has {count} itemsa..b"],"ok":"custom"}
+{"fn":"accentIdFor","args":["ΣΊΣΥΦΟΣline1\nline2"],"ok":"custom"}
+{"fn":"accentIdFor","args":["src/a/b.ts😀"],"ok":"custom"}
+{"fn":"accentIdFor","args":["straßens:key.path"],"ok":"custom"}
+{"fn":"accentIdFor","args":["  padded  abc"],"ok":"custom"}
+{"fn":"accentIdFor","args":["a:b:c.leading"],"ok":"custom"}
+{"fn":"accentIdFor","args":[":emoji 👍🏽 mix"],"ok":"custom"}
+{"fn":"accentIdFor","args":["﻿bom:"],"ok":"custom"}
+{"fn":"accentIdFor","args":["a😀b😀cline1\nline2"],"ok":"custom"}
+{"fn":"accentIdFor","args":["ΣΊΣΥΦΟΣsrc/a/b.ts"],"ok":"custom"}
+{"fn":"accentIdFor","args":["a..bhello"],"ok":"custom"}
+{"fn":"accentIdFor","args":[".leadingünïcödé"],"ok":"custom"}
+{"fn":"accentIdFor","args":["./x/**/*.jsoné"],"ok":"custom"}
+{"fn":"accentIdFor","args":["  padded  {name} has {count} items"],"ok":"custom"}
+{"fn":"accentIdFor","args":["hello worlda..b"],"ok":"custom"}
+{"fn":"accentIdFor","args":["é.leading"],"ok":"custom"}
+{"fn":"accentIdFor","args":[".leadinga"],"ok":"custom"}
+{"fn":"accentIdFor","args":["line1\nline2emoji 👍🏽 mix"],"ok":"custom"}
+{"fn":"accentIdFor","args":["ns:key.pathab"],"ok":"custom"}
+{"fn":"accentIdFor","args":["😀ab"],"ok":"custom"}
+{"fn":"accentIdFor","args":["./x/**/*.jsonabc"],"ok":"custom"}
+{"fn":"accentIdFor","args":["日本語のテキストİstanbul"],"ok":"custom"}
+{"fn":"accentIdFor","args":["ünïcödéabc"],"ok":"custom"}
+{"fn":"accentIdFor","args":["ns:key.pathHello World"],"ok":"custom"}
+{"fn":"accentIdFor","args":["hello worldabc"],"ok":"custom"}
+{"fn":"accentIdFor","args":["tab\tseparated﻿bom"],"ok":"custom"}
+{"fn":"accentIdFor","args":["line1\nline2﻿bom"],"ok":"custom"}
+{"fn":"accentIdFor","args":["./x/**/*.jsonHELLO"],"ok":"custom"}
+{"fn":"accentIdFor","args":["./x/**/*.jsonünïcödé"],"ok":"custom"}
+{"fn":"accentIdFor","args":["line1\nline2hello world"],"ok":"custom"}
+{"fn":"accentIdFor","args":["line1\nline2straße"],"ok":"custom"}
+{"fn":"accentIdFor","args":[".leadingHELLO"],"ok":"custom"}
+{"fn":"accentIdFor","args":["straße😀"],"ok":"custom"}
+{"fn":"accentIdFor","args":["a.b.cünïcödé"],"ok":"custom"}
+{"fn":"accentIdFor","args":["ünïcödé﻿bom"],"ok":"custom"}
+{"fn":"accentIdFor","args":["Hello Worldsrc/a/b.ts"],"ok":"custom"}
+{"fn":"accentIdFor","args":["İstanbulsrc/a/b.ts"],"ok":"custom"}
+{"fn":"accentIdFor","args":["日本語のテキストhello world"],"ok":"custom"}
+{"fn":"accentIdFor","args":["ünïcödéa.b.c"],"ok":"custom"}
+{"fn":"accentIdFor","args":[":ab"],"ok":"custom"}
+{"fn":"accentIdFor","args":["HELLOΣΊΣΥΦΟΣ"],"ok":"custom"}
+{"fn":"accentIdFor","args":["ns:key.patha😀b😀c"],"ok":"custom"}
+{"fn":"accentIdFor","args":["hello worldΣΊΣΥΦΟΣ"],"ok":"custom"}
+{"fn":"accentIdFor","args":["astraße"],"ok":"custom"}
+{"fn":"accentIdFor","args":["日本語のテキストa😀b😀c"],"ok":"custom"}
+{"fn":"accentIdFor","args":["straße  padded  "],"ok":"custom"}
+{"fn":"accentIdFor","args":["éa"],"ok":"custom"}
+{"fn":"accentIdFor","args":["﻿bomHELLO"],"ok":"custom"}
+{"fn":"accentIdFor","args":["Hello Worldemoji 👍🏽 mix"],"ok":"custom"}
+{"fn":"accentIdFor","args":["İstanbulhello world"],"ok":"custom"}
+{"fn":"accentIdFor","args":["é{name} has {count} items"],"ok":"custom"}
+{"fn":"accentIdFor","args":["a:b:ckey_name-1"],"ok":"custom"}
+{"fn":"accentIdFor","args":["ΣΊΣΥΦΟΣemoji 👍🏽 mix"],"ok":"custom"}
+{"fn":"accentIdFor","args":["éa.b.c"],"ok":"custom"}
+{"fn":"accentIdFor","args":["{name} has {count} itemsa.b.c"],"ok":"custom"}
+{"fn":"accentIdFor","args":["tab\tseparatedhello"],"ok":"custom"}
+{"fn":"accentIdFor","args":["tab\tseparateda..b"],"ok":"custom"}
+{"fn":"accentIdFor","args":["a./x/**/*.json"],"ok":"custom"}
+{"fn":"accentIdFor","args":["hello worldab"],"ok":"custom"}
+{"fn":"accentIdFor","args":["HELLOsrc/a/b.ts"],"ok":"custom"}
+{"fn":"accentIdFor","args":["İstanbul😀"],"ok":"custom"}
+{"fn":"accentIdFor","args":["a..bİstanbul"],"ok":"custom"}
+{"fn":"accentIdFor","args":["hello worldemoji 👍🏽 mix"],"ok":"custom"}
+{"fn":"accentIdFor","args":["İstanbula..b"],"ok":"custom"}
+{"fn":"accentIdFor","args":["./x/**/*.jsona..b"],"ok":"custom"}
+{"fn":"accentIdFor","args":["src/a/b.tsHELLO"],"ok":"custom"}
+{"fn":"accentIdFor","args":["a..b:"],"ok":"custom"}
+{"fn":"accentIdFor","args":["./x/**/*.json  padded  "],"ok":"custom"}
+{"fn":"accentIdFor","args":["{name} has {count} itemssrc/a/b.ts"],"ok":"custom"}
+{"fn":"accentIdFor","args":[".leadingΣΊΣΥΦΟΣ"],"ok":"custom"}
+{"fn":"accentIdFor","args":["a:b:cab"],"ok":"custom"}
+{"fn":"accentIdFor","args":["a.b.c日本語のテキスト"],"ok":"custom"}
+{"fn":"accentIdFor","args":["Hello Worldab"],"ok":"custom"}
+{"fn":"accentIdFor","args":["key_name-1﻿bom"],"ok":"custom"}
+{"fn":"accentIdFor","args":["a.b.c{name} has {count} items"],"ok":"custom"}
+{"fn":"accentIdFor","args":["a..btab\tseparated"],"ok":"custom"}
+{"fn":"accentIdFor","args":["line1\nline2.leading"],"ok":"custom"}
+{"fn":"accentIdFor","args":["日本語のテキストabc"],"ok":"custom"}
+{"fn":"accentIdFor","args":[".leadingns:key.path"],"ok":"custom"}
+{"fn":"accentIdFor","args":["abc.leading"],"ok":"custom"}
+{"fn":"accentIdFor","args":["line1\nline2a:b:c"],"ok":"custom"}
+{"fn":"accentIdFor","args":["😀a:b:c"],"ok":"custom"}
+{"fn":"accentIdFor","args":["Hello Worldé"],"ok":"custom"}
+{"fn":"accentIdFor","args":["a..bab"],"ok":"custom"}
+{"fn":"accentIdFor","args":["abca😀b😀c"],"ok":"custom"}
+{"fn":"accentIdFor","args":["﻿bom.leading"],"ok":"custom"}
+{"fn":"accentIdFor","args":["trailing.İstanbul"],"ok":"custom"}
+{"fn":"accentIdFor","args":["éab"],"ok":"custom"}
+{"fn":"accentIdFor","args":["ünïcödé  padded  "],"ok":"custom"}
+{"fn":"accentIdFor","args":["﻿boma"],"ok":"custom"}
+{"fn":"accentIdFor","args":["a..btrailing."],"ok":"custom"}
+{"fn":"accentIdFor","args":["ns:key.path:"],"ok":"custom"}
+{"fn":"accentIdFor","args":["key_name-1ünïcödé"],"ok":"custom"}
+{"fn":"accentIdFor","args":["a:b:c😀"],"ok":"custom"}
+{"fn":"accentIdFor","args":["ns:key.pathns:key.path"],"ok":"custom"}
+{"fn":"accentIdFor","args":["straßeΣΊΣΥΦΟΣ"],"ok":"custom"}
+{"fn":"accentIdFor","args":["helloHello World"],"ok":"custom"}
+{"fn":"accentIdFor","args":["ΣΊΣΥΦΟΣa"],"ok":"custom"}
+{"fn":"accentIdFor","args":["emoji 👍🏽 mixΣΊΣΥΦΟΣ"],"ok":"custom"}
+{"fn":"accentIdFor","args":["  padded  .leading"],"ok":"custom"}
+{"fn":"accentIdFor","args":["HELLOabc"],"ok":"custom"}
+{"fn":"accentIdFor","args":["a.b.c😀"],"ok":"custom"}
+{"fn":"accentIdFor","args":["ünïcödé{name} has {count} items"],"ok":"custom"}
+{"fn":"accentIdFor","args":["a😀b😀ca😀b😀c"],"ok":"custom"}
+{"fn":"accentIdFor","args":["emoji 👍🏽 mixtrailing."],"ok":"custom"}
+{"fn":"accentIdFor","args":[":a.b.c"],"ok":"custom"}
+{"fn":"accentIdFor","args":["ns:key.pathhello"],"ok":"custom"}
+{"fn":"accentIdFor","args":["a.b.c:"],"ok":"custom"}
+{"fn":"accentIdFor","args":["ΣΊΣΥΦΟΣ日本語のテキスト"],"ok":"custom"}
+{"fn":"accentIdFor","args":["ünïcödé😀"],"ok":"custom"}
+{"fn":"accentIdFor","args":["straßeünïcödé"],"ok":"custom"}
+{"fn":"accentIdFor","args":["aba..b"],"ok":"custom"}
+{"fn":"accentIdFor","args":["ans:key.path"],"ok":"custom"}
+{"fn":"accentIdFor","args":["{name} has {count} items{name} has {count} items"],"ok":"custom"}
+{"fn":"accentIdFor","args":["Hello Worldİstanbul"],"ok":"custom"}
+{"fn":"accentIdFor","args":["key_name-1src/a/b.ts"],"ok":"custom"}
+{"fn":"accentIdFor","args":["key_name-1a.b.c"],"ok":"custom"}
+{"fn":"accentIdFor","args":["a.b.chello"],"ok":"custom"}
+{"fn":"accentIdFor","args":["helloa"],"ok":"custom"}
+{"fn":"accentIdFor","args":["a.b.cabc"],"ok":"custom"}
+{"fn":"accentIdFor","args":["ünïcödéline1\nline2"],"ok":"custom"}
+{"fn":"accentIdFor","args":["helloabc"],"ok":"custom"}
+{"fn":"accentIdFor","args":["./x/**/*.jsonhello world"],"ok":"custom"}
+{"fn":"accentIdFor","args":["./x/**/*.json.leading"],"ok":"custom"}
+{"fn":"accentIdFor","args":["a..bé"],"ok":"custom"}
+{"fn":"accentIdFor","args":["😀日本語のテキスト"],"ok":"custom"}
+{"fn":"accentIdFor","args":["line1\nline2ns:key.path"],"ok":"custom"}
+{"fn":"accentIdFor","args":["abchello"],"ok":"custom"}
+{"fn":"accentIdFor","args":["straße.leading"],"ok":"custom"}
+{"fn":"accentIdFor","args":["  padded  tab\tseparated"],"ok":"custom"}
+{"fn":"accentIdFor","args":["ünïcödé./x/**/*.json"],"ok":"custom"}
+{"fn":"accentIdFor","args":["😀Hello World"],"ok":"custom"}
+{"fn":"accentIdFor","args":["héllo wörld"],"ok":"custom"}
+{"fn":"accentIdFor","args":["👍🏽 thumbs"],"ok":"custom"}
+{"fn":"accentIdFor","args":["日本語"],"ok":"custom"}
+{"fn":"accentIdFor","args":["ılık ırmak"],"ok":"custom"}
+{"fn":"accentIdFor","args":["👨‍👩‍👧 family"],"ok":"custom"}
+{"fn":"accentIdFor","args":["a b"],"ok":"custom"}
+{"fn":"accentIdFor","args":["a😀b"],"ok":"custom"}
+{"fn":"accentIdFor","args":["Iı İi"],"ok":"custom"}
+{"fn":"accentIdFor","args":["K K k"],"ok":"custom"}
+{"fn":"accentIdFor","args":["ſ s S"],"ok":"custom"}
+{"fn":"accentIdFor","args":["x‍y 👨‍👩‍👧"],"ok":"custom"}
+{"fn":"accentIdFor","args":["a b c　d"],"ok":"custom"}
+{"fn":"accentIdFor","args":["١٢٣ ٤٥"],"ok":"custom"}
+{"fn":"accentIdFor","args":["𝟘𝟙 ²³"],"ok":"custom"}
+{"fn":"accentIdFor","args":["snake_case foo-bar o'neil"],"ok":"custom"}
+{"fn":"accentIdFor","args":["ǅungla Ǆ"],"ok":"custom"}
+{"fn":"accentIdFor","args":["one\r\ntwo threefour"],"ok":"custom"}
+{"fn":"accentIdFor","args":["café café"],"ok":"custom"}
+{"fn":"accentIdFor","args":["ΣΑΣ σας ς"],"ok":"custom"}

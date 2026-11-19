@@ -1,0 +1,24 @@
+// Toast: frontend/src/components/Toast.tsx — a bottom-centred pill.
+import { Palette, Typography } from "palette.slint";
+
+export component Toast inherits Rectangle {
+    in property <string> message: "";
+    width: text.width + 28px;
+    height: 30px;
+    border-radius: 999px;
+    background: Palette.surface-2;
+    border-width: 1px;
+    border-color: Palette.border;
+
+    text := Text {
+        text: root.message;
+        color: Palette.text-soft;
+        font-family: Typography.family;
+        font-size: 11px;
+        font-weight: 500;
+        x: 14px;
+        y: 0px;
+        height: parent.height;
+        vertical-alignment: center;
+    }
+}

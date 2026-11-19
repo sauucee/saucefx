@@ -1,0 +1,374 @@
+// Preset/output selectors: frontend/src/components/Selectors.tsx and
+// styles.css:400-660.
+import { Layout, Palette, Typography } from "palette.slint";
+
+export struct MenuEntry {
+    label: string,
+    detail: string,
+    is-group: bool,
+    disabled: bool,
+    selected: bool,
+}
+
+export component SelectorField inherits Rectangle {
+    in property <string> heading: "PRESET";
+    in property <string> value: "Default";
+    in property <string> detail: "";
+    in property <bool> enabled: true;
+    in property <bool> badge: false;
+    in property <bool> open: false;
+    callback clicked();
+
+    // Keyboard reachability: the reference select trigger is a labelled
+    // Base UI control, so Enter/Space/ArrowDown open the menu and focus can
+    // return here after the popup dismisses itself with Escape.
+    out property <bool> keyboard-focused: trigger-focus.has-focus;
+    public function take-focus() { trigger-focus.focus(); }
+
+    background: transparent;
+    height: Layout.field-heading-height + Layout.field-heading-gap + Layout.select-height;
+
+    VerticalLayout {
+        spacing: Layout.field-heading-gap;
+        HorizontalLayout {
+            height: Layout.field-heading-height;
+            spacing: 8px;
+            alignment: start;
+            Text {
+                text: root.heading;
+                color: Palette.muted;
+                font-family: Typography.family;
+                font-size: Typography.label;
+                font-weight: 600;
+                letter-spacing: 1.1px;
+                vertical-alignment: center;
+            }
+            if root.badge : Rectangle {
+                height: 14px;
+                width: badge-text.width + 10px;
+                border-radius: 4px;
+                background: Palette.accent-wash;
+                border-width: 1px;
+                border-color: Palette.accent-border;
+                badge-text := Text {
+                    text: "EDITED";
+                    x: 5px;
+                    y: 0px;
+                    color: Palette.accent;
+                    font-family: Typography.family;
+                    font-size: 8.5px;
+                    font-weight: 600;
+                    letter-spacing: 0.5px;
+                    vertical-alignment: center;
+                }
+            }
+        }
+
+        Rectangle {
+            height: Layout.select-height;
+            border-radius: Layout.select-radius;
+            opacity: root.enabled ? 1 : 0.48;
+            // styles.css .select-trigger:hover: surface-hover + border-strong;
+            // open and keyboard focus keep their stronger states.
+            background: root.open ? Palette.surface-2
+                : (ta.has-hover ? Palette.surface-hover : Palette.surface);
+            border-width: 1px;
+            border-color: root.open ? Palette.accent-border
+                : (trigger-focus.has-focus ? Palette.accent
+                : (ta.has-hover ? Palette.border-strong : Palette.border));
+            trigger-focus := FocusScope {
+                enabled: root.enabled;
+                width: parent.width;
+                height: parent.height;
+                key-pressed(event) => {
+                    if (event.text == Key.Return || event.text == Key.Space
+                        || event.text == Key.DownArrow) {
+                        root.clicked();
+                        return accept;
+                    }
+                    reject
+                }
+            }
+            ta := TouchArea {
+                enabled: root.enabled;
+                mouse-cursor: root.enabled ? pointer : default;
+                clicked => { trigger-focus.focus(); root.clicked(); }
+            }
+            HorizontalLayout {
+                padding-left: 13px;
+                padding-right: 13px;
+                spacing: 10px;
+                alignment: stretch;
+                VerticalLayout {
+                    horizontal-stretch: 1;
+                    spacing: 2px;
+                    alignment: center;
+                    Text {
+                        text: root.value;
+                        color: Palette.text;
+                        font-family: Typography.family;
+                        font-size: 12.5px;
+                        font-weight: 600;
+                        overflow: elide;
+                        horizontal-alignment: left;
+                        vertical-alignment: center;
+                    }
+                    if root.detail != "" : Text {
+                        text: root.detail;
+                        color: Palette.muted-2;
+                        font-family: Typography.family;
+                        font-size: 10px;
+                        overflow: elide;
+                        horizontal-alignment: left;
+                        vertical-alignment: center;
+                    }
+                }
+                Rectangle {
+                    width: 15px;
+                    height: parent.height;
+                    background: transparent;
+                    Path {
+                        y: (parent.height - 15px) / 2;
+                        width: 15px;
+                        height: 15px;
+                        viewbox-width: 24;
+                        viewbox-height: 24;
+                        // Fit the 24-unit viewbox into the 15px icon box. Do
+                        // NOT use `fit: preserve`: it bypasses the viewbox
+                        // fit and draws the commands as 24 device pixels,
+                        // clipping/offsetting the chevron.
+                        // lucide ChevronDown at size 15 / strokeWidth 1.9.
+                        stroke-width: 1.19px;
+                        stroke-line-cap: round;
+                        stroke-line-join: round;
+                        stroke: Palette.muted;
+                        commands: root.open ? "M 6 15 L 12 9 L 18 15" : "M 6 9 L 12 15 L 18 9";
+                    }
+                }
+            }
+        }
+    }
+}
+
+export component MenuPopup inherits Rectangle {
+    in property <[MenuEntry]> entries;
+    // Content y of every row in px, computed by the host from the same rows
+    // (group rows are 22px, entry rows 32px, 1px spacing). Slint pure
+    // functions cannot loop, so the host supplies the geometry the keyboard
+    // scroll needs.
+    in property <[float]> entry-offsets;
+    // First and last selectable row index, -1 when none (also host-computed:
+    // finding them needs a scan).
+    in property <int> first-enabled: -1;
+    in property <int> last-enabled: -1;
+    // Highlight on open: the selected row, like the reference keyboard-open.
+    in property <int> initial-highlight: -1;
+    callback activated(int);
+    callback dismissed();
+    private property <int> highlight: -1;
+
+    width: 292px;
+    // Hug the list, but cap at the reference popup max-height (320px) so a
+    // long list scrolls inside the flick instead of clipping at the window
+    // edge.
+    height: min(list.preferred-height, Layout.menu-max-height) + 10px;
+    border-radius: 10px;
+    background: Palette.surface;
+    border-width: 1px;
+    border-color: Palette.border;
+    // styles.css .select-popup carries a 38px-blur drop shadow; imitate the
+    // soft dark halo with an offset translucent layer behind the panel.
+    Rectangle {
+        x: -12px;
+        y: -2px;
+        width: parent.width + 24px;
+        height: parent.height + 24px;
+        border-radius: 16px;
+        background: #00000045;
+    }
+
+    keyboard := FocusScope {
+        width: parent.width;
+        height: parent.height;
+
+        key-pressed(event) => {
+            if (event.text == Key.DownArrow || event.text == Key.UpArrow) {
+                let index = root.next-enabled(root.highlight, event.text == Key.DownArrow ? 1 : -1);
+                if (index >= 0) {
+                    root.highlight = index;
+                    root.ensure-visible(index);
+                    return accept;
+                }
+                reject
+            } else if (event.text == Key.Home || event.text == Key.End) {
+                let index = event.text == Key.Home ? root.first-enabled : root.last-enabled;
+                if (index >= 0) {
+                    root.highlight = index;
+                    root.ensure-visible(index);
+                    return accept;
+                }
+                reject
+            } else if (event.text == Key.Return) {
+                if (root.highlight >= 0 && root.highlight < root.entries.length) {
+                    if (!root.entries[root.highlight].is-group && !root.entries[root.highlight].disabled) {
+                        root.activated(root.highlight);
+                    }
+                }
+                return accept;
+            } else if (event.text == Key.Escape) {
+                root.dismissed();
+                return accept;
+            } else {
+                reject
+            }
+        }
+
+        flick := Flickable {
+            x: 5px;
+            y: 5px;
+            width: parent.width - 10px;
+            height: min(parent.height - 10px, Layout.menu-max-height);
+            content-width: self.width;
+            content-height: list.preferred-height;
+            interactive: list.preferred-height > self.height;
+
+            list := VerticalLayout {
+                spacing: 1px;
+                for entry[i] in root.entries : Rectangle {
+                    height: entry.is-group ? 22px : 32px;
+                    background: (entry.selected && !entry.is-group) || root.highlight == i ? Palette.accent-wash : transparent;
+                    border-radius: 6px;
+
+                    if entry.is-group : Text {
+                        text: entry.label;
+                        x: 8px;
+                        y: 0px;
+                        color: Palette.muted-2;
+                        font-family: Typography.family;
+                        font-size: 9px;
+                        font-weight: 600;
+                        letter-spacing: 1.1px;
+                        vertical-alignment: center;
+                    }
+
+                    if !entry.is-group : HorizontalLayout {
+                        padding-left: 8px;
+                        padding-right: 8px;
+                        spacing: 8px;
+                        // The reference item: label left, check right, no
+                        // detail line for presets; text stays text-soft and
+                        // the selection only changes the wash + check.
+                        VerticalLayout {
+                            horizontal-stretch: 1;
+                            spacing: 1px;
+                            alignment: center;
+                            HorizontalLayout {
+                                spacing: 6px;
+                                alignment: start;
+                                Text {
+                                    text: entry.label;
+                                    color: entry.disabled ? Palette.muted-2 : Palette.text-soft;
+                                    font-family: Typography.family;
+                                    font-size: 12px;
+                                    font-weight: 400;
+                                    vertical-alignment: center;
+                                    overflow: elide;
+                                }
+                                if entry.detail == "Custom" : Rectangle {
+                                    width: tag-text.width + 8px;
+                                    height: 14px;
+                                    border-width: 1px;
+                                    border-radius: 3px;
+                                    border-color: Palette.border;
+                                    tag-text := Text {
+                                        x: 4px;
+                                        text: entry.detail;
+                                        color: Palette.muted-2;
+                                        font-family: Typography.family;
+                                        font-size: 8px;
+                                        font-weight: 600;
+                                        vertical-alignment: center;
+                                    }
+                                }
+                            }
+                            if entry.detail != "" && entry.detail != "Custom" : Text {
+                                text: entry.detail;
+                                color: Palette.muted-2;
+                                font-family: Typography.family;
+                                font-size: 9.5px;
+                                vertical-alignment: center;
+                                overflow: elide;
+                            }
+                        }
+                        if entry.selected : Path {
+                            width: 10px;
+                            height: 8px;
+                            stroke-width: 1.6px;
+                            stroke: Palette.accent;
+                            commands: "M 0 4 L 3.6 7.6 L 10 0";
+                        }
+                    }
+
+                    if !entry.is-group && !entry.disabled : TouchArea {
+                        mouse-cursor: pointer;
+                        // Base UI marks the row under the pointer
+                        // data-highlighted exactly like the keyboard highlight,
+                        // so hovering moves the shared highlight and the row
+                        // background above paints it.
+                        changed has-hover => {
+                            if (self.has-hover) { root.highlight = i; }
+                        }
+                        clicked => { root.activated(i); }
+                    }
+                }
+            }
+        }
+    }
+
+    pure function wrap(index: int) -> int {
+        let total = root.entries.length;
+        return index < 0 ? total - 1 : (index >= total ? 0 : index);
+    }
+
+    pure function selectable(index: int) -> bool {
+        return index >= 0 && index < root.entries.length
+            && !root.entries[index].is-group && !root.entries[index].disabled;
+    }
+
+    pure function next-enabled(start: int, direction: int) -> int {
+        let first = wrap(start + direction);
+        let second = wrap(first + direction);
+        let third = wrap(second + direction);
+        let fourth = wrap(third + direction);
+        return selectable(first) ? first
+            : selectable(second) ? second
+            : selectable(third) ? third
+            : selectable(fourth) ? fourth
+            : -1;
+    }
+
+    // Keep the highlighted row inside the flick view, like the reference
+    // select scrolling the active option into view. `content-y` is the
+    // distance scrolled from the top (0..content-height - height).
+    function ensure-visible(index: int) {
+        if (index < 0 || index >= root.entries.length || index >= root.entry-offsets.length) {
+            return;
+        }
+        let top = root.entry-offsets[index] * 1px;
+        let bottom = top + (root.entries[index].is-group ? 22px : 32px);
+        let lowest = flick.content-height - flick.height;
+        if (top < flick.content-y) {
+            flick.content-y = clamp(top, 0, lowest);
+        } else if (bottom > flick.content-y + flick.height) {
+            flick.content-y = clamp(bottom - flick.height, 0, lowest);
+        }
+    }
+
+    init => {
+        keyboard.focus();
+        if (root.initial-highlight >= 0) {
+            root.highlight = root.initial-highlight;
+            root.ensure-visible(root.initial-highlight);
+        }
+    }
+}

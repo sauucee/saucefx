@@ -1,0 +1,239 @@
+# Packages for the Rust/Slint native UI. Builds every format from source on
+# GitHub (the DSP archives are compiled here, never committed). Reusable:
+# release.yml calls this on v* tags and publishes the artifacts. Pushes to
+# the development branch and manual dispatch also build all formats.
+name: Native packages
+
+on:
+  workflow_dispatch:
+  workflow_call:
+  push:
+    branches: [rust-native-ui]
+
+permissions:
+  contents: read
+
+jobs:
+  appimage:
+    name: Portable AppImage (native UI)
+    runs-on: ubuntu-22.04
+    env:
+      SAUCEFX_BUILD_JOBS: '2'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      # Skia's C++ build needs a recent clang; jammy's default is too old.
+      - name: Install LLVM 18
+        run: |
+          curl -fsSL https://apt.llvm.org/llvm.sh | sudo bash -s 18
+          sudo apt-get install -y libclang-18-dev
+          sudo update-alternatives --install /usr/bin/clang clang /usr/bin/clang-18 100
+          sudo update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-18 100
+
+      - name: Install build and smoke-test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            g++ make pkg-config curl file patchelf ninja-build \
+            libpipewire-0.3-dev libpulse-dev libasound2-dev \
+            libx11-dev libxext-dev libxinerama-dev libxrandr-dev \
+            libxcursor-dev libxcomposite-dev libfreetype6-dev libfontconfig1-dev \
+            libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev \
+            libxkbcommon-dev libxkbcommon-x11-0 \
+            desktop-file-utils imagemagick \
+            pipewire pipewire-pulse wireplumber pulseaudio-utils \
+            dbus-x11 xvfb xauth python3
+
+      - name: Build AppImage
+        env:
+          CC: clang-18
+          CXX: clang++-18
+          LIBCLANG_PATH: /usr/lib/llvm-18/lib
+        run: packaging/native/appimage/build-appimage.sh
+
+      - name: Smoke-test portable AppImage
+        run: packaging/native/appimage/smoke-test.sh release/SauceFX-*-x86_64.AppImage
+
+      - name: Upload AppImage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: saucefx-native-appimage
+          path: release/*.AppImage
+          if-no-files-found: error
+
+  flatpak:
+    name: Flatpak bundle (native UI)
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      # The 26.08 SDK has no clang/libclang and no llvm extension exists for
+      # the branch, so the Skia host is built on the runner (same toolchain
+      # as the AppImage) and the manifest installs the prebuilt tree.
+      - name: Install LLVM 18
+        run: |
+          curl -fsSL https://apt.llvm.org/llvm.sh | sudo bash -s 18
+          sudo apt-get install -y libclang-18-dev
+          sudo update-alternatives --install /usr/bin/clang clang /usr/bin/clang-18 100
+          sudo update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-18 100
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            g++ make pkg-config ninja-build \
+            libpipewire-0.3-dev libpulse-dev libfreetype6-dev libfontconfig1-dev \
+            libgl1-mesa-dev libegl1-mesa-dev libxkbcommon-dev libxkbcommon-x11-0
+
+      - name: Build host (Skia)
+        env:
+          CC: clang-18
+          CXX: clang++-18
+          LIBCLANG_PATH: /usr/lib/llvm-18/lib
+        run: |
+          make -C src rt -j2
+          CARGO_BUILD_JOBS=2 cargo build --release -p saucefx-host \
+            --no-default-features --features renderer-skia
+
+      - name: Stage install tree
+        run: |
+          S=packaging/native/flatpak/flatpak-stage
+          mkdir -p "$S"
+          install -Dm0755 target/release/saucefx "$S/SauceFX"
+          cp -a presets "$S/presets"
+          install -Dm0644 packaging/linux/io.github.sauucee.SauceFX.desktop \
+            "$S/io.github.sauucee.SauceFX.desktop"
+          install -Dm0644 packaging/linux/io.github.sauucee.SauceFX.metainfo.xml \
+            "$S/io.github.sauucee.SauceFX.metainfo.xml"
+          install -Dm0644 assets/Images/saucefx-logo-512.png \
+            "$S/io.github.sauucee.SauceFX.png"
+          install -Dm0644 LICENSE "$S/LICENSE"
+
+      - name: Install Flatpak tooling and runtimes
+        run: |
+          sudo apt-get install -y flatpak flatpak-builder appstream desktop-file-utils \
+            pipewire pipewire-pulse wireplumber pulseaudio-utils dbus-x11 xvfb xauth
+          flatpak remote-add --user --if-not-exists flathub \
+            https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user -y --noninteractive flathub \
+            org.gnome.Platform//51 org.gnome.Sdk//51 org.freedesktop.Sdk//26.08
+
+      - name: Build Flatpak
+        run: packaging/native/flatpak/build-flatpak.sh
+
+      - name: Install bundle and launch-check
+        run: |
+          flatpak install --user -y --noninteractive release/SauceFX-*-x86_64.flatpak
+          flatpak run --no-documents-portal --command=sh io.github.sauucee.SauceFX -c 'command -v zenity'
+          packaging/native/flatpak/smoke-test.sh
+
+      - name: Upload Flatpak artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: saucefx-native-flatpak
+          path: release/*.flatpak
+          if-no-files-found: error
+
+  arch:
+    name: Arch pacman package (native UI)
+    runs-on: ubuntu-24.04
+    container: archlinux:base-devel
+    steps:
+      - name: Install build dependencies
+        run: |
+          # Every PKGBUILD depends/makedepends must be present up front:
+          # makepkg runs as an unprivileged user and cannot sudo-install.
+          pacman -Syu --noconfirm --needed \
+            git nodejs rust clang ninja pkgconf \
+            pipewire pipewire-pulse libpulse libxkbcommon fontconfig freetype2 libglvnd \
+            zenity desktop-file-utils hicolor-icon-theme
+
+      - uses: actions/checkout@v4
+
+      - name: Build package
+        run: packaging/native/arch/build-pkg.sh
+
+      - name: Upload Arch artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: saucefx-native-arch
+          path: release/*.pkg.tar.zst
+          if-no-files-found: error
+
+  rpm:
+    name: RPM package (native UI)
+    runs-on: ubuntu-24.04
+    container: fedora:42
+    steps:
+      - name: Install build dependencies
+        run: |
+          dnf install -y git nodejs gcc-c++ make rust cargo clang llvm-devel \
+            ninja-build pkgconf-pkg-config pipewire-devel pulseaudio-libs-devel \
+            fontconfig-devel freetype-devel libxkbcommon-devel mesa-libGL-devel \
+            mesa-libEGL-devel desktop-file-utils libappstream-glib appstream rpm-build
+
+      - uses: actions/checkout@v4
+
+      - name: Build package
+        run: packaging/native/rpm/build-rpm.sh
+
+      - name: Upload RPM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: saucefx-native-rpm
+          path: release/*.rpm
+          if-no-files-found: error
+
+  deb:
+    name: DEB package (native UI)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Install LLVM 18
+        run: |
+          curl -fsSL https://apt.llvm.org/llvm.sh | sudo bash -s 18
+          sudo apt-get install -y libclang-18-dev
+          sudo update-alternatives --install /usr/bin/clang clang /usr/bin/clang-18 100
+          sudo update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-18 100
+
+      - name: Install build and package dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            g++ make pkg-config ninja-build \
+            libpipewire-0.3-dev libpulse-dev libfreetype6-dev libfontconfig1-dev \
+            libgl1-mesa-dev libegl1-mesa-dev libxkbcommon-dev libxkbcommon-x11-0 \
+            desktop-file-utils dpkg-dev
+
+      - name: Build host (Skia)
+        env:
+          CC: clang-18
+          CXX: clang++-18
+          LIBCLANG_PATH: /usr/lib/llvm-18/lib
+        run: |
+          make -C src rt -j2
+          CARGO_BUILD_JOBS=2 cargo build --release -p saucefx-host \
+            --no-default-features --features renderer-skia
+
+      - name: Build package
+        run: packaging/native/deb/build-deb.sh
+
+      - name: Upload DEB artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: saucefx-native-deb
+          path: release/*.deb
+          if-no-files-found: error

@@ -1,0 +1,51 @@
+# Native UI Flatpak bundle manifest. Same app-id as the released JUCE app
+# (upgrade path). The 26.08 SDK ships no clang/libclang and no llvm
+# extension exists for the branch, so CI builds the Skia host on the runner
+# (glibc 2.35 base, forward-compatible with the runtime's newer glibc) and
+# this manifest installs the prebuilt tree. zenity is built from source so
+# the import/export choosers work inside the sandbox. A future Flathub
+# submission can move the host build into the sandbox with an LLVM module.
+app-id: io.github.sauucee.SauceFX
+runtime: org.gnome.Platform
+runtime-version: '51'
+sdk: org.gnome.Sdk
+command: SauceFX
+
+finish-args:
+  - --share=ipc
+  - --socket=x11
+  - --socket=wayland
+  - --socket=pulseaudio
+  - --device=dri
+  - --filesystem=xdg-run/pipewire-0
+  - --filesystem=xdg-download
+  - --filesystem=xdg-config/autostart:create
+
+modules:
+  # The host's import/export choosers call zenity; build it so the sandbox
+  # is self-sufficient regardless of what the runtime ships.
+  - name: zenity
+    buildsystem: meson
+    config-opts:
+      - -Dbuildtype=release
+    sources:
+      - type: archive
+        url: https://gitlab.gnome.org/GNOME/zenity/-/archive/4.0.2/zenity-4.0.2.tar.gz
+        sha256: fdbb74e882a6a56bb2f1a2381b81e08b06c627cc7e944edb71d107092c70dd80
+
+  - name: saucefx
+    buildsystem: simple
+    build-commands:
+      - install -Dm0755 SauceFX /app/bin/SauceFX
+      - install -d /app/share/saucefx
+      - cp -a presets /app/share/saucefx/presets
+      - install -Dm0644 io.github.sauucee.SauceFX.desktop
+          /app/share/applications/io.github.sauucee.SauceFX.desktop
+      - install -Dm0644 io.github.sauucee.SauceFX.metainfo.xml
+          /app/share/metainfo/io.github.sauucee.SauceFX.metainfo.xml
+      - install -Dm0644 io.github.sauucee.SauceFX.png
+          /app/share/icons/hicolor/512x512/apps/io.github.sauucee.SauceFX.png
+      - install -Dm0644 LICENSE /app/share/licenses/io.github.sauucee.SauceFX/LICENSE
+    sources:
+      - type: dir
+        path: flatpak-stage

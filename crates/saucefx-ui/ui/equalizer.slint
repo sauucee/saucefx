@@ -1,0 +1,506 @@
+// 31-band graphic EQ: frontend/src/components/Equalizer.tsx geometry, bands and
+// ranges from data.ts (20 Hz..20 kHz, +-12 dB). The trace is a real path built
+// from the 31 gain values by the binding layer.
+import { Layout, Palette, Typography } from "palette.slint";
+
+export component EqualizerPanel inherits Rectangle {
+    in property <[float]> gains;
+    in property <string> curve-commands;
+    in property <string> fill-commands;
+    in property <[string]> labels;
+    in property <[float]> label-positions;
+    in property <string> readout: "";
+    in property <bool> enabled: true;
+    in property <bool> keyboard-enabled: true;
+    // Band whose readout is currently shown, mirroring Equalizer.tsx
+    // `activeBand`. Slint sends the new cell's hover before the old cell's
+    // exit, so exits must not clear a readout another cell already claimed.
+    private property <int> active-band: -1;
+    callback band-changed(int, float);
+    callback band-hovered(int);
+    callback band-blurred(int);
+    callback band-stepped(int, int);
+    callback band-reset(int);
+    callback reset-all();
+
+    VerticalLayout {
+        width: parent.width;
+        height: parent.height;
+        padding-top: Layout.panel-head-pad-top;
+        padding-left: Layout.panel-head-pad-h;
+        padding-right: Layout.panel-head-pad-h;
+        padding-bottom: 0px;
+        // styles.css .eq-plot margin-top 2px between the head and the plot.
+        spacing: 2px;
+
+        HorizontalLayout {
+            spacing: 8px;
+            // styles.css `.eq-panel-head` padding is `14px 15px 4px`; the 4px
+            // bottom edge is what puts the chart at the reference y=337.59
+            // (measured DOM), so it belongs to the head, not to the plot.
+            padding-bottom: 4px;
+            VerticalLayout {
+                spacing: 3px;
+                Text {
+                    text: "Equalizer";
+                    color: Palette.text;
+                    // styles.css .panel.is-disabled dims .panel-title to 0.55;
+                    // verified in the reference capture pair (title/subtitle
+                    // are the ONLY plot-external pixels that change).
+                    opacity: root.enabled ? 1 : 0.55;
+                    font-family: Typography.family;
+                    font-size: Typography.title;
+                    font-weight: 600;
+                    vertical-alignment: center;
+                }
+                // Equalizer.tsx replaces the subtitle with the hover/focus readout.
+                Text {
+                    text: root.readout == "" ? "31 bands \u{00b7} \u{00b1}12 dB" : root.readout;
+                    color: root.readout == "" ? Palette.muted-2 : Palette.accent;
+                    // Same .panel.is-disabled .panel-subtitle 0.55 dim.
+                    opacity: root.enabled ? 1 : 0.55;
+                    font-family: Typography.family;
+                    font-size: Typography.small;
+                    font-weight: root.readout == "" ? 400 : 600;
+                    vertical-alignment: center;
+                }
+            }
+            Rectangle { horizontal-stretch: 1; }
+            // styles.css .icon-button: 28x28, 6px radius, no border at rest.
+            // The reference renders the disabled reset icon unchanged: Base UI
+            // never sets the native `disabled` attribute (aria-disabled only),
+            // so `.icon-button:disabled` never matches and the glyph keeps its
+            // rest pixels — verified pixel-identical in the reference pair.
+            // Only the TouchArea below gates the interaction.
+            Rectangle {
+                width: Layout.icon-button;
+                height: Layout.icon-button;
+                border-radius: 6px;
+                background: reset-ta.has-hover && root.enabled ? Palette.surface-hover : transparent;
+                Path {
+                    // lucide RotateCcw (the reference reset glyph).
+                    //
+                    // styles.css .icon-button is a 28x28 inline-flex box with
+                    // align-items:center, so the glyph box centres in it; the
+                    // path is symmetric in the 24-unit viewbox, so centring
+                    // the box centres the ink and no x/y offset belongs here.
+                    //
+                    // Slint paints `stroke-width` in element pixels instead of
+                    // scaling it by the viewbox, and insets the viewbox by that
+                    // width, so the obvious 14px box with stroke-width 1.9px
+                    // rendered a glyph thinner in reach and ~1.5x heavier in ink
+                    // than the reference (11px of ink instead of 11.6px, with
+                    // half-covered edge pixels). The reference is a 14px SVG
+                    // whose 1.9-unit stroke is 1.9 * 14 / 24 = 1.11 element
+                    // pixels, so take that as the stroke and widen the box to
+                    // 15px to give back the extent the stroke inset removes.
+                    x: (parent.width - 15px) / 2;
+                    y: (parent.height - 15px) / 2;
+                    width: 15px;
+                    height: 15px;
+                    viewbox-width: 24;
+                    viewbox-height: 24;
+                    stroke-width: 1.11px;
+                    stroke: reset-ta.has-hover ? Palette.text : Palette.muted;
+                    commands: "M 3 12 A 9 9 0 1 0 12 3 A 9.75 9.75 0 0 0 5.26 5.74 L 3 8 M 3 3 L 3 8 L 8 8";
+                }
+                reset-ta := TouchArea {
+                    enabled: root.enabled;
+                    mouse-cursor: root.enabled ? pointer : default;
+                    clicked => { root.reset-all(); }
+                }
+            }
+        }
+
+        plot := Rectangle {
+            vertical-stretch: 1;
+            background: transparent;
+
+        chart := Rectangle {
+            x: 0;
+            y: Layout.eq-chart-inset-top;
+            width: parent.width - Layout.eq-chart-inset-right;
+            height: parent.height - Layout.eq-chart-inset-top - Layout.eq-chart-inset-bottom;
+            background: transparent;
+
+            // Equalizer.tsx draws the guides in its 200-unit viewBox, stretched
+            // to the plot: horizontal lines at viewBox y = 12/56/100/144/188
+            // (the middle one is the stronger zero line) and vertical lines at
+            // 20/40/60/80% of the width spanning y=12..188 with a 2px-on /
+            // 4px-off dash. They are not at 0/25/50/75/100%.
+            for i in 5 : Rectangle {
+                x: 0;
+                width: parent.width;
+                height: 1px;
+                y: parent.height * (12 + i * 44) / 200;
+                background: i == 2 ? Palette.eq-zero : Palette.eq-grid;
+            }
+
+            for step[i] in [0.2, 0.4, 0.6, 0.8] : Rectangle {
+                x: parent.width * step;
+                width: 1px;
+                height: parent.height;
+                background: transparent;
+
+                // Bounded dash repeat: viewBox y=12..188 in 6-unit steps.
+                for dash[j] in 30 : Rectangle {
+                    x: 0;
+                    width: 1px;
+                    height: 2px;
+                    y: parent.height * (12 + j * 6) / 200;
+                    visible: 12 + j * 6 + 2 <= 188;
+                    background: Palette.eq-grid;
+                }
+            }
+
+            // Equalizer.tsx draws the trace in a 1000x200 viewBox with
+            // preserveAspectRatio="none", i.e. a plain stretch. Slint's Path
+            // defaults to `fit: contain`, which preserves the aspect ratio, and
+            // its fitted area is the element box minus the stroke width with a
+            // half-stroke offset. Both are corrected here: `fit: fill` matches
+            // the source, and growing each box by the stroke while shifting it
+            // by half the stroke makes the fitted bounds exactly chart-sized, so
+            // the curve, the thumbs and the hit cells agree.
+            //
+            // Power does not hide the trace, and it changes nothing else in
+            // the plot either. Equalizer.tsx renders the fill and `.eq-curve`
+            // unconditionally (styles.css: `stroke: var(--accent)`, fill
+            // gradient with no disabled variant); the `.slider[data-disabled]`
+            // opacity rule only matches the EffectRack sliders (className
+            // `slider`), never these bands, so the thumbs keep their accent
+            // disks at full opacity when disabled; and the reference pair has
+            // the plot pixel-identical between power states. The whole
+            // power-off delta is the head dimming above; disabling still
+            // leaves the bands inert through the FocusScope/TouchArea guards
+            // below. There is no "Paused" overlay in the reference.
+            Path {
+                x: 0px - Layout.eq-curve-stroke / 2;
+                y: 0px - Layout.eq-curve-stroke / 2;
+                width: parent.width + Layout.eq-curve-stroke;
+                height: parent.height + Layout.eq-curve-stroke;
+                commands: root.fill-commands;
+                viewbox-width: 1000;
+                viewbox-height: 200;
+                fit: fill;
+                fill: Palette.accent.with-alpha(0.10);
+                stroke: transparent;
+                stroke-width: Layout.eq-curve-stroke;
+            }
+
+            Path {
+                x: 0px - Layout.eq-curve-stroke / 2;
+                y: 0px - Layout.eq-curve-stroke / 2;
+                width: parent.width + Layout.eq-curve-stroke;
+                height: parent.height + Layout.eq-curve-stroke;
+                commands: root.curve-commands;
+                viewbox-width: 1000;
+                viewbox-height: 200;
+                fit: fill;
+                stroke: Palette.accent;
+                stroke-width: Layout.eq-curve-stroke;
+                fill: transparent;
+            }
+
+            // 31 focusable band sliders, 1 dB keyboard steps, right-click reset.
+            // Equalizer.tsx .eq-band is `flex: 1 1 0`, so each band owns its
+            // whole pitch slice: centres, gaps between thumbs and the plot
+            // edges all land on a cell. Thumb/curve geometry is unchanged.
+            for band[i] in Layout.eq-bands : Rectangle {
+                // Source `.eq-band` is `flex: 1 1 0`, so the 31 cells abut
+                // across the whole chart: no dead strip between bands and no
+                // strip outside the first/last cell. Both edges of every cell
+                // come from the same `width * index / count` expression, so a
+                // shared boundary evaluates to one identical value and cell 31
+                // lands exactly on the chart's right edge.
+                x: (parent.width * i) / Layout.eq-bands;
+                width: (parent.width * (i + 1)) / Layout.eq-bands - (parent.width * i) / Layout.eq-bands;
+                height: parent.height;
+                background: transparent;
+
+                focus := FocusScope {
+                    // Pointer focus is real focus so arrow keys work after a
+                    // click, but the styles.css `:focus-visible` halo/readout
+                    // affordance belongs to keyboard-acquired focus only.
+                    private property <bool> keyboard-visible: false;
+                    enabled: root.keyboard-enabled && root.enabled;
+                    // Focus is taken explicitly on press so its reason is
+                    // Programmatic, which Slint reports synchronously here.
+                    focus-on-click: false;
+                    width: parent.width;
+                    height: parent.height;
+                    focus-gained(reason) => {
+                        if (reason == FocusReason.programmatic) {
+                            self.keyboard-visible = false;
+                        } else {
+                            self.keyboard-visible = true;
+                            root.active-band = i;
+                            root.band-hovered(i);
+                        }
+                    }
+                    focus-lost(reason) => {
+                        self.keyboard-visible = false;
+                        // Keyboard focus leaving must not wipe a readout the
+                        // pointer still owns: only clear when this cell is not
+                        // hovered. A genuine hover keeps its readout; a real
+                        // mouse leave clears it through `has-hover` below.
+                        if (root.active-band == i && !touch.has-hover) {
+                            root.active-band = -1;
+                            root.band-blurred(i);
+                        }
+                    }
+                    key-pressed(event) => {
+                        if (root.keyboard-enabled && root.enabled) {
+                            // Slint 1.18 reports the arrow keys as the
+                            // private-use Key codes (U+F700 Up, U+F701 Down,
+                            // U+F702 Left, U+F703 Right), not as
+                            // "ArrowUp"/"ArrowDown" text. The `Key` enum is
+                            // the verified spelling of those same codes.
+                            if (event.text == Key.UpArrow || event.text == Key.RightArrow) {
+                                self.keyboard-visible = true;
+                                root.active-band = i;
+                                root.band-hovered(i);
+                                root.band-stepped(i, 1);
+                                return accept;
+                            }
+                            if (event.text == Key.DownArrow || event.text == Key.LeftArrow) {
+                                self.keyboard-visible = true;
+                                root.active-band = i;
+                                root.band-hovered(i);
+                                root.band-stepped(i, -1);
+                                return accept;
+                            }
+                            // The reference range input steps 10 dB per page
+                            // key and jumps to its limits on Home/End (±24
+                            // always clamps somewhere inside ±12).
+                            if (event.text == Key.Home) {
+                                self.keyboard-visible = true;
+                                root.active-band = i;
+                                root.band-hovered(i);
+                                root.band-stepped(i, -24);
+                                return accept;
+                            }
+                            if (event.text == Key.End) {
+                                self.keyboard-visible = true;
+                                root.active-band = i;
+                                root.band-hovered(i);
+                                root.band-stepped(i, 24);
+                                return accept;
+                            }
+                            if (event.text == Key.PageUp || event.text == Key.PageDown) {
+                                self.keyboard-visible = true;
+                                root.active-band = i;
+                                root.band-hovered(i);
+                                root.band-stepped(i, event.text == Key.PageUp ? 10 : -10);
+                                return accept;
+                            }
+                        }
+                        reject
+                    }
+                }
+
+                // The hovered cell gets a 1px accent guide at its centre,
+                // spanning the same viewBox 12..188 extent as the vertical
+                // guides. It is bound to this cell's live hover state, so it
+                // moves with the pointer from cell to cell and leaves with it;
+                // resting bands draw nothing and no geometry changes size.
+                Rectangle {
+                    x: (parent.width - 1px) / 2;
+                    width: 1px;
+                    y: parent.height * 12 / 200;
+                    height: parent.height * (188 - 12) / 200;
+                    background: Palette.accent-border;
+                    visible: touch.has-hover && root.enabled;
+                }
+
+                // styles.css .eq-thumb: 6x6 circle, 1.5px surface ring, 1.3x
+                // on hover/focus, 1.5x while dragging. No disabled dimming:
+                // `.eq-band .slider[data-disabled]` never matches these bands
+                // (the EQ Slider.Root carries no `slider` class), and the
+                // reference pair keeps the plot identical when power is off.
+                // Slint has no transform, so the scaled states grow the geometry.
+                // styles.css .eq-thumb: the accent disk is 6px and the 1.5px
+                // surface ring is a box-shadow, i.e. outside the disk. Drawing
+                // it as a 1.5px border shrank the pink core to 2px, so the ring
+                // is a separate circle behind the disk. Both stay centred on the
+                // same point, so band centres and hit cells are untouched.
+                Rectangle {
+                    property <length> thumb-size: touch.pressed ? 9px : (touch.has-hover || focus.keyboard-visible ? 8px : 6px);
+                    property <length> ring-size: 1.5px;
+                    property <length> centre: max(thumb-size / 2 + ring-size, min(parent.height - thumb-size / 2 - ring-size, (12 + (12 - root.gains[i]) / 24 * 176) / 200 * parent.height));
+                    x: (parent.width - thumb-size - ring-size * 2) / 2;
+                    y: centre - (thumb-size / 2) - ring-size;
+                    width: thumb-size + ring-size * 2;
+                    height: thumb-size + ring-size * 2;
+                    border-radius: (thumb-size + ring-size * 2) / 2;
+                    background: Palette.surface;
+                }
+                Rectangle {
+                    property <length> thumb-size: touch.pressed ? 9px : (touch.has-hover || focus.keyboard-visible ? 8px : 6px);
+                    property <length> ring-size: 1.5px;
+                    property <length> centre: max(thumb-size / 2 + ring-size, min(parent.height - thumb-size / 2 - ring-size, (12 + (12 - root.gains[i]) / 24 * 176) / 200 * parent.height));
+                    x: (parent.width - thumb-size) / 2;
+                    y: centre - thumb-size / 2;
+                    width: thumb-size;
+                    height: thumb-size;
+                    border-radius: thumb-size / 2;
+                    // The disk stays accent when power is off: the reference
+                    // pair has the plot pixel-identical in both states (the
+                    // `.slider[data-disabled]` dim never reaches these bands).
+                    background: Palette.accent;
+                }
+
+                // accent-wash focus/drag halo behind the thumb.
+                if focus.keyboard-visible || touch.pressed : Rectangle {
+                    property <length> halo-size: 15px;
+                    x: (parent.width - halo-size) / 2;
+                    y: max(0px, min(parent.height - halo-size, (12 + (12 - root.gains[i]) / 24 * 176) / 200 * parent.height - halo-size / 2));
+                    width: halo-size;
+                    height: halo-size;
+                    border-radius: halo-size / 2;
+                    border-width: 4px;
+                    border-color: Palette.accent-wash-strong;
+                    background: transparent;
+                }
+
+                touch := TouchArea {
+                    // A modal owns pointer editing too, not just the keyboard.
+                    // Power alone is not enough while a grab is still active.
+                    enabled: root.enabled && root.keyboard-enabled;
+                    mouse-cursor: root.enabled && root.keyboard-enabled ? ns-resize : default;
+                    changed has-hover => {
+                        if (self.has-hover) {
+                            root.active-band = i;
+                            root.band-hovered(i);
+                        } else {
+                            // Equalizer.tsx onPointerLeave clears the hover
+                            // readout, but only if no neighbouring cell already
+                            // claimed it during the same move. The real focus
+                            // stays on this band so Up/Down still target a
+                            // clicked band after the pointer leaves; the halo
+                            // and readout stay hidden because keyboard-visible
+                            // is still false.
+                            if (root.active-band == i) {
+                                root.active-band = -1;
+                                root.band-blurred(i);
+                            }
+                        }
+                    }
+                    moved => {
+                        if (self.pressed && root.enabled && root.keyboard-enabled) {
+                            let gain = 12 - ((self.mouse-y / self.height * 200 - 12) / 176) * 24;
+                            root.band-changed(i, max(-12, min(12, round(gain))));
+                        }
+                    }
+                    clicked => {
+                        if (root.enabled && root.keyboard-enabled) {
+                            root.active-band = i;
+                            root.band-hovered(i);
+                            let gain = 12 - ((self.mouse-y / self.height * 200 - 12) / 176) * 24;
+                            root.band-changed(i, max(-12, min(12, round(gain))));
+                        }
+                    }
+                    double-clicked => {
+                        if (root.enabled && root.keyboard-enabled) { root.band-reset(i); }
+                    }
+                    pointer-event(event) => {
+                        if (event.kind == PointerEventKind.move) {
+                            root.active-band = i;
+                            root.band-hovered(i);
+                        }
+                        if (event.kind == PointerEventKind.down && root.enabled && root.keyboard-enabled) {
+                            if (event.button == PointerEventButton.left) {
+                                // Programmatic focus so focus-gained can tell a
+                                // press apart from Tab navigation.
+                                focus.focus();
+                            } else if (event.button == PointerEventButton.right) {
+                                root.band-reset(i);
+                            }
+                        }
+                    }
+                }
+
+            }
+        }
+
+        // 11 frequency labels along the same band positions (Equalizer.tsx:186-194)
+        // and the right-hand dB scale, both anchored to the plot bottom.
+        label-row := Rectangle {
+            x: 0;
+            y: parent.height - Layout.eq-frequency-height;
+            width: parent.width - Layout.eq-chart-inset-right;
+            height: Layout.eq-frequency-height;
+            background: transparent;
+            for label[i] in labels : Text {
+                text: label;
+                color: Palette.muted-2;
+                font-family: Typography.family;
+                font-size: 8.5px;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+                x: parent.width * (i < label-positions.length ? label-positions[i] : 0) - self.width / 2;
+                width: 40px;
+                height: parent.height;
+            }
+        }
+
+        // styles.css .eq-scale: 19px wide, top 3px, bottom 20px, three labels
+        // distributed space-between (+12 / 0 / -12).
+        Rectangle {
+            x: parent.width - Layout.eq-scale-width;
+            y: Layout.eq-chart-inset-top;
+            width: Layout.eq-scale-width;
+            height: parent.height - Layout.eq-chart-inset-top - Layout.eq-chart-inset-bottom;
+            background: transparent;
+            Text {
+                text: "+12";
+                x: 0;
+                y: 0;
+                width: parent.width;
+                height: 8.5px;
+                color: Palette.muted-2;
+                font-family: Typography.family;
+                font-size: 8.5px;
+                horizontal-alignment: right;
+                vertical-alignment: center;
+            }
+            Text {
+                text: "0";
+                x: 0;
+                y: (parent.height - 8.5px) / 2;
+                width: parent.width;
+                height: 8.5px;
+                color: Palette.muted-2;
+                font-family: Typography.family;
+                font-size: 8.5px;
+                horizontal-alignment: right;
+                vertical-alignment: center;
+            }
+            Text {
+                text: "\u{2212}12";
+                x: 0;
+                y: parent.height - 8.5px;
+                width: parent.width;
+                height: 8.5px;
+                color: Palette.muted-2;
+                font-family: Typography.family;
+                font-size: 8.5px;
+                horizontal-alignment: right;
+                vertical-alignment: center;
+            }
+        }
+        }
+    }
+
+    public function drag(x: length, y: length) {
+        if (chart.width <= 0px || chart.height <= 0px) {
+            return;
+        }
+        let band = round((x / chart.width) * (Layout.eq-bands - 1));
+        let gain = max(-12, min(12, 12 - (y / chart.height) * 24));
+        band-changed(clamp(band, 0, Layout.eq-bands - 1), gain);
+    }
+
+    pure function clamp(value: int, low: int, high: int) -> int {
+        return max(low, min(high, value));
+    }
+}
