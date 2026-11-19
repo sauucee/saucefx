@@ -1,0 +1,39 @@
+# Maintainer: SauceFX <sauucee@users.noreply.github.com>
+# Source build of the native Rust/Slint UI, pinned to the v0.3.0 release
+# tag. The same recipe is built and smoke-tested on GitHub CI (Arch
+# container) for every release. Submit to AUR under the maintainer's own
+# account; see SUBMIT.md.
+pkgname=saucefx
+pkgver=0.3.0
+pkgrel=1
+pkgdesc="Sound EQ and audio enhancement for Linux (native Rust/Slint UI)"
+arch=('x86_64')
+url="https://github.com/sauucee/saucefx"
+license=('AGPL-3.0-or-later')
+depends=(pipewire pipewire-pulse libpulse zenity fontconfig freetype2
+         libxkbcommon libglvnd hicolor-icon-theme)
+makedepends=(rust clang ninja pkgconf pipewire libpulse libxkbcommon
+             fontconfig freetype2 libglvnd)
+source=("https://github.com/sauucee/saucefx/archive/refs/tags/v$pkgver.tar.gz")
+sha256sums=('746b352f7761f92cca55d51895878c5d7912372c5ee9cf6457c1ff799e349e3c')
+
+build() {
+    cd "saucefx-$pkgver"
+    make -C src rt -j2
+    CARGO_BUILD_JOBS=2 cargo build --release -p saucefx-host \
+        --no-default-features --features renderer-skia
+}
+
+package() {
+    cd "saucefx-$pkgver"
+    install -Dm0755 target/release/saucefx "$pkgdir/usr/bin/SauceFX"
+    install -d "$pkgdir/usr/share/saucefx"
+    cp -a presets "$pkgdir/usr/share/saucefx/presets"
+    install -Dm0644 packaging/linux/io.github.sauucee.SauceFX.desktop \
+        "$pkgdir/usr/share/applications/io.github.sauucee.SauceFX.desktop"
+    install -Dm0644 packaging/linux/io.github.sauucee.SauceFX.metainfo.xml \
+        "$pkgdir/usr/share/metainfo/io.github.sauucee.SauceFX.metainfo.xml"
+    install -Dm0644 assets/Images/saucefx-logo-512.png \
+        "$pkgdir/usr/share/icons/hicolor/512x512/apps/io.github.sauucee.SauceFX.png"
+    install -Dm0644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}
