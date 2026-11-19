@@ -178,7 +178,7 @@ jobs:
           dnf install -y git nodejs gcc-c++ make rust cargo clang llvm-devel \
             ninja-build pkgconf-pkg-config pipewire-devel pulseaudio-libs-devel \
             fontconfig-devel freetype-devel libxkbcommon-devel mesa-libGL-devel \
-            mesa-libEGL-devel desktop-file-utils libappstream-glib rpm-build
+            mesa-libEGL-devel desktop-file-utils libappstream-glib appstream rpm-build
 
       - uses: actions/checkout@v4
 

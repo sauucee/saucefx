@@ -53,7 +53,7 @@ dpkg-deb --build --root-owner-group "$STAGE" \
     "$ROOT/release/saucefx_${VERSION}_${ARCH}.deb"
 
 echo "==> Install + link check"
-apt-get install -y "$ROOT/release/saucefx_${VERSION}_${ARCH}.deb"
+sudo apt-get install -y "$ROOT/release/saucefx_${VERSION}_${ARCH}.deb"
 if ldd /usr/bin/SauceFX | grep 'not found'; then
     echo "error: unresolved dynamic libraries" >&2
     exit 1
