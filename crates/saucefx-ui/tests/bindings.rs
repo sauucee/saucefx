@@ -970,6 +970,52 @@ fn direct_playback_restore_keeps_the_saved_device_preference() {
 }
 
 #[test]
+fn captured_eq_gains_round_to_whole_decibels_before_becoming_baseline() {
+    let engine = Rc::new(RefCell::new(MockEngine::default()));
+    let mut binding = UiBinding::default();
+    binding.set_engine(Rc::clone(&engine) as Rc<RefCell<dyn saucefx_ui::binding::Engine>>);
+    let gains = [
+        -12.0, -11.6, -11.5, -11.4, -10.2, -9.9, -8.7, -7.5, -6.4, -5.5, -4.49, -3.51, -2.5, -1.2,
+        -0.6, -0.5, -0.49, 0.0, 0.49, 0.5, 0.6, 1.2, 1.5, 2.5, 3.49, 4.51, 5.5, 7.2, 8.8, 11.6,
+        12.0,
+    ];
+    let expected = [
+        -12.0, -12.0, -12.0, -11.0, -10.0, -10.0, -9.0, -8.0, -6.0, -6.0, -4.0, -4.0, -3.0, -1.0,
+        -1.0, -1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 2.0, 3.0, 3.0, 5.0, 6.0, 7.0, 9.0, 12.0, 12.0,
+    ];
+    let effects = [0.25, 1.2, 2.5, 3.75, 10.0];
+    assert!(binding.apply_captured_values(&effects, &gains));
+    assert_eq!(
+        binding.eq_gains(),
+        expected,
+        "all preset/session gains use whole dB"
+    );
+    assert_eq!(
+        binding.effects(),
+        effects,
+        "EQ rounding does not alter effects"
+    );
+    assert!(!binding.edited());
+    assert_eq!(
+        engine.borrow().eq,
+        expected.into_iter().enumerate().collect::<Vec<_>>()
+    );
+    for (band, gain) in expected.into_iter().enumerate() {
+        assert_eq!(binding.state().applied_eq_gain(band), Some(gain));
+        assert_eq!(
+            binding.set_eq_gain(band, if gain > 0.0 { -12.0 } else { 12.0 }),
+            EditOutcome::Applied
+        );
+        assert_eq!(binding.reset_eq_band(band), EditOutcome::Applied);
+        assert_eq!(binding.eq_gains()[band], gain);
+        assert!(
+            !binding.edited(),
+            "reset restores the rounded preset baseline"
+        );
+    }
+}
+
+#[test]
 fn install_catalog_resets_selection_and_reports_paths() {
     let mut binding = UiBinding::default();
     let mut real = PresetFixture::flat("Library 1", true);
