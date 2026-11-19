@@ -792,3 +792,33 @@ fn install_catalog_resets_selection_and_reports_paths() {
     assert_eq!(binding.find_preset_by_basename("1.FAC"), Some(1));
     assert!(binding.find_preset_by_basename("missing.fac").is_none());
 }
+
+#[test]
+fn first_launch_loads_the_selected_preset_into_the_engine() {
+    let engine = Rc::new(RefCell::new(MockEngine::default()));
+    let mut binding = UiBinding::default();
+    binding.set_engine(Rc::clone(&engine) as Rc<RefCell<dyn saucefx_ui::binding::Engine>>);
+    let mut default = PresetFixture::flat("Default", true);
+    default.path = "/library/Factsoft/Default.fac".to_string();
+    binding.install_catalog(vec![default], Vec::new(), Vec::new(), 1);
+
+    // Selecting the row alone does not load it (install_catalog semantics).
+    assert!(engine.borrow().loaded.is_empty());
+
+    // The host's first-launch fallback loads the selected preset and mirrors
+    // the live engine values, exactly like a user selection — the reference
+    // applies Default for new users instead of running preset-less.
+    assert!(binding.load_selected_preset());
+    assert_eq!(
+        engine.borrow().loaded,
+        vec!["/library/Factsoft/Default.fac".to_string()]
+    );
+    assert_eq!(binding.effects()[0], 7.5, "engine values mirror the view");
+    assert_eq!(binding.eq_gains()[17], -4.25);
+    assert!(!binding.edited(), "the loaded preset is the new baseline");
+
+    // Power off blocks the fallback without forwarding anything.
+    binding.toggle_power();
+    assert!(!binding.load_selected_preset());
+    assert_eq!(engine.borrow().loaded.len(), 1, "no second engine load");
+}

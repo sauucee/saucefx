@@ -893,6 +893,15 @@ impl UiBinding {
         self.output_open = false;
     }
 
+    /// First-launch fallback: load the currently selected preset into the
+    /// engine. `install_catalog` only selects the row; the reference applies
+    /// the Default preset for new users, so a host without a saved session
+    /// calls this once at startup instead of running preset-less.
+    pub fn load_selected_preset(&mut self) -> bool {
+        let index = self.selected_preset;
+        self.choose_preset(index)
+    }
+
     /// Pick a preset row. Group and disabled rows keep the current selection.
     /// Real library rows (with a .fac path) load through the engine and
     /// mirror the resulting live values; synthetic rows apply their fixture.

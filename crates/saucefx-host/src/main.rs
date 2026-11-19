@@ -198,12 +198,13 @@ fn output_rows(engine: &fxpw::FxpwEngine, settings: &GuiSettings) -> (Vec<MenuRo
 }
 
 /// Restore the live session (selected preset + unsaved tweaks + power).
-fn restore_session(binding: &Rc<RefCell<UiBinding>>, state_dir: &Path) {
+/// Returns false when no usable session exists (first launch).
+fn restore_session(binding: &Rc<RefCell<UiBinding>>, state_dir: &Path) -> bool {
     let Some(text) = read_file(&state_dir.join("preset-session.txt")) else {
-        return;
+        return false;
     };
     let Ok(session) = parse_session(&text) else {
-        return;
+        return false;
     };
     if session.power != binding.borrow().power() {
         binding.borrow_mut().toggle_power();
@@ -222,6 +223,7 @@ fn restore_session(binding: &Rc<RefCell<UiBinding>>, state_dir: &Path) {
     binding
         .borrow_mut()
         .apply_captured_values(&session.effects, &session.eq_gains);
+    true
 }
 
 /// Write settings.txt and preset-session.txt when their content changed.
@@ -349,7 +351,22 @@ fn main() {
         let (outputs, selected_output) = output_rows(&engine.borrow(), &settings);
         binding.install_catalog(factory, Vec::new(), outputs, selected_output);
     }
-    restore_session(&binding, &state);
+    // First launch (no usable session): new users start on the Default
+    // preset like the reference, located by name — the scanned library's
+    // row order is not fixed, so the catalog's default row index is not
+    // reliably Default. Loading it here also keeps the engine from running
+    // preset-less until the user picks one.
+    if !restore_session(&binding, &state) {
+        let default = binding.borrow().find_preset_by_basename("Default.fac");
+        match default {
+            Some(index) => {
+                binding.borrow_mut().choose_preset(index);
+            }
+            None => {
+                binding.borrow_mut().load_selected_preset();
+            }
+        }
+    }
     // The saved (or preferred) output routes through the engine.
     let selected_output = binding.borrow().selected_output();
     binding.borrow_mut().choose_output(selected_output);
