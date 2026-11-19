@@ -576,6 +576,69 @@ impl UiBinding {
         self.selected_output = selected_output;
     }
 
+    /// Restore the saved output identity, even when the device is disconnected.
+    pub fn restore_output(&mut self, name: &str, port: &str, routed: bool) {
+        self.state.set_output_preference(name, port);
+        self.state.set_active_output("", "", routed);
+        self.refresh_outputs(self.catalog.outputs.clone());
+        if let Some(engine) = &self.engine {
+            engine.borrow_mut().apply_output(
+                if routed { name } else { "direct" },
+                if routed { port } else { "" },
+            );
+        }
+    }
+
+    /// Refresh device rows without applying routing or changing audio edits.
+    pub fn refresh_outputs(&mut self, mut outputs: Vec<MenuRow>) -> bool {
+        let preference = self.state.output();
+        let name = if preference.routed {
+            preference.preferred_name.as_str()
+        } else {
+            "direct"
+        };
+        let matches = |row: &MenuRow| {
+            !row.is_group
+                && row.output_name == name
+                && (name.is_empty()
+                    || name == "direct"
+                    || preference.preferred_port.is_empty()
+                    || row.output_port == preference.preferred_port)
+        };
+        let selected = outputs.iter().position(matches).unwrap_or_else(|| {
+            if preference.routed && !name.is_empty() {
+                let mut missing = self
+                    .catalog
+                    .outputs
+                    .iter()
+                    .find(|row| matches(row))
+                    .cloned()
+                    .unwrap_or_else(|| {
+                        MenuRow::output(name, "", name, &preference.preferred_port, false)
+                    });
+                missing.disabled = true;
+                missing.detail = "Disconnected".to_string();
+                let index = outputs
+                    .iter()
+                    .position(|row| row.is_group && row.label == "WITHOUT EFFECTS")
+                    .unwrap_or(outputs.len());
+                outputs.insert(index, missing);
+                index
+            } else {
+                outputs
+                    .iter()
+                    .position(|row| !row.is_group && !row.disabled)
+                    .unwrap_or(0)
+            }
+        });
+        if self.catalog.outputs == outputs && self.selected_output == selected {
+            return false;
+        }
+        self.catalog.outputs = outputs;
+        self.selected_output = selected;
+        true
+    }
+
     /// Path of the selected preset fixture ("" for synthetic rows).
     pub fn selected_preset_path(&self) -> &str {
         self.catalog

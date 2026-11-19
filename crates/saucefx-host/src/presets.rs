@@ -7,6 +7,31 @@ use std::path::{Path, PathBuf};
 use saucefx_core::state::{BAND_COUNT, EFFECT_COUNT};
 use saucefx_ui::binding::PresetFixture;
 
+/// The factory .fac library: launch override, source checkout, installed data.
+pub fn library_dir(root: Option<&Path>, exe: Option<&Path>) -> PathBuf {
+    if let Some(root) = root {
+        return root.join("presets").join("Factsoft");
+    }
+    if let Some(exe) = exe {
+        for current in exe.ancestors().skip(1) {
+            let candidate = current.join("presets").join("Factsoft");
+            if candidate.is_dir() {
+                return candidate;
+            }
+        }
+        // Installed layouts, including Flatpak's /app/bin and /app/share.
+        for current in exe.ancestors().skip(1) {
+            let candidate = current.join("share/saucefx/presets/Factsoft");
+            if candidate.is_dir() {
+                return candidate;
+            }
+        }
+    }
+    PathBuf::from("/usr/share/saucefx")
+        .join("presets")
+        .join("Factsoft")
+}
+
 /// One scanned .fac file with the directory kind it came from.
 pub struct ScannedPreset {
     pub path: PathBuf,
@@ -269,6 +294,33 @@ pub fn export_message(target: &Path, ok: bool) -> String {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn installed_flatpak_discovers_factory_default() {
+        let dir =
+            std::env::temp_dir().join(format!("saucefx-flatpak-library-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let exe = dir.join("app/bin/SauceFX");
+        let factory = dir.join("app/share/saucefx/presets/Factsoft");
+        std::fs::create_dir_all(&factory).unwrap();
+        let default = factory.join("Default.fac");
+        std::fs::write(&default, "CLASS1 : Effect Type\n9: Version\nDefault\n").unwrap();
+
+        let resolved = library_dir(None, Some(&exe));
+        let scanned = scan(&resolved, &dir.join("user"));
+        let found = scanned
+            .iter()
+            .any(|preset| preset.path == default && preset.factory);
+        std::fs::remove_dir_all(&dir).unwrap();
+
+        assert!(
+            found,
+            "factory Default must be discovered beside the installed prefix; resolved {}",
+            resolved.display()
+        );
+        assert_eq!(resolved, factory);
+        assert_eq!(scanned.len(), 1);
+    }
 
     #[test]
     fn importing_a_readable_preset_copies_it_and_reports_one_import() {

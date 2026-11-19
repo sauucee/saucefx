@@ -783,6 +783,193 @@ fn engine_sink_forwards_applied_changes_and_real_preset_paths() {
 }
 
 #[test]
+fn output_refresh_tracks_devices_without_reapplying_audio() {
+    use saucefx_ui::binding::MenuRow;
+
+    let engine = Rc::new(RefCell::new(MockEngine::default()));
+    let mut binding = UiBinding::default();
+    binding.set_engine(Rc::clone(&engine) as Rc<RefCell<dyn saucefx_ui::binding::Engine>>);
+    assert!(binding.choose_output(2));
+    binding.set_effect(1, 4.0);
+    binding.set_eq_gain(3, -2.0);
+    binding.toggle_output_menu();
+    let state = binding.state().clone();
+    let preset = binding.preset_name().to_string();
+    let presets = binding.preset_rows().to_vec();
+    let calls = engine.borrow().outputs.clone();
+
+    let mut outputs = binding.output_rows().to_vec();
+    outputs.insert(
+        2,
+        MenuRow::output("USB DAC", "USB audio", "usb.dac", "", true),
+    );
+    assert!(binding.refresh_outputs(outputs.clone()));
+    assert_eq!(binding.output_rows(), outputs);
+    assert_eq!(
+        binding.selected_output(),
+        3,
+        "selection follows device identity"
+    );
+    assert_eq!(binding.output_name(), "Test speakers");
+    assert_eq!(binding.state(), &state);
+    assert_eq!(binding.preset_name(), preset);
+    assert_eq!(binding.preset_rows(), presets);
+    assert!(binding.output_menu_open());
+    assert_eq!(
+        engine.borrow().outputs,
+        calls,
+        "refresh does not reroute audio"
+    );
+    assert!(
+        !binding.refresh_outputs(outputs),
+        "unchanged rows need no update"
+    );
+
+    let mut disconnected = binding.output_rows().to_vec();
+    disconnected.retain(|row| row.output_name != "alsa_output.test-speakers");
+    assert!(binding.refresh_outputs(disconnected));
+    assert_eq!(binding.output_name(), "Test speakers");
+    assert!(binding.output_rows()[binding.selected_output()].disabled);
+    assert_eq!(
+        binding.state(),
+        &state,
+        "unplugging preserves the preferred output"
+    );
+
+    let mut reconnected = binding.output_rows().to_vec();
+    reconnected.retain(|row| row.output_name != "alsa_output.test-speakers");
+    reconnected.insert(
+        2,
+        MenuRow::output(
+            "Test speakers",
+            "Built-in audio",
+            "alsa_output.test-speakers",
+            "",
+            true,
+        ),
+    );
+    assert!(binding.refresh_outputs(reconnected));
+    assert_eq!(binding.output_name(), "Test speakers");
+    assert!(!binding.output_rows()[binding.selected_output()].disabled);
+    assert_eq!(binding.state(), &state);
+    assert_eq!(engine.borrow().outputs, calls);
+}
+
+#[test]
+fn saved_output_restores_the_exact_port() {
+    use saucefx_ui::binding::MenuRow;
+
+    let engine = Rc::new(RefCell::new(MockEngine::default()));
+    let mut binding = UiBinding::default();
+    binding.set_engine(Rc::clone(&engine) as Rc<RefCell<dyn saucefx_ui::binding::Engine>>);
+    let mut outputs = binding.output_rows().to_vec();
+    outputs.insert(
+        2,
+        MenuRow::output(
+            "Speakers",
+            "Built-in audio",
+            "alsa_output.shared",
+            "analog-output-speaker",
+            true,
+        ),
+    );
+    outputs.insert(
+        3,
+        MenuRow::output(
+            "Headphones",
+            "Built-in audio",
+            "alsa_output.shared",
+            "analog-output-headphones",
+            true,
+        ),
+    );
+    binding.install_catalog(factory_fixtures(), Vec::new(), outputs.clone(), 1);
+
+    binding.restore_output("alsa_output.shared", "analog-output-headphones", true);
+    assert_eq!(binding.selected_output(), 3);
+    assert_eq!(binding.output_name(), "Headphones");
+    assert_eq!(
+        binding.state().output().preferred_name,
+        "alsa_output.shared"
+    );
+    assert_eq!(
+        binding.state().output().preferred_port,
+        "analog-output-headphones"
+    );
+    let expected = vec![(
+        "alsa_output.shared".to_string(),
+        "analog-output-headphones".to_string(),
+    )];
+    assert_eq!(engine.borrow().outputs, expected);
+
+    outputs.swap(2, 3);
+    assert!(binding.refresh_outputs(outputs));
+    assert_eq!(binding.selected_output(), 2);
+    assert_eq!(binding.output_name(), "Headphones");
+    assert_eq!(engine.borrow().outputs, expected);
+}
+
+#[test]
+fn disconnected_saved_output_preserves_its_device_and_port() {
+    use saucefx_ui::binding::MenuRow;
+
+    let engine = Rc::new(RefCell::new(MockEngine::default()));
+    let mut binding = UiBinding::default();
+    binding.set_engine(Rc::clone(&engine) as Rc<RefCell<dyn saucefx_ui::binding::Engine>>);
+    binding.restore_output("usb.saved", "headphones", true);
+    let saved = binding.state().output().clone();
+    assert!(saved.routed);
+    assert_eq!(saved.preferred_name, "usb.saved");
+    assert_eq!(saved.preferred_port, "headphones");
+    let row = &binding.output_rows()[binding.selected_output()];
+    assert!(row.disabled);
+    assert_eq!(row.output_name, "usb.saved");
+    assert_eq!(row.output_port, "headphones");
+    assert_eq!(
+        engine.borrow().outputs,
+        vec![("usb.saved".to_string(), "headphones".to_string())]
+    );
+
+    let mut connected = binding.output_rows().to_vec();
+    connected.retain(|row| row.output_name != "usb.saved");
+    connected.insert(
+        2,
+        MenuRow::output(
+            "USB headphones",
+            "USB audio",
+            "usb.saved",
+            "headphones",
+            true,
+        ),
+    );
+    assert!(binding.refresh_outputs(connected));
+    assert_eq!(binding.output_name(), "USB headphones");
+    assert!(!binding.output_rows()[binding.selected_output()].disabled);
+    assert_eq!(binding.state().output(), &saved);
+    assert_eq!(engine.borrow().outputs.len(), 1);
+}
+
+#[test]
+fn direct_playback_restore_keeps_the_saved_device_preference() {
+    let engine = Rc::new(RefCell::new(MockEngine::default()));
+    let mut binding = UiBinding::default();
+    binding.set_engine(Rc::clone(&engine) as Rc<RefCell<dyn saucefx_ui::binding::Engine>>);
+    binding.restore_output("usb.saved", "headphones", false);
+    assert_eq!(binding.output_name(), "Direct playback");
+    assert!(!binding.state().output().routed);
+    assert_eq!(binding.state().output().preferred_name, "usb.saved");
+    assert_eq!(binding.state().output().preferred_port, "headphones");
+    assert_eq!(
+        engine.borrow().outputs,
+        vec![("direct".to_string(), String::new())]
+    );
+    let rows = binding.output_rows().to_vec();
+    assert!(!binding.refresh_outputs(rows));
+    assert_eq!(binding.output_name(), "Direct playback");
+    assert_eq!(engine.borrow().outputs.len(), 1);
+}
+
+#[test]
 fn install_catalog_resets_selection_and_reports_paths() {
     let mut binding = UiBinding::default();
     let mut real = PresetFixture::flat("Library 1", true);
