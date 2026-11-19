@@ -71,60 +71,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: dtolnay/rust-toolchain@stable
-
-      - uses: Swatinem/rust-cache@v2
-
-      # The 26.08 SDK has no clang/libclang and no llvm extension exists for
-      # the branch, so the Skia host is built on the runner (same toolchain
-      # as the AppImage) and the manifest installs the prebuilt tree.
-      - name: Install LLVM 18
-        run: |
-          curl -fsSL https://apt.llvm.org/llvm.sh | sudo bash -s 18
-          sudo apt-get install -y libclang-18-dev
-          sudo update-alternatives --install /usr/bin/clang clang /usr/bin/clang-18 100
-          sudo update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-18 100
-
-      - name: Install build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            g++ make pkg-config ninja-build \
-            libpipewire-0.3-dev libpulse-dev libfreetype6-dev libfontconfig1-dev \
-            libgl1-mesa-dev libegl1-mesa-dev libxkbcommon-dev libxkbcommon-x11-0
-
-      - name: Build host (Skia)
-        env:
-          CC: clang-18
-          CXX: clang++-18
-          LIBCLANG_PATH: /usr/lib/llvm-18/lib
-        run: |
-          make -C src rt -j2
-          CARGO_BUILD_JOBS=2 cargo build --release -p saucefx-host \
-            --no-default-features --features renderer-skia
-
-      - name: Stage install tree
-        run: |
-          S=packaging/native/flatpak/flatpak-stage
-          mkdir -p "$S"
-          install -Dm0755 target/release/saucefx "$S/SauceFX"
-          cp -a presets "$S/presets"
-          install -Dm0644 packaging/linux/io.github.sauucee.SauceFX.desktop \
-            "$S/io.github.sauucee.SauceFX.desktop"
-          install -Dm0644 packaging/linux/io.github.sauucee.SauceFX.metainfo.xml \
-            "$S/io.github.sauucee.SauceFX.metainfo.xml"
-          install -Dm0644 assets/Images/saucefx-logo-512.png \
-            "$S/io.github.sauucee.SauceFX.png"
-          install -Dm0644 LICENSE "$S/LICENSE"
-
+      # From-source build inside the sandbox: the llvm22 extension provides
+      # clang/libclang for the 26.08 SDK (the base ships none), rust-stable
+      # provides cargo. No runner toolchain needed.
       - name: Install Flatpak tooling and runtimes
         run: |
+          sudo apt-get update
           sudo apt-get install -y flatpak flatpak-builder appstream desktop-file-utils \
             pipewire pipewire-pulse wireplumber pulseaudio-utils dbus-x11 xvfb xauth
           flatpak remote-add --user --if-not-exists flathub \
             https://dl.flathub.org/repo/flathub.flatpakrepo
           flatpak install --user -y --noninteractive flathub \
-            org.gnome.Platform//51 org.gnome.Sdk//51 org.freedesktop.Sdk//26.08
+            org.gnome.Platform//51 org.gnome.Sdk//51 org.freedesktop.Sdk//26.08 \
+            org.freedesktop.Sdk.Extension.rust-stable//26.08 \
+            org.freedesktop.Sdk.Extension.llvm22//26.08
 
       - name: Build Flatpak
         run: packaging/native/flatpak/build-flatpak.sh

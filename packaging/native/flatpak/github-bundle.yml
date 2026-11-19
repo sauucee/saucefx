@@ -1,14 +1,16 @@
-# Native UI Flatpak bundle manifest. Same app-id as the released JUCE app
-# (upgrade path). The 26.08 SDK ships no clang/libclang and no llvm
-# extension exists for the branch, so CI builds the Skia host on the runner
-# (glibc 2.35 base, forward-compatible with the runtime's newer glibc) and
-# this manifest installs the prebuilt tree. zenity is built from source so
-# the import/export choosers work inside the sandbox. A future Flathub
-# submission can move the host build into the sandbox with an LLVM module.
+# Native UI Flatpak bundle manifest — from-source build inside the sandbox.
+# Same app-id as the released JUCE app (upgrade path). The 26.08 SDK base
+# ships no clang, but org.freedesktop.Sdk.Extension.llvm22//26.08 provides
+# clang/libclang and rust-stable provides cargo, so the DSP archives and the
+# Skia host compile in the build sandbox. zenity is built from source so the
+# import/export choosers work inside the sandbox.
 app-id: io.github.sauucee.SauceFX
 runtime: org.gnome.Platform
 runtime-version: '51'
 sdk: org.gnome.Sdk
+sdk-extensions:
+  - org.freedesktop.Sdk.Extension.rust-stable
+  - org.freedesktop.Sdk.Extension.llvm22
 command: SauceFX
 
 finish-args:
@@ -35,17 +37,39 @@ modules:
 
   - name: saucefx
     buildsystem: simple
+    build-options:
+      append-path: /usr/lib/sdk/rust-stable/bin:/usr/lib/sdk/llvm22/bin
+      env:
+        CC: clang
+        CXX: clang++
+        LIBCLANG_PATH: /usr/lib/sdk/llvm22/lib
+        CARGO_HOME: /run/build/saucefx/cargo-home
+        CARGO_BUILD_JOBS: '2'
     build-commands:
-      - install -Dm0755 SauceFX /app/bin/SauceFX
+      - make -C src rt -j2
+      - cargo build --release -p saucefx-host --no-default-features --features renderer-skia
+      - install -Dm0755 target/release/saucefx /app/bin/SauceFX
       - install -d /app/share/saucefx
       - cp -a presets /app/share/saucefx/presets
-      - install -Dm0644 io.github.sauucee.SauceFX.desktop
+      - install -Dm0644 packaging/linux/io.github.sauucee.SauceFX.desktop
           /app/share/applications/io.github.sauucee.SauceFX.desktop
-      - install -Dm0644 io.github.sauucee.SauceFX.metainfo.xml
+      - install -Dm0644 packaging/linux/io.github.sauucee.SauceFX.metainfo.xml
           /app/share/metainfo/io.github.sauucee.SauceFX.metainfo.xml
-      - install -Dm0644 io.github.sauucee.SauceFX.png
+      - install -Dm0644 assets/Images/saucefx-logo-512.png
           /app/share/icons/hicolor/512x512/apps/io.github.sauucee.SauceFX.png
       - install -Dm0644 LICENSE /app/share/licenses/io.github.sauucee.SauceFX/LICENSE
     sources:
       - type: dir
-        path: flatpak-stage
+        path: ../..
+        skip:
+          - .git
+          - .hermes
+          - .flatpak-builder
+          - release
+          - target
+          - src/build
+          - frontend/node_modules
+          - site
+          - docs
+          - rust-anything
+          - packaging/native/flatpak/flatpak-stage
