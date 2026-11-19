@@ -4,7 +4,7 @@ set -euo pipefail
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 ROOT=$(cd -- "$SCRIPT_DIR/../.." && pwd)
 if [ "${1:-}" != --isolated ]; then
-    exec dbus-run-session -- bash "$0" --isolated
+    exec dbus-run-session -- xvfb-run -a bash "$0" --isolated
 fi
 
 WORK=$(mktemp -d "${TMPDIR:-/tmp}/saucefx-direct.XXXXXX")
