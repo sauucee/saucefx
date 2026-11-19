@@ -76,6 +76,7 @@ rm -rf -- "$APPDIR"
 mkdir -p "$APPDIR/usr/bin"
 install -Dm0755 "$ROOT/target/release/saucefx" "$APPDIR/usr/bin/SauceFX"
 install -Dm0755 /usr/bin/pactl "$APPDIR/usr/bin/pactl"
+install -d "$APPDIR/usr/share/saucefx"
 cp -a "$ROOT/presets" "$APPDIR/usr/share/saucefx/presets"
 install -Dm0644 "$ROOT/packaging/linux/io.github.sauucee.SauceFX.desktop" \
     "$APPDIR/usr/share/applications/io.github.sauucee.SauceFX.desktop"
