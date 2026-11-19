@@ -68,7 +68,7 @@ test "$(pactl get-default-sink)" = AppImageTestOutput
 mkdir -p "$WORK/Portable App"
 (cd "$WORK/Portable App" && "$IMAGE" --appimage-extract >/dev/null)
 APPDIR_TEST="$WORK/Portable App/squashfs-root"
-APP_STATE_DIR="$WORK/home/.local/state/saucefx"
+APP_STATE_DIR="$XDG_STATE_HOME/saucefx"
 mkdir -p "$APP_STATE_DIR"
 printf 'theme=dark\nautostart=on\noutput=saucefx\n' > "$APP_STATE_DIR/settings.txt"
 python3 - "$APP_STATE_DIR/preset-session.txt" <<'PY'

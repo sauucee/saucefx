@@ -16,6 +16,7 @@ trap 'rm -rf -- "$WORK"' EXIT
 export XDG_DATA_HOME="$WORK/data"
 export XDG_CONFIG_HOME="$WORK/config"
 export XDG_CACHE_HOME="$WORK/cache"
+export XDG_STATE_HOME="$WORK/state"
 export FLATPAK_USER_DIR="$WORK/user-install"
 export FLATPAK_SYSTEM_DIR="$WORK/system-install"
 export SAUCEFX_TEST_CALLS="$WORK/flatpak-commands"
@@ -39,11 +40,10 @@ APP_ID=io.github.sauucee.SauceFX
 flatpak install --user --bundle "$OLD_BUNDLE"
 OLD_COMMIT=$(flatpak info --user --show-commit "$APP_ID")
 OLD_REF=$(flatpak info --user --show-ref "$APP_ID")
-# Mirror the host's home-relative settings/session and custom-preset paths
-# in a disposable fixture; the application itself is never launched.
-TEST_HOME="$WORK/home"
-STATE_DIR="$TEST_HOME/.local/state/saucefx"
-PRESET_DIR="$TEST_HOME/.local/share/saucefx/presets"
+# Seed the same XDG settings/session and custom-preset paths used by both
+# application versions, inside this disposable test environment.
+STATE_DIR="$XDG_STATE_HOME/saucefx"
+PRESET_DIR="$XDG_DATA_HOME/saucefx/presets"
 mkdir -p "$STATE_DIR" "$PRESET_DIR"
 printf 'theme=light\nautostart=off\noutput=system\n' > "$STATE_DIR/settings.txt"
 printf 'version=1\nfactory-preset=Default.fac\npower=1\n' > "$STATE_DIR/preset-session.txt"

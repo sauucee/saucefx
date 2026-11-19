@@ -52,10 +52,10 @@ kill -0 "$APP_PID"
 # the saved app state rather than just the presence of a file in the package.
 for ((i=0; i<100; ++i)); do
     if flatpak run --no-documents-portal --command=sh io.github.sauucee.SauceFX -c \
-        'grep -qx "preset=/app/share/saucefx/presets/Factsoft/Default.fac" "$HOME/.local/state/saucefx/preset-session.txt"' \
+        'grep -qx "preset=/app/share/saucefx/presets/Factsoft/Default.fac" "$XDG_STATE_HOME/saucefx/preset-session.txt"' \
         2>/dev/null; then break; fi
     sleep 0.1
 done
 flatpak run --no-documents-portal --command=sh io.github.sauucee.SauceFX -c \
-    'grep -qx "preset=/app/share/saucefx/presets/Factsoft/Default.fac" "$HOME/.local/state/saucefx/preset-session.txt" && grep -qx "factory-preset=Default.fac" "$HOME/.local/state/saucefx/preset-session.txt"'
+    'grep -qx "preset=/app/share/saucefx/presets/Factsoft/Default.fac" "$XDG_STATE_HOME/saucefx/preset-session.txt" && grep -qx "factory-preset=Default.fac" "$XDG_STATE_HOME/saucefx/preset-session.txt"'
 echo "PASS: native Flatpak launches, creates its sink and applies factory Default"

@@ -4,6 +4,7 @@
 
 mod autostart;
 mod fxpw;
+mod paths;
 mod presets;
 mod single_instance;
 
@@ -39,27 +40,33 @@ fn home_dir() -> PathBuf {
 }
 
 fn state_dir() -> PathBuf {
-    home_dir().join(".local").join("state").join("saucefx")
+    paths::app_dir(
+        &home_dir(),
+        std::env::var("XDG_STATE_HOME").ok().as_deref(),
+        ".local/state",
+    )
 }
 
 fn data_dir() -> PathBuf {
-    home_dir().join(".local").join("share").join("saucefx")
+    paths::app_dir(
+        &home_dir(),
+        std::env::var("XDG_DATA_HOME").ok().as_deref(),
+        ".local/share",
+    )
 }
 
 fn user_preset_dir() -> PathBuf {
     data_dir().join("presets")
 }
 
-/// The XDG config directory (`configDir()` in Main.cpp): XDG_CONFIG_HOME,
-/// else ~/.config — the autostart entry lives at
-/// `<config>/autostart/saucefx.desktop`.
+/// Match the previous host's autostart path, including Flatpak's host-side
+/// ~/.config/autostart exception.
 fn config_dir() -> PathBuf {
-    if let Ok(xdg) = std::env::var("XDG_CONFIG_HOME")
-        && !xdg.is_empty()
-    {
-        return PathBuf::from(xdg);
-    }
-    home_dir().join(".config")
+    paths::config_dir(
+        &home_dir(),
+        std::env::var("XDG_CONFIG_HOME").ok().as_deref(),
+        std::env::var_os("FLATPAK_ID").is_some(),
+    )
 }
 
 /// Resolve the factory library using the launch override and executable path.
