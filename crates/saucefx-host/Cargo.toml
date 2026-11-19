@@ -13,10 +13,17 @@ path = "src/main.rs"
 slint = { version = "=1.18.1", default-features = false, features = [
     "std",
     "backend-winit",
-    "renderer-femtovg",
     "compat-1-2",
     "unstable-winit-030",
 ] }
 saucefx-core = { path = "../saucefx-core" }
 libc = "0.2"
-saucefx-ui = { path = "../saucefx-ui" }
+saucefx-ui = { path = "../saucefx-ui", default-features = false }
+
+[features]
+default = ["renderer-femtovg"]
+# Mirror saucefx-ui: winit prefers femtovg when both renderers are compiled
+# in, so the Skia build drops femtovg instead of layering behind it:
+# `cargo build -p saucefx-host --no-default-features --features renderer-skia`.
+renderer-femtovg = ["slint/renderer-femtovg", "saucefx-ui/renderer-femtovg"]
+renderer-skia = ["slint/renderer-skia", "saucefx-ui/renderer-skia"]

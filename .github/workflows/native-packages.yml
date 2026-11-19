@@ -1,0 +1,64 @@
+# Packages for the Rust/Slint native UI. Builds every format from source on
+# GitHub (the DSP archives are compiled here, never committed). Manual
+# dispatch builds artifacts; publishing a release stays an explicit owner
+# action — the tag-triggered publish job is added when the migration merges
+# and replaces the JUCE release workflow.
+name: Native packages
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  appimage:
+    name: Portable AppImage (native UI)
+    runs-on: ubuntu-22.04
+    env:
+      SAUCEFX_BUILD_JOBS: '2'
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+
+      # Skia's C++ build needs a recent clang; jammy's default is too old.
+      - name: Install LLVM 18
+        run: |
+          curl -fsSL https://apt.llvm.org/llvm.sh | sudo bash -s 18
+          sudo apt-get install -y libclang-18-dev
+          sudo update-alternatives --install /usr/bin/clang clang /usr/bin/clang-18 100
+          sudo update-alternatives --install /usr/bin/clang++ clang++ /usr/bin/clang++-18 100
+
+      - name: Install build and smoke-test dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            g++ make pkg-config curl file patchelf ninja-build \
+            libpipewire-0.3-dev libpulse-dev libasound2-dev \
+            libx11-dev libxext-dev libxinerama-dev libxrandr-dev \
+            libxcursor-dev libxcomposite-dev libfreetype6-dev libfontconfig1-dev \
+            libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev \
+            libxkbcommon-dev libxkbcommon-x11-0 \
+            desktop-file-utils imagemagick \
+            pipewire pipewire-pulse wireplumber pulseaudio-utils \
+            dbus-x11 xvfb xauth python3
+
+      - name: Build AppImage
+        env:
+          CC: clang-18
+          CXX: clang++-18
+          LIBCLANG_PATH: /usr/lib/llvm-18/lib
+        run: packaging/native/appimage/build-appimage.sh
+
+      - name: Smoke-test portable AppImage
+        run: packaging/native/appimage/smoke-test.sh release/SauceFX-*-x86_64.AppImage
+
+      - name: Upload AppImage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: saucefx-native-appimage
+          path: release/*.AppImage
+          if-no-files-found: error
