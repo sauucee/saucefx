@@ -302,6 +302,88 @@ impl FxpwEngine {
     }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use saucefx_ui::binding::UiBinding;
+    use std::process::Command;
+    use std::thread;
+    use std::time::{Duration, Instant};
+
+    fn pactl(args: &[&str]) -> String {
+        let output = Command::new("pactl")
+            .env("PULSE_PROP", "media.category=Manager")
+            .args(args)
+            .output()
+            .expect("run pactl on the private test server");
+        assert!(
+            output.status.success(),
+            "pactl failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        String::from_utf8(output.stdout).unwrap().trim().to_string()
+    }
+
+    struct TestSink(String);
+
+    impl TestSink {
+        fn create(name: &str, priority: &str) -> Self {
+            Self(pactl(&[
+                "load-module",
+                "module-null-sink",
+                &format!("sink_name={name}"),
+                &format!("sink_properties=device.description={name} priority.session={priority}"),
+            ]))
+        }
+    }
+
+    impl Drop for TestSink {
+        fn drop(&mut self) {
+            let _ = Command::new("pactl")
+                .env("PULSE_PROP", "media.category=Manager")
+                .args(["unload-module", &self.0])
+                .status();
+        }
+    }
+
+    #[test]
+    #[ignore = "requires the private PipeWire session in test-direct-output.sh"]
+    fn direct_playback_startup_restores_the_saved_engine_output() {
+        assert_eq!(std::env::var("SAUCEFX_TEST_ISOLATED").as_deref(), Ok("1"));
+        let _saved = TestSink::create("RestoreSavedOutput", "1000");
+        let _other = TestSink::create("RestoreOtherOutput", "3000");
+        pactl(&["set-default-sink", "RestoreOtherOutput"]);
+        let engine = FxpwEngine::start().expect("start the engine on the private server");
+        let deadline = Instant::now() + Duration::from_secs(8);
+        while !engine
+            .borrow()
+            .outputs()
+            .iter()
+            .any(|output| output.device == "RestoreSavedOutput")
+        {
+            assert!(
+                Instant::now() < deadline,
+                "saved fixture output was never discovered"
+            );
+            thread::sleep(Duration::from_millis(50));
+        }
+        let mut binding = UiBinding::default();
+        binding.set_engine(Rc::clone(&engine) as Rc<RefCell<dyn Engine>>);
+        binding.restore_output("RestoreSavedOutput", "", false);
+        let restored = engine.borrow().output_state();
+        let default_output = pactl(&["get-default-sink"]);
+        engine.borrow_mut().stop();
+        assert_eq!(
+            restored,
+            ("RestoreSavedOutput".to_string(), String::new(), false)
+        );
+        assert_eq!(
+            default_output, "RestoreSavedOutput",
+            "direct playback must restore the saved physical device"
+        );
+    }
+}
+
 impl Drop for FxpwEngine {
     fn drop(&mut self) {
         self.stop();

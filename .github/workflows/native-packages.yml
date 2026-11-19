@@ -68,6 +68,13 @@ jobs:
             --no-default-features --features saucefx-host/renderer-skia,saucefx-ui/renderer-skia \
             -- --test-threads=1
 
+      - name: Test direct-playback output restore
+        env:
+          CC: clang-18
+          CXX: clang++-18
+          LIBCLANG_PATH: /usr/lib/llvm-18/lib
+        run: bash packaging/native/test-direct-output.sh
+
       - name: Smoke-test portable AppImage
         run: packaging/native/appimage/smoke-test.sh release/SauceFX-*-x86_64.AppImage
 
