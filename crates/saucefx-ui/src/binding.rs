@@ -480,6 +480,8 @@ pub trait Engine: 'static {
     /// One EQ gain in dB (the engine's band frequency is resolved by the
     /// implementation's own band table).
     fn apply_eq_gain(&mut self, index: usize, gain: f32);
+    /// Remember the physical device/port without enabling SauceFX routing.
+    fn set_output_preference(&mut self, name: &str, port: &str);
     /// Route to a physical output; an empty name selects automatic.
     fn apply_output(&mut self, name: &str, port: &str);
     /// Load a .fac file into the engine. Returns the resulting live effect
@@ -582,7 +584,11 @@ impl UiBinding {
         self.state.set_active_output("", "", routed);
         self.refresh_outputs(self.catalog.outputs.clone());
         if let Some(engine) = &self.engine {
-            engine.borrow_mut().apply_output(
+            let mut engine = engine.borrow_mut();
+            if !routed {
+                engine.set_output_preference(name, port);
+            }
+            engine.apply_output(
                 if routed { name } else { "direct" },
                 if routed { port } else { "" },
             );

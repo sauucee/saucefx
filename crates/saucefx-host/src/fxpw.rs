@@ -410,6 +410,20 @@ impl Engine for FxpwEngine {
         }
     }
 
+    fn set_output_preference(&mut self, name: &str, port: &str) {
+        if self.handle.is_null() {
+            return;
+        }
+        let name = CString::new(name).unwrap_or_default();
+        let port = CString::new(port).unwrap_or_default();
+        let (name, port) = if name.as_bytes().is_empty() {
+            (std::ptr::null(), std::ptr::null())
+        } else {
+            (name.as_ptr(), port.as_ptr())
+        };
+        unsafe { fxpw_set_output(self.handle, name, port) };
+    }
+
     fn apply_output(&mut self, name: &str, port: &str) {
         if self.handle.is_null() {
             return;
@@ -421,17 +435,8 @@ impl Engine for FxpwEngine {
             unsafe { fxpw_route_default(self.handle, 0) };
             return;
         }
-        let name = CString::new(name).unwrap_or_default();
-        let port = CString::new(port).unwrap_or_default();
-        let (name, port) = if name.as_bytes().is_empty() {
-            (std::ptr::null(), std::ptr::null())
-        } else {
-            (name.as_ptr(), port.as_ptr())
-        };
-        unsafe {
-            fxpw_set_output(self.handle, name, port);
-            fxpw_route_default(self.handle, 1);
-        }
+        self.set_output_preference(name, port);
+        unsafe { fxpw_route_default(self.handle, 1) };
     }
 
     fn load_preset(&mut self, path: &str) -> Option<([f32; EFFECT_COUNT], [f32; BAND_COUNT])> {

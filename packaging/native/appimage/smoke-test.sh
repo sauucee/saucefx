@@ -68,9 +68,10 @@ test "$(pactl get-default-sink)" = AppImageTestOutput
 mkdir -p "$WORK/Portable App"
 (cd "$WORK/Portable App" && "$IMAGE" --appimage-extract >/dev/null)
 APPDIR_TEST="$WORK/Portable App/squashfs-root"
-mkdir -p "$XDG_STATE_HOME/saucefx"
-printf 'theme=dark\nautostart=on\noutput=saucefx\n' > "$XDG_STATE_HOME/saucefx/settings.txt"
-python3 - "$XDG_STATE_HOME/saucefx/preset-session.txt" <<'PY'
+APP_STATE_DIR="$WORK/home/.local/state/saucefx"
+mkdir -p "$APP_STATE_DIR"
+printf 'theme=dark\nautostart=on\noutput=saucefx\n' > "$APP_STATE_DIR/settings.txt"
+python3 - "$APP_STATE_DIR/preset-session.txt" <<'PY'
 import sys
 from pathlib import Path
 frequencies = [20, 25, 31.5, 40, 50, 63, 80, 100, 125, 160, 200, 250, 315, 400,
@@ -159,12 +160,17 @@ for attempt in 1 2 3; do
     sleep 2
 done
 
-# The 2 s save timer persists the restored session under the portable name.
-for ((i=0; i<50; ++i)); do
-    [ -f "$XDG_STATE_HOME/saucefx/preset-session.txt" ] && break
+# Require the save timer to replace the old mount path and retain the
+# non-default band value, proving the seeded session was actually restored.
+for ((i=0; i<100; ++i)); do
+    if grep -Fqx "preset=$APPDIR_TEST/usr/share/saucefx/presets/Factsoft/Default.fac" \
+        "$APP_STATE_DIR/preset-session.txt"; then break; fi
     sleep 0.1
 done
-grep -q 'factory-preset=Default.fac' "$XDG_STATE_HOME/saucefx/preset-session.txt"
+grep -Fqx "preset=$APPDIR_TEST/usr/share/saucefx/presets/Factsoft/Default.fac" \
+    "$APP_STATE_DIR/preset-session.txt"
+grep -qx 'factory-preset=Default.fac' "$APP_STATE_DIR/preset-session.txt"
+grep -qx 'eq17gain=3.000000' "$APP_STATE_DIR/preset-session.txt"
 # Start at login is on by default and re-applied at startup: the portable
 # launch command is registered under the private config dir.
 grep -F "Exec=\"$IMAGE\" --autostart" "$XDG_CONFIG_HOME/autostart/saucefx.desktop"

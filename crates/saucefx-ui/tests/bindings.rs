@@ -703,6 +703,7 @@ struct MockEngine {
     effects: Vec<(usize, f32)>,
     eq: Vec<(usize, f32)>,
     outputs: Vec<(String, String)>,
+    preferences: Vec<(String, String)>,
     loaded: Vec<String>,
 }
 
@@ -715,6 +716,9 @@ impl saucefx_ui::binding::Engine for MockEngine {
     }
     fn apply_eq_gain(&mut self, index: usize, gain: f32) {
         self.eq.push((index, gain));
+    }
+    fn set_output_preference(&mut self, name: &str, port: &str) {
+        self.preferences.push((name.to_string(), port.to_string()));
     }
     fn apply_output(&mut self, name: &str, port: &str) {
         self.outputs.push((name.to_string(), port.to_string()));
@@ -959,6 +963,10 @@ fn direct_playback_restore_keeps_the_saved_device_preference() {
     assert!(!binding.state().output().routed);
     assert_eq!(binding.state().output().preferred_name, "usb.saved");
     assert_eq!(binding.state().output().preferred_port, "headphones");
+    assert_eq!(
+        engine.borrow().preferences,
+        vec![("usb.saved".to_string(), "headphones".to_string())]
+    );
     assert_eq!(
         engine.borrow().outputs,
         vec![("direct".to_string(), String::new())]
