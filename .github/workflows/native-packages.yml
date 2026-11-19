@@ -71,6 +71,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # The build sandbox has no network: vendor every crate from Cargo.lock
+      # and pre-fetch the Skia binaries archive skia-bindings would download.
+      - name: Generate cargo sources manifest
+        run: |
+          python3 -m venv /tmp/cargo-gen
+          /tmp/cargo-gen/bin/pip install -q tomlkit aiohttp
+          git clone --depth 1 https://github.com/flatpak/flatpak-builder-tools /tmp/fbt
+          /tmp/cargo-gen/bin/python /tmp/fbt/cargo/flatpak-cargo-generator.py \
+            Cargo.lock -o packaging/native/flatpak/cargo-sources.json
+
+      - name: Fetch prebuilt Skia binaries
+        run: |
+          # Key is specific to skia-bindings 0.153.3 + this target + the
+          # Slint renderer's Skia feature set; refresh it on slint bumps.
+          curl -fsSL -o packaging/native/flatpak/skia-binaries.tar.gz \
+            https://github.com/rust-skia/skia-binaries/releases/download/0.153.3/skia-binaries-b7f043e0b1e2a850e702-x86_64-unknown-linux-gnu-ganesh-gl-jpegd-jpege-pdf-vulkan.tar.gz
+          echo "9ebe4c448cc9f789bad241cbd11739cdf759e27db5719c23a7635e096d5807b3  packaging/native/flatpak/skia-binaries.tar.gz" | sha256sum -c -
+
       # From-source build inside the sandbox: the llvm22 extension provides
       # clang/libclang for the 26.08 SDK (the base ships none), rust-stable
       # provides cargo. No runner toolchain needed.
