@@ -5,6 +5,17 @@
 
 use std::path::{Path, PathBuf};
 
+/// Apply the initial window visibility for this launch.
+pub fn show_on_launch(
+    window: &slint::Window,
+    autostart_launch: bool,
+) -> Result<(), slint::PlatformError> {
+    if !autostart_launch {
+        window.show()?;
+    }
+    Ok(())
+}
+
 /// `<config>/autostart/saucefx.desktop` (`configDir().getChildFile(...)`).
 pub fn autostart_file(config_dir: &Path) -> PathBuf {
     config_dir.join("autostart").join("saucefx.desktop")
@@ -99,6 +110,31 @@ pub fn apply_autostart(enabled: bool, file: &Path, entry: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn login_launch_stays_hidden_until_opened_normally() {
+        use slint::ComponentHandle;
+        use slint::platform::software_renderer::{MinimalSoftwareWindow, RepaintBufferType};
+        use slint::platform::{Platform, PlatformError, WindowAdapter};
+        use std::rc::Rc;
+
+        struct OffscreenPlatform;
+        impl Platform for OffscreenPlatform {
+            fn create_window_adapter(&self) -> Result<Rc<dyn WindowAdapter>, PlatformError> {
+                Ok(MinimalSoftwareWindow::new(RepaintBufferType::NewBuffer))
+            }
+        }
+        slint::platform::set_platform(Box::new(OffscreenPlatform)).unwrap();
+        let app = saucefx_ui::AppWindow::new().unwrap();
+        show_on_launch(app.window(), true).unwrap();
+        assert!(!app.window().is_visible(), "login must not pop up a window");
+        show_on_launch(app.window(), false).unwrap();
+        assert!(
+            app.window().is_visible(),
+            "a normal launch shows the window"
+        );
+        app.hide().unwrap();
+    }
 
     #[test]
     fn autostart_file_is_the_xdg_entry_under_the_config_dir() {

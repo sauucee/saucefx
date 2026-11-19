@@ -4,6 +4,7 @@
 
 mod autostart;
 mod fxpw;
+mod paths;
 mod presets;
 mod single_instance;
 
@@ -20,6 +21,7 @@ use saucefx_ui::binding::{MenuRow, UiBinding};
 use slint::{ComponentHandle, Timer, TimerMode};
 
 const SPECTRUM_INTERVAL_MS: u64 = 50;
+const OUTPUT_INTERVAL_MS: u64 = 1000;
 const SAVE_INTERVAL_MS: u64 = 2000;
 
 fn now_ms() -> u64 {
@@ -38,49 +40,40 @@ fn home_dir() -> PathBuf {
 }
 
 fn state_dir() -> PathBuf {
-    home_dir().join(".local").join("state").join("saucefx")
+    paths::app_dir(
+        &home_dir(),
+        std::env::var("XDG_STATE_HOME").ok().as_deref(),
+        ".local/state",
+    )
 }
 
 fn data_dir() -> PathBuf {
-    home_dir().join(".local").join("share").join("saucefx")
+    paths::app_dir(
+        &home_dir(),
+        std::env::var("XDG_DATA_HOME").ok().as_deref(),
+        ".local/share",
+    )
 }
 
 fn user_preset_dir() -> PathBuf {
     data_dir().join("presets")
 }
 
-/// The XDG config directory (`configDir()` in Main.cpp): XDG_CONFIG_HOME,
-/// else ~/.config — the autostart entry lives at
-/// `<config>/autostart/saucefx.desktop`.
+/// Match the previous host's autostart path, including Flatpak's host-side
+/// ~/.config/autostart exception.
 fn config_dir() -> PathBuf {
-    if let Ok(xdg) = std::env::var("XDG_CONFIG_HOME")
-        && !xdg.is_empty()
-    {
-        return PathBuf::from(xdg);
-    }
-    home_dir().join(".config")
+    paths::config_dir(
+        &home_dir(),
+        std::env::var("XDG_CONFIG_HOME").ok().as_deref(),
+        std::env::var_os("FLATPAK_ID").is_some(),
+    )
 }
 
-/// The factory .fac library: `SAUCEFX_ROOT` override, else the repo checkout
-/// found from the executable path, else the installed data dir (Main.cpp's
-/// presetLibraryDir resolution order).
+/// Resolve the factory library using the launch override and executable path.
 fn preset_library_dir() -> PathBuf {
-    if let Ok(root) = std::env::var("SAUCEFX_ROOT") {
-        return PathBuf::from(root).join("presets").join("Factsoft");
-    }
-    if let Ok(exe) = std::fs::read_link("/proc/self/exe") {
-        let mut dir = exe.parent().map(Path::to_path_buf);
-        while let Some(current) = dir {
-            let candidate = current.join("presets").join("Factsoft");
-            if candidate.is_dir() {
-                return candidate;
-            }
-            dir = current.parent().map(Path::to_path_buf);
-        }
-    }
-    PathBuf::from("/usr/share/saucefx")
-        .join("presets")
-        .join("Factsoft")
+    let root = std::env::var("SAUCEFX_ROOT").ok().map(PathBuf::from);
+    let exe = std::fs::read_link("/proc/self/exe").ok();
+    presets::library_dir(root.as_deref(), exe.as_deref())
 }
 
 fn read_file(path: &Path) -> Option<String> {
@@ -136,9 +129,9 @@ fn zenity_save_file(title: &str, start: &Path) -> Option<PathBuf> {
     }
 }
 
-/// Output menu rows from the engine, with the saved/preferred selection.
-/// Row 1 is Automatic; an empty device name routes automatically.
-fn output_rows(engine: &fxpw::FxpwEngine, settings: &GuiSettings) -> (Vec<MenuRow>, usize) {
+/// Output menu rows from the engine. Row 1 is Automatic; an empty device
+/// name routes automatically. Device and port together identify an output.
+fn output_rows(entries: Vec<fxpw::OutputEntry>) -> Vec<MenuRow> {
     // The reference output menu: WITH SAUCEFX EFFECTS (automatic + devices),
     // WITHOUT EFFECTS (direct playback), matching webSetOutput's ids.
     let mut rows = vec![MenuRow::group("WITH SAUCEFX EFFECTS")];
@@ -149,7 +142,7 @@ fn output_rows(engine: &fxpw::FxpwEngine, settings: &GuiSettings) -> (Vec<MenuRo
         "",
         true,
     ));
-    for entry in engine.outputs() {
+    for entry in entries {
         let label = if entry.port_description.is_empty() {
             entry.description.clone()
         } else {
@@ -176,25 +169,7 @@ fn output_rows(engine: &fxpw::FxpwEngine, settings: &GuiSettings) -> (Vec<MenuRo
         "",
         true,
     ));
-    // Saved selection: an unrouted preference points at Direct playback; a
-    // routed one at the saved device, or Automatic when none was saved.
-    let saved_row: Option<&str> = if !settings.output_routed {
-        Some("direct")
-    } else if settings.output_device.is_empty() {
-        Some("")
-    } else {
-        Some(settings.output_device.as_str())
-    };
-    let selected = saved_row
-        .and_then(|device| {
-            rows.iter().position(|row| {
-                !row.is_group
-                    && (row.output_name == device
-                        || (device != "direct" && !device.is_empty() && row.output_name == device))
-            })
-        })
-        .unwrap_or(1);
-    (rows, selected)
+    rows
 }
 
 /// Restore the live session (selected preset + unsaved tweaks + power).
@@ -348,8 +323,8 @@ fn main() {
         binding.set_autostart(settings.autostart);
         let scanned = presets::scan(&factory_dir, &user_preset_dir());
         let factory = presets::fixtures(&engine.borrow(), &scanned);
-        let (outputs, selected_output) = output_rows(&engine.borrow(), &settings);
-        binding.install_catalog(factory, Vec::new(), outputs, selected_output);
+        let outputs = output_rows(engine.borrow().outputs());
+        binding.install_catalog(factory, Vec::new(), outputs, 1);
     }
     // First launch (no usable session): new users start on the Default
     // preset like the reference, located by name — the scanned library's
@@ -367,9 +342,13 @@ fn main() {
             }
         }
     }
-    // The saved (or preferred) output routes through the engine.
-    let selected_output = binding.borrow().selected_output();
-    binding.borrow_mut().choose_output(selected_output);
+    // Restore the saved identity directly, including a disconnected device's
+    // port. Choosing a fallback menu row here would erase that preference.
+    binding.borrow_mut().restore_output(
+        &settings.output_device,
+        &settings.output_port,
+        settings.output_routed,
+    );
     binding.borrow().sync(&window);
 
     // Settings -> Quit SauceFX: save, stop the engine, end the process.
@@ -574,7 +553,8 @@ fn main() {
         }
     }
 
-    window.show().expect("show the SauceFX window");
+    autostart::show_on_launch(window.window(), auto_start_launch)
+        .expect("set initial SauceFX window visibility");
 
     // Live spectrum: the engine's analyzer feeds the view's history.
     let spectrum_timer = Timer::default();
@@ -596,7 +576,26 @@ fn main() {
         );
     }
 
-    // Persist settings and the live session; both timers run on the event
+    // Keep the device menu current without applying routing again.
+    let output_timer = Timer::default();
+    {
+        let binding = Rc::clone(&binding);
+        let engine = Rc::clone(&engine);
+        let window = window.as_weak();
+        output_timer.start(
+            TimerMode::Repeated,
+            Duration::from_millis(OUTPUT_INTERVAL_MS),
+            move || {
+                let rows = output_rows(engine.borrow().outputs());
+                let changed = binding.borrow_mut().refresh_outputs(rows);
+                if changed && let Some(window) = window.upgrade() {
+                    binding.borrow().sync(&window);
+                }
+            },
+        );
+    }
+
+    // Persist settings and the live session; timers run on the event
     // loop thread, matching the fxpw and RefCell threading rules.
     let save_timer = Timer::default();
     {

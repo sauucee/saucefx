@@ -67,6 +67,15 @@
     <display_length compare="ge">768</display_length>
   </requires>
   <releases>
+    <release version="0.3.1" date="2026-11-20">
+      <description>
+        <p>Restore factory presets in Flatpak installations and provide an
+        in-place bundle upgrade helper. Keep login startup hidden, refresh
+        output devices while running, and restore the saved output port.
+        Loaded equalizer gains now round to whole decibels consistently
+        across playback, controls, resets and saved sessions.</p>
+      </description>
+    </release>
     <release version="0.3.0" date="2026-11-19">
       <description>
         <p>Native Rust/Slint interface replaces the web-based UI, with crisp

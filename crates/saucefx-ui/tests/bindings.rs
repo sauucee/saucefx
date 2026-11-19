@@ -628,21 +628,21 @@ fn format_gain_never_mutates_preset_or_session_state() {
     captured[4] = 1.15;
     assert!(binding.apply_captured_values(&[0.0; EFFECT_COUNT], &captured));
     let before = binding.eq_gains();
-    assert_eq!(before[17], -1.25, "captured floats keep their precision");
-    assert_eq!(before[4], 1.15);
+    assert_eq!(before[17], -1.0, "loaded EQ uses whole decibels");
+    assert_eq!(before[4], 1.0);
 
     binding.set_active_eq_band(Some(17));
-    assert_eq!(binding.eq_readout(), "1 kHz \u{b7} -1.2 dB");
+    assert_eq!(binding.eq_readout(), "1 kHz \u{b7} -1 dB");
     binding.set_active_eq_band(Some(4));
-    assert_eq!(binding.eq_readout(), "50 Hz \u{b7} +1.1 dB");
+    assert_eq!(binding.eq_readout(), "50 Hz \u{b7} +1 dB");
     binding.set_active_eq_band(None);
     assert_eq!(binding.eq_readout(), "");
 
     // Formatting is read-only: neither the live gains nor the applied
     // baseline moved.
     assert_eq!(binding.eq_gains(), before);
-    assert_eq!(binding.state().applied_eq_gain(17), Some(-1.25));
-    assert_eq!(binding.state().applied_eq_gain(4), Some(1.15));
+    assert_eq!(binding.state().applied_eq_gain(17), Some(-1.0));
+    assert_eq!(binding.state().applied_eq_gain(4), Some(1.0));
 }
 
 #[test]
@@ -664,14 +664,14 @@ fn eq_readout_uses_the_31_frequency_band_not_the_compact_caption_list() {
     binding.set_active_eq_band(Some(30));
     assert_eq!(binding.eq_readout(), "20 kHz \u{b7} 0 dB");
 
-    // A captured preset keeps fractional EQ values; the readout must not round.
+    // Loaded presets use the same whole-dB scale as manual edits.
     let mut music = UiBinding::default();
     let mut captured = [0.0f32; BAND_COUNT];
     captured[17] = 1.2;
     assert!(music.apply_captured_values(&[0.0; EFFECT_COUNT], &captured));
-    assert_eq!(music.eq_gains()[17], 1.2);
+    assert_eq!(music.eq_gains()[17], 1.0);
     music.set_active_eq_band(Some(17));
-    assert_eq!(music.eq_readout(), "1 kHz \u{b7} +1.2 dB");
+    assert_eq!(music.eq_readout(), "1 kHz \u{b7} +1 dB");
 
     music.set_active_eq_band(None);
     assert_eq!(music.eq_readout(), "");
@@ -703,6 +703,7 @@ struct MockEngine {
     effects: Vec<(usize, f32)>,
     eq: Vec<(usize, f32)>,
     outputs: Vec<(String, String)>,
+    preferences: Vec<(String, String)>,
     loaded: Vec<String>,
 }
 
@@ -715,6 +716,9 @@ impl saucefx_ui::binding::Engine for MockEngine {
     }
     fn apply_eq_gain(&mut self, index: usize, gain: f32) {
         self.eq.push((index, gain));
+    }
+    fn set_output_preference(&mut self, name: &str, port: &str) {
+        self.preferences.push((name.to_string(), port.to_string()));
     }
     fn apply_output(&mut self, name: &str, port: &str) {
         self.outputs.push((name.to_string(), port.to_string()));
@@ -767,7 +771,7 @@ fn engine_sink_forwards_applied_changes_and_real_preset_paths() {
     );
     assert_eq!(binding.preset_name(), "Factsoft 1");
     assert_eq!(binding.effects()[0], 7.5, "engine values mirror the view");
-    assert_eq!(binding.eq_gains()[17], -4.25);
+    assert_eq!(binding.eq_gains()[17], -4.0);
     assert!(!binding.edited(), "the loaded preset is the new baseline");
 
     // Synthetic rows (no path) keep applying their fixture values.
@@ -780,6 +784,243 @@ fn engine_sink_forwards_applied_changes_and_real_preset_paths() {
         "fixture values, not engine reads"
     );
     assert_eq!(engine.borrow().loaded.len(), 1, "no second engine load");
+}
+
+#[test]
+fn output_refresh_tracks_devices_without_reapplying_audio() {
+    use saucefx_ui::binding::MenuRow;
+
+    let engine = Rc::new(RefCell::new(MockEngine::default()));
+    let mut binding = UiBinding::default();
+    binding.set_engine(Rc::clone(&engine) as Rc<RefCell<dyn saucefx_ui::binding::Engine>>);
+    assert!(binding.choose_output(2));
+    binding.set_effect(1, 4.0);
+    binding.set_eq_gain(3, -2.0);
+    binding.toggle_output_menu();
+    let state = binding.state().clone();
+    let preset = binding.preset_name().to_string();
+    let presets = binding.preset_rows().to_vec();
+    let calls = engine.borrow().outputs.clone();
+
+    let mut outputs = binding.output_rows().to_vec();
+    outputs.insert(
+        2,
+        MenuRow::output("USB DAC", "USB audio", "usb.dac", "", true),
+    );
+    assert!(binding.refresh_outputs(outputs.clone()));
+    assert_eq!(binding.output_rows(), outputs);
+    assert_eq!(
+        binding.selected_output(),
+        3,
+        "selection follows device identity"
+    );
+    assert_eq!(binding.output_name(), "Test speakers");
+    assert_eq!(binding.state(), &state);
+    assert_eq!(binding.preset_name(), preset);
+    assert_eq!(binding.preset_rows(), presets);
+    assert!(binding.output_menu_open());
+    assert_eq!(
+        engine.borrow().outputs,
+        calls,
+        "refresh does not reroute audio"
+    );
+    assert!(
+        !binding.refresh_outputs(outputs),
+        "unchanged rows need no update"
+    );
+
+    let mut disconnected = binding.output_rows().to_vec();
+    disconnected.retain(|row| row.output_name != "alsa_output.test-speakers");
+    assert!(binding.refresh_outputs(disconnected));
+    assert_eq!(binding.output_name(), "Test speakers");
+    assert!(binding.output_rows()[binding.selected_output()].disabled);
+    assert_eq!(
+        binding.state(),
+        &state,
+        "unplugging preserves the preferred output"
+    );
+
+    let mut reconnected = binding.output_rows().to_vec();
+    reconnected.retain(|row| row.output_name != "alsa_output.test-speakers");
+    reconnected.insert(
+        2,
+        MenuRow::output(
+            "Test speakers",
+            "Built-in audio",
+            "alsa_output.test-speakers",
+            "",
+            true,
+        ),
+    );
+    assert!(binding.refresh_outputs(reconnected));
+    assert_eq!(binding.output_name(), "Test speakers");
+    assert!(!binding.output_rows()[binding.selected_output()].disabled);
+    assert_eq!(binding.state(), &state);
+    assert_eq!(engine.borrow().outputs, calls);
+}
+
+#[test]
+fn saved_output_restores_the_exact_port() {
+    use saucefx_ui::binding::MenuRow;
+
+    let engine = Rc::new(RefCell::new(MockEngine::default()));
+    let mut binding = UiBinding::default();
+    binding.set_engine(Rc::clone(&engine) as Rc<RefCell<dyn saucefx_ui::binding::Engine>>);
+    let mut outputs = binding.output_rows().to_vec();
+    outputs.insert(
+        2,
+        MenuRow::output(
+            "Speakers",
+            "Built-in audio",
+            "alsa_output.shared",
+            "analog-output-speaker",
+            true,
+        ),
+    );
+    outputs.insert(
+        3,
+        MenuRow::output(
+            "Headphones",
+            "Built-in audio",
+            "alsa_output.shared",
+            "analog-output-headphones",
+            true,
+        ),
+    );
+    binding.install_catalog(factory_fixtures(), Vec::new(), outputs.clone(), 1);
+
+    binding.restore_output("alsa_output.shared", "analog-output-headphones", true);
+    assert_eq!(binding.selected_output(), 3);
+    assert_eq!(binding.output_name(), "Headphones");
+    assert_eq!(
+        binding.state().output().preferred_name,
+        "alsa_output.shared"
+    );
+    assert_eq!(
+        binding.state().output().preferred_port,
+        "analog-output-headphones"
+    );
+    let expected = vec![(
+        "alsa_output.shared".to_string(),
+        "analog-output-headphones".to_string(),
+    )];
+    assert_eq!(engine.borrow().outputs, expected);
+
+    outputs.swap(2, 3);
+    assert!(binding.refresh_outputs(outputs));
+    assert_eq!(binding.selected_output(), 2);
+    assert_eq!(binding.output_name(), "Headphones");
+    assert_eq!(engine.borrow().outputs, expected);
+}
+
+#[test]
+fn disconnected_saved_output_preserves_its_device_and_port() {
+    use saucefx_ui::binding::MenuRow;
+
+    let engine = Rc::new(RefCell::new(MockEngine::default()));
+    let mut binding = UiBinding::default();
+    binding.set_engine(Rc::clone(&engine) as Rc<RefCell<dyn saucefx_ui::binding::Engine>>);
+    binding.restore_output("usb.saved", "headphones", true);
+    let saved = binding.state().output().clone();
+    assert!(saved.routed);
+    assert_eq!(saved.preferred_name, "usb.saved");
+    assert_eq!(saved.preferred_port, "headphones");
+    let row = &binding.output_rows()[binding.selected_output()];
+    assert!(row.disabled);
+    assert_eq!(row.output_name, "usb.saved");
+    assert_eq!(row.output_port, "headphones");
+    assert_eq!(
+        engine.borrow().outputs,
+        vec![("usb.saved".to_string(), "headphones".to_string())]
+    );
+
+    let mut connected = binding.output_rows().to_vec();
+    connected.retain(|row| row.output_name != "usb.saved");
+    connected.insert(
+        2,
+        MenuRow::output(
+            "USB headphones",
+            "USB audio",
+            "usb.saved",
+            "headphones",
+            true,
+        ),
+    );
+    assert!(binding.refresh_outputs(connected));
+    assert_eq!(binding.output_name(), "USB headphones");
+    assert!(!binding.output_rows()[binding.selected_output()].disabled);
+    assert_eq!(binding.state().output(), &saved);
+    assert_eq!(engine.borrow().outputs.len(), 1);
+}
+
+#[test]
+fn direct_playback_restore_keeps_the_saved_device_preference() {
+    let engine = Rc::new(RefCell::new(MockEngine::default()));
+    let mut binding = UiBinding::default();
+    binding.set_engine(Rc::clone(&engine) as Rc<RefCell<dyn saucefx_ui::binding::Engine>>);
+    binding.restore_output("usb.saved", "headphones", false);
+    assert_eq!(binding.output_name(), "Direct playback");
+    assert!(!binding.state().output().routed);
+    assert_eq!(binding.state().output().preferred_name, "usb.saved");
+    assert_eq!(binding.state().output().preferred_port, "headphones");
+    assert_eq!(
+        engine.borrow().preferences,
+        vec![("usb.saved".to_string(), "headphones".to_string())]
+    );
+    assert_eq!(
+        engine.borrow().outputs,
+        vec![("direct".to_string(), String::new())]
+    );
+    let rows = binding.output_rows().to_vec();
+    assert!(!binding.refresh_outputs(rows));
+    assert_eq!(binding.output_name(), "Direct playback");
+    assert_eq!(engine.borrow().outputs.len(), 1);
+}
+
+#[test]
+fn captured_eq_gains_round_to_whole_decibels_before_becoming_baseline() {
+    let engine = Rc::new(RefCell::new(MockEngine::default()));
+    let mut binding = UiBinding::default();
+    binding.set_engine(Rc::clone(&engine) as Rc<RefCell<dyn saucefx_ui::binding::Engine>>);
+    let gains = [
+        -12.0, -11.6, -11.5, -11.4, -10.2, -9.9, -8.7, -7.5, -6.4, -5.5, -4.49, -3.51, -2.5, -1.2,
+        -0.6, -0.5, -0.49, 0.0, 0.49, 0.5, 0.6, 1.2, 1.5, 2.5, 3.49, 4.51, 5.5, 7.2, 8.8, 11.6,
+        12.0,
+    ];
+    let expected = [
+        -12.0, -12.0, -12.0, -11.0, -10.0, -10.0, -9.0, -8.0, -6.0, -6.0, -4.0, -4.0, -3.0, -1.0,
+        -1.0, -1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 2.0, 3.0, 3.0, 5.0, 6.0, 7.0, 9.0, 12.0, 12.0,
+    ];
+    let effects = [0.25, 1.2, 2.5, 3.75, 10.0];
+    assert!(binding.apply_captured_values(&effects, &gains));
+    assert_eq!(
+        binding.eq_gains(),
+        expected,
+        "all preset/session gains use whole dB"
+    );
+    assert_eq!(
+        binding.effects(),
+        effects,
+        "EQ rounding does not alter effects"
+    );
+    assert!(!binding.edited());
+    assert_eq!(
+        engine.borrow().eq,
+        expected.into_iter().enumerate().collect::<Vec<_>>()
+    );
+    for (band, gain) in expected.into_iter().enumerate() {
+        assert_eq!(binding.state().applied_eq_gain(band), Some(gain));
+        assert_eq!(
+            binding.set_eq_gain(band, if gain > 0.0 { -12.0 } else { 12.0 }),
+            EditOutcome::Applied
+        );
+        assert_eq!(binding.reset_eq_band(band), EditOutcome::Applied);
+        assert_eq!(binding.eq_gains()[band], gain);
+        assert!(
+            !binding.edited(),
+            "reset restores the rounded preset baseline"
+        );
+    }
 }
 
 #[test]
@@ -818,7 +1059,7 @@ fn first_launch_loads_the_selected_preset_into_the_engine() {
         vec!["/library/Factsoft/Default.fac".to_string()]
     );
     assert_eq!(binding.effects()[0], 7.5, "engine values mirror the view");
-    assert_eq!(binding.eq_gains()[17], -4.25);
+    assert_eq!(binding.eq_gains()[17], -4.0);
     assert!(!binding.edited(), "the loaded preset is the new baseline");
 
     // Power off blocks the fallback without forwarding anything.

@@ -213,8 +213,7 @@ fn scenario_startup(window: &AppWindow, binding: &Rc<RefCell<UiBinding>>, checks
         None,
     );
 
-    // A captured preset keeps fractional EQ values; the readout must format
-    // them with the reference half-rounding rule and must not round the state.
+    // Loaded presets use whole-dB values in both state and the readout.
     let mut captured = [0.0f32; BAND_COUNT];
     captured[17] = -1.25;
     checks.is(
@@ -227,14 +226,14 @@ fn scenario_startup(window: &AppWindow, binding: &Rc<RefCell<UiBinding>>, checks
     binding.borrow_mut().set_active_eq_band(Some(17));
     sync(window, binding);
     checks.eq(
-        "negative half readout",
+        "rounded negative readout",
         readout(window),
-        "1 kHz \u{b7} -1.2 dB".to_string(),
+        "1 kHz \u{b7} -1 dB".to_string(),
     );
     checks.eq(
-        "captured gain keeps its precision",
+        "captured gain uses whole decibels",
         binding.borrow().eq_gains()[17],
-        -1.25f32,
+        -1.0f32,
     );
 }
 

@@ -480,6 +480,8 @@ pub trait Engine: 'static {
     /// One EQ gain in dB (the engine's band frequency is resolved by the
     /// implementation's own band table).
     fn apply_eq_gain(&mut self, index: usize, gain: f32);
+    /// Remember the physical device/port without enabling SauceFX routing.
+    fn set_output_preference(&mut self, name: &str, port: &str);
     /// Route to a physical output; an empty name selects automatic.
     fn apply_output(&mut self, name: &str, port: &str);
     /// Load a .fac file into the engine. Returns the resulting live effect
@@ -574,6 +576,73 @@ impl UiBinding {
         self.catalog.outputs = outputs;
         self.selected_preset = 1;
         self.selected_output = selected_output;
+    }
+
+    /// Restore the saved output identity, even when the device is disconnected.
+    pub fn restore_output(&mut self, name: &str, port: &str, routed: bool) {
+        self.state.set_output_preference(name, port);
+        self.state.set_active_output("", "", routed);
+        self.refresh_outputs(self.catalog.outputs.clone());
+        if let Some(engine) = &self.engine {
+            let mut engine = engine.borrow_mut();
+            if !routed {
+                engine.set_output_preference(name, port);
+            }
+            engine.apply_output(
+                if routed { name } else { "direct" },
+                if routed { port } else { "" },
+            );
+        }
+    }
+
+    /// Refresh device rows without applying routing or changing audio edits.
+    pub fn refresh_outputs(&mut self, mut outputs: Vec<MenuRow>) -> bool {
+        let preference = self.state.output();
+        let name = if preference.routed {
+            preference.preferred_name.as_str()
+        } else {
+            "direct"
+        };
+        let matches = |row: &MenuRow| {
+            !row.is_group
+                && row.output_name == name
+                && (name.is_empty()
+                    || name == "direct"
+                    || preference.preferred_port.is_empty()
+                    || row.output_port == preference.preferred_port)
+        };
+        let selected = outputs.iter().position(matches).unwrap_or_else(|| {
+            if preference.routed && !name.is_empty() {
+                let mut missing = self
+                    .catalog
+                    .outputs
+                    .iter()
+                    .find(|row| matches(row))
+                    .cloned()
+                    .unwrap_or_else(|| {
+                        MenuRow::output(name, "", name, &preference.preferred_port, false)
+                    });
+                missing.disabled = true;
+                missing.detail = "Disconnected".to_string();
+                let index = outputs
+                    .iter()
+                    .position(|row| row.is_group && row.label == "WITHOUT EFFECTS")
+                    .unwrap_or(outputs.len());
+                outputs.insert(index, missing);
+                index
+            } else {
+                outputs
+                    .iter()
+                    .position(|row| !row.is_group && !row.disabled)
+                    .unwrap_or(0)
+            }
+        });
+        if self.catalog.outputs == outputs && self.selected_output == selected {
+            return false;
+        }
+        self.catalog.outputs = outputs;
+        self.selected_output = selected;
+        true
     }
 
     /// Path of the selected preset fixture ("" for synthetic rows).
@@ -679,13 +748,15 @@ impl UiBinding {
         )
     }
 
-    /// Apply captured preset values verbatim. The preset format stores floats,
-    /// while the view's own sliders stay on a 1 dB step. With an engine
-    /// installed the full applied set is forwarded, so a session restore or
-    /// preset load reaches the DSP as well.
+    /// Load preset/session EQ gains on the same whole-dB scale as manual
+    /// edits. Round before capturing the baseline and forwarding to the DSP,
+    /// keeping the readout, resets and saved values consistent.
     pub fn apply_captured_values(&mut self, effects: &[f32], eq: &[f32]) -> bool {
         for (band, gain) in eq.iter().take(BAND_COUNT).enumerate() {
-            if self.state.set_eq_gain(band, *gain).is_err() {
+            if !gain.is_finite()
+                || !(-12.0..=12.0).contains(gain)
+                || self.state.set_eq_gain(band, gain.round()).is_err()
+            {
                 return false;
             }
         }

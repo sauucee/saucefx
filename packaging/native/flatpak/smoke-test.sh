@@ -48,4 +48,14 @@ for ((i=0; i<300; ++i)); do
 done
 pactl list short sinks | grep -q SauceFX
 kill -0 "$APP_PID"
-echo "PASS: native Flatpak launches in the sandbox and creates the SauceFX sink"
+# First launch must discover and apply the installed factory Default. Check
+# the saved app state rather than just the presence of a file in the package.
+for ((i=0; i<100; ++i)); do
+    if flatpak run --no-documents-portal --command=sh io.github.sauucee.SauceFX -c \
+        'grep -qx "preset=/app/share/saucefx/presets/Factsoft/Default.fac" "$XDG_STATE_HOME/saucefx/preset-session.txt"' \
+        2>/dev/null; then break; fi
+    sleep 0.1
+done
+flatpak run --no-documents-portal --command=sh io.github.sauucee.SauceFX -c \
+    'grep -qx "preset=/app/share/saucefx/presets/Factsoft/Default.fac" "$XDG_STATE_HOME/saucefx/preset-session.txt" && grep -qx "factory-preset=Default.fac" "$XDG_STATE_HOME/saucefx/preset-session.txt"'
+echo "PASS: native Flatpak launches, creates its sink and applies factory Default"
