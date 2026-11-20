@@ -99,6 +99,8 @@ export component AppWindow inherits Window {
     out property <bool> preset-selector-focused: preset-selector.keyboard-focused;
     out property <bool> output-selector-focused: output-selector.keyboard-focused;
     out property <bool> power-focused: app-header.power-focused;
+    out property <float> settings-save-action-y: settings-dialog.save-action-y;
+    out property <float> settings-update-action-y: settings-dialog.update-action-y;
 
     callback power-toggled();
     callback effect-changed(int, float);

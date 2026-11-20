@@ -112,6 +112,8 @@ export component SettingsDialog inherits Rectangle {
     in property <int> refocus-count: 0;
 
     out property <bool> modal-focused: fs.has-focus;
+    out property <float> save-action-y: (preset-actions.absolute-position.y + preset-actions.height / 2) / 1px;
+    out property <float> update-action-y: (update-button.absolute-position.y + update-button.height / 2) / 1px;
     private property <int> focus-index: 0;
     private property <bool> update-focusable: root.update-action-enabled && !root.update-busy;
     changed focus-index => { root.focus-changed("settings:" + root.focus-index); }
@@ -597,7 +599,7 @@ export component SettingsDialog inherits Rectangle {
                     font-size: 10px;
                     wrap: word-wrap;
                 }
-                HorizontalLayout {
+                preset-actions := HorizontalLayout {
                     spacing: 7px;
                     for action[i] in [0, 1, 2] : Rectangle {
                         horizontal-stretch: 1;
@@ -767,7 +769,7 @@ export component SettingsDialog inherits Rectangle {
                         vertical-alignment: center;
                     }
                     Rectangle { horizontal-stretch: 1; }
-                    Rectangle {
+                    update-button := Rectangle {
                         width: 108px;
                         height: 28px;
                         border-radius: 6px;

@@ -313,7 +313,7 @@ fn scenario_save_success(
     open_settings(window, binding);
 
     // Open Save the way a person does: the Settings card's own button.
-    click(window, 702.0, 353.0);
+    click(window, 702.0, window.get_settings_save_action_y());
     settle();
     checks.is(
         "pointer Settings Save opener opens Save",
@@ -379,7 +379,7 @@ fn scenario_save_success(
 fn scenario_save_escape(window: &AppWindow, binding: &Rc<RefCell<UiBinding>>, checks: &mut Checks) {
     reset(window, binding);
     open_settings(window, binding);
-    click(window, 702.0, 353.0);
+    click(window, 702.0, window.get_settings_save_action_y());
     settle();
     click(window, 500.0, 283.0);
     settle();
@@ -959,7 +959,7 @@ fn scenario_update_settings(
     );
 
     // The action is explicit: clicking it emits the normal AppWindow callback.
-    click(window, 750.0, 446.0);
+    click(window, 750.0, window.get_settings_update_action_y());
     settle();
     checks.eq("update action callback", *update_clicks.borrow(), 1usize);
 
@@ -982,7 +982,7 @@ fn scenario_update_settings(
         window.get_update_busy(),
         "checking action does not expose busy state",
     );
-    click(window, 750.0, 446.0);
+    click(window, 750.0, window.get_settings_update_action_y());
     settle();
     checks.eq(
         "busy update action does not emit callback",
@@ -1019,7 +1019,7 @@ fn scenario_update_settings(
         !window.get_update_action_enabled(),
         "unsupported action remains enabled",
     );
-    click(window, 750.0, 446.0);
+    click(window, 750.0, window.get_settings_update_action_y());
     settle();
     checks.eq(
         "disabled unsupported action does not emit callback",
@@ -1028,7 +1028,9 @@ fn scenario_update_settings(
     );
 
     binding.borrow_mut().set_update_status(UpdateStatus::Ready);
+    binding.borrow_mut().close_settings();
     sync(window, binding);
+    open_settings(window, binding);
     for _ in 0..14 {
         press(window, "\t");
     }
