@@ -26,8 +26,13 @@ export XDG_CONFIG_HOME="$WORK/config" XDG_DATA_HOME="$WORK/data"
 export XDG_CACHE_HOME="$WORK/cache" XDG_STATE_HOME="$WORK/state"
 export FLATPAK_USER_DIR="$WORK/user-install" FLATPAK_SYSTEM_DIR="$WORK/system"
 export GNUPGHOME="$WORK/gnupg"
-mkdir -p "$GNUPGHOME" "$XDG_CONFIG_HOME" "$FLATPAK_USER_DIR" "$FLATPAK_SYSTEM_DIR"
-chmod 700 "$GNUPGHOME"
+export XDG_RUNTIME_DIR="$WORK/run"
+mkdir -p "$GNUPGHOME" "$XDG_CONFIG_HOME" "$FLATPAK_USER_DIR" "$FLATPAK_SYSTEM_DIR" "$XDG_RUNTIME_DIR"
+chmod 700 "$GNUPGHOME" "$XDG_RUNTIME_DIR"
+# D-Bus services are activated by the private bus. They must inherit the
+# same installation paths that the test's flatpak commands use.
+dbus-update-activation-environment FLATPAK_USER_DIR FLATPAK_SYSTEM_DIR \
+    XDG_CONFIG_HOME XDG_DATA_HOME XDG_CACHE_HOME XDG_STATE_HOME XDG_RUNTIME_DIR
 ostree init --repo="$FLATPAK_USER_DIR/repo" --mode=bare-user-only
 ostree init --repo="$FLATPAK_SYSTEM_DIR/repo" --mode=bare-user-only
 gpg --batch --pinentry-mode loopback --passphrase '' --quick-gen-key \

@@ -238,16 +238,48 @@ async fn restart_latest(connection: &zbus::Connection) -> Result<(), String> {
     let fds: HashMap<u32, Fd<'_>> = HashMap::new();
     let envs: HashMap<&str, &str> = HashMap::new();
     let options: HashMap<&str, Value<'_>> = HashMap::new();
-    // LATEST_VERSION=2 asks Flatpak to launch the newly installed deployment.
-    // No host-command, extra filesystem or network capability is requested.
+    let mut started = portal
+        .receive_signal("SpawnStarted")
+        .await
+        .map_err(service_error)?;
+    let mut exited = portal
+        .receive_signal("SpawnExited")
+        .await
+        .map_err(service_error)?;
+    // LATEST_VERSION=2 uses the new deployment; NOTIFY_START=64 confirms it
+    // started before the running application saves, stops audio and exits.
     let pid: u32 = portal
-        .call("Spawn", &(cwd, argv, fds, envs, 2u32, options))
+        .call("Spawn", &(cwd, argv, fds, envs, 66u32, options))
         .await
         .map_err(service_error)?;
     if pid == 0 {
         return Err("Flatpak could not start the updated version. Try again.".into());
     }
-    Ok(())
+    let ready = async {
+        while let Some(message) = started.next().await {
+            let (candidate, _relative): (u32, u32) =
+                message.body().deserialize().map_err(service_error)?;
+            if candidate == pid {
+                return Ok(());
+            }
+        }
+        Err("Flatpak disconnected before starting the update. Try again.".into())
+    };
+    let failed = async {
+        while let Some(message) = exited.next().await {
+            let (candidate, _status): (u32, u32) =
+                message.body().deserialize().map_err(service_error)?;
+            if candidate == pid {
+                return Err("The updated application could not start. Try again.".into());
+            }
+        }
+        Err("Flatpak disconnected before starting the update. Try again.".into())
+    };
+    future::or(future::or(ready, failed), async {
+        async_io::Timer::after(Duration::from_secs(10)).await;
+        Err("Flatpak did not confirm the restart. Try again.".into())
+    })
+    .await
 }
 
 #[cfg(test)]
