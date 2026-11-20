@@ -35,6 +35,8 @@ KEY=$(gpg --batch --with-colons --list-secret-keys 2>/dev/null | python3 -I -c '
 gpg --batch --export "$KEY" > "$WORK/test-public.gpg"
 APP_ID=io.github.sauucee.SauceFX
 REF="app/$APP_ID/x86_64/master"
+mkdir -p "$WORK/repo"
+ostree init --repo="$WORK/repo" --mode=archive
 # This probe does not link graphics/audio libraries. The runtime is an empty
 # sandbox fixture; required shared objects come from the same GitHub runner.
 RUNTIME="$WORK/runtime"
