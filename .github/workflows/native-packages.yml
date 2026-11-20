@@ -81,7 +81,7 @@ jobs:
           CXX: clang++-18
           LIBCLANG_PATH: /usr/lib/llvm-18/lib
         run: |
-          sudo apt-get install -y flatpak gnupg
+          sudo apt-get install -y flatpak gnupg ostree
           cargo build --locked -p saucefx-host --example updater_probe --no-default-features --features renderer-skia
           bash packaging/native/flatpak/test-in-app-update.sh target/debug/examples/updater_probe
 
