@@ -19,6 +19,9 @@ cleanup() {
     fi
     for pid in "${PIDS[@]}"; do kill "$pid" 2>/dev/null || true; done
     for pid in "${PIDS[@]}"; do wait "$pid" 2>/dev/null || true; done
+    # The document portal can mount a FUSE filesystem under this private
+    # runtime; unmount it before cleaning the generated test directory.
+    if mountpoint -q "$WORK/run/doc"; then fusermount -u "$WORK/run/doc" || true; fi
     rm -rf -- "$WORK"
 }
 trap cleanup EXIT
@@ -27,7 +30,8 @@ export XDG_CACHE_HOME="$WORK/cache" XDG_STATE_HOME="$WORK/state"
 export FLATPAK_USER_DIR="$WORK/user-install" FLATPAK_SYSTEM_DIR="$WORK/system"
 export GNUPGHOME="$WORK/gnupg"
 export XDG_RUNTIME_DIR="$WORK/run"
-mkdir -p "$GNUPGHOME" "$XDG_CONFIG_HOME" "$FLATPAK_USER_DIR" "$FLATPAK_SYSTEM_DIR" "$XDG_RUNTIME_DIR"
+mkdir -p "$GNUPGHOME" "$XDG_CONFIG_HOME" "$XDG_DATA_HOME" "$XDG_STATE_HOME" "$XDG_CACHE_HOME" \
+    "$FLATPAK_USER_DIR" "$FLATPAK_SYSTEM_DIR" "$XDG_RUNTIME_DIR"
 chmod 700 "$GNUPGHOME" "$XDG_RUNTIME_DIR"
 # D-Bus services are activated by the private bus. They must inherit the
 # same installation paths that the test's flatpak commands use.
