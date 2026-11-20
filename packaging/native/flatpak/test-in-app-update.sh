@@ -24,9 +24,9 @@ cleanup() {
 trap cleanup EXIT
 export XDG_CONFIG_HOME="$WORK/config" XDG_DATA_HOME="$WORK/data"
 export XDG_CACHE_HOME="$WORK/cache" XDG_STATE_HOME="$WORK/state"
-export FLATPAK_USER_DIR="$WORK/installation" FLATPAK_SYSTEM_DIR="$WORK/system"
+export FLATPAK_USER_DIR="$WORK/user-install" FLATPAK_SYSTEM_DIR="$WORK/system"
 export GNUPGHOME="$WORK/gnupg"
-mkdir -p "$GNUPGHOME" "$XDG_CONFIG_HOME"
+mkdir -p "$GNUPGHOME" "$XDG_CONFIG_HOME" "$FLATPAK_USER_DIR" "$FLATPAK_SYSTEM_DIR"
 chmod 700 "$GNUPGHOME"
 gpg --batch --pinentry-mode loopback --passphrase '' --quick-gen-key \
     'SauceFX CI update test <ci@saucefx.invalid>' rsa2048 sign 1d >"$WORK/key.log" 2>&1
