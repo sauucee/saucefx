@@ -53,6 +53,7 @@ mkdir -p "$APP/files/bin"
 cp "$PROBE" "$APP/files/bin/SauceFX"
 printf '[Application]\nname=%s\nruntime=io.github.sauucee.UpdateTestRuntime/x86_64/master\ncommand=SauceFX\n' "$APP_ID" > "$APP/metadata"
 printf old > "$APP/files/version-marker"
+flatpak build-finish --command=SauceFX "$APP"
 flatpak build-export --gpg-sign="$KEY" --gpg-homedir="$GNUPGHOME" \
     "$WORK/repo" "$APP" master >"$WORK/export-old.log" 2>&1
 flatpak build-update-repo --gpg-sign="$KEY" --gpg-homedir="$GNUPGHOME" "$WORK/repo"
