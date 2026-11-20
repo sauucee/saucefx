@@ -29,6 +29,7 @@ pub enum Event {
 pub struct Updater {
     receiver: Option<Receiver<Event>>,
     worker: Option<JoinHandle<()>>,
+    restart_pending: bool,
 }
 
 impl Updater {
@@ -88,6 +89,17 @@ impl Updater {
     pub fn poll(&mut self) -> Option<Event> {
         let receiver = self.receiver.as_ref()?;
         match receiver.try_recv() {
+            Ok(Event::Status(status)) => {
+                if status == UpdateStatus::RestartRequired {
+                    self.restart_pending = true;
+                }
+                let status = if self.restart_pending && status == UpdateStatus::UpToDate {
+                    UpdateStatus::RestartRequired
+                } else {
+                    status
+                };
+                Some(Event::Status(status))
+            }
             Ok(event) => Some(event),
             Err(TryRecvError::Empty) => None,
             Err(TryRecvError::Disconnected) => {
@@ -236,7 +248,22 @@ async fn restart_latest(connection: &zbus::Connection) -> Result<(), String> {
     let cwd = b"/app\0".to_vec();
     let argv = vec![b"/app/bin/SauceFX\0".to_vec(), b"--restart-wait\0".to_vec()];
     let fds: HashMap<u32, Fd<'_>> = HashMap::new();
-    let envs: HashMap<&str, &str> = HashMap::new();
+    // Preserve only the app's data paths. Older portal versions do not
+    // retain XDG_STATE_HOME when creating the replacement sandbox.
+    let envs: HashMap<String, String> = [
+        "XDG_STATE_HOME",
+        "XDG_DATA_HOME",
+        "XDG_CONFIG_HOME",
+        "XDG_CACHE_HOME",
+    ]
+    .into_iter()
+    .filter_map(|name| {
+        std::env::var(name)
+            .ok()
+            .filter(|value| !value.is_empty())
+            .map(|value| (name.to_string(), value))
+    })
+    .collect();
     let options: HashMap<&str, Value<'_>> = HashMap::new();
     let mut started = portal
         .receive_signal("SpawnStarted")
@@ -285,6 +312,25 @@ async fn restart_latest(connection: &zbus::Connection) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn empty_recheck_keeps_an_installed_update_pending_restart() {
+        let (sender, receiver) = mpsc::channel();
+        let mut updater = Updater {
+            receiver: Some(receiver),
+            ..Updater::default()
+        };
+        sender
+            .send(Event::Status(UpdateStatus::RestartRequired))
+            .unwrap();
+        sender.send(Event::Status(UpdateStatus::UpToDate)).unwrap();
+        for _ in 0..2 {
+            assert!(matches!(
+                updater.poll(),
+                Some(Event::Status(UpdateStatus::RestartRequired))
+            ));
+        }
+    }
 
     #[test]
     fn validates_application_identity_in_the_application_section() {
