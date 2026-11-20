@@ -20,10 +20,14 @@ image = { version = "0.25", default-features = false, features = ["png"] }
 saucefx-core = { path = "../saucefx-core" }
 
 [features]
-default = ["renderer-femtovg"]
-# GPU renderers for the live window. The winit backend prefers femtovg when
-# both are compiled in, so the Skia build drops femtovg instead of layering
-# behind it: `cargo build --no-default-features --features renderer-skia`.
+default = ["renderer-skia"]
+# GPU renderers for the live window. Skia is the default: its glyph
+# rasterization (FreeType + Slight hinting) is the quality fix for the soft
+# text femtovg produces (no hinting, grayscale AA), and every shipped package
+# builds `--no-default-features --features renderer-skia`. The winit backend
+# prefers femtovg when both are compiled in, so the femtovg build drops Skia
+# instead of layering behind it:
+# `cargo build --no-default-features --features renderer-femtovg`.
 # renderer-software stays on unconditionally: the offscreen capture tool and
 # the tests render through it without a GPU.
 renderer-femtovg = ["slint/renderer-femtovg"]

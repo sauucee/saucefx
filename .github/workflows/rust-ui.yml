@@ -40,15 +40,15 @@ jobs:
       - name: Test (core + ui, host needs untracked DSP archives)
         run: xvfb-run -a cargo test -p saucefx-core -p saucefx-ui -- --test-threads=1
 
-      - name: Build release (femtovg, default)
+      - name: Build release (skia, default)
         run: |
           cargo build --release -p saucefx-ui
-          cp target/release/preview target/release/preview-femtovg
-
-      - name: Build release (skia)
-        run: |
-          cargo build --release -p saucefx-ui --no-default-features --features renderer-skia
           cp target/release/preview target/release/preview-skia
+
+      - name: Build release (femtovg)
+        run: |
+          cargo build --release -p saucefx-ui --no-default-features --features renderer-femtovg
+          cp target/release/preview target/release/preview-femtovg
 
       - name: Capture Settings update states
         run: |
