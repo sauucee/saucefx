@@ -2,10 +2,15 @@
 //! UI thread polls events and keeps ownership of the audio engine.
 
 use std::collections::HashMap;
+use std::future::Future;
+use std::os::fd::AsFd;
+use std::os::unix::net::UnixStream;
+use std::path::{Component, Path, PathBuf};
 use std::sync::mpsc::{self, Receiver, Sender, TryRecvError};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
+use futures_lite::io::AsyncReadExt;
 use futures_lite::{StreamExt, future};
 use saucefx_core::updates::UpdateStatus;
 use zbus::zvariant::{Fd, OwnedObjectPath, OwnedValue, Value};
@@ -16,6 +21,10 @@ const PATH: &str = "/org/freedesktop/portal/Flatpak";
 const MONITOR: &str = "org.freedesktop.portal.Flatpak.UpdateMonitor";
 const METHOD_TIMEOUT: Duration = Duration::from_secs(30);
 const UPDATE_TIMEOUT: Duration = Duration::from_secs(15 * 60);
+const DEPLOYMENT_TIMEOUT: Duration = Duration::from_secs(15);
+const METADATA_LIMIT: usize = 64 * 1024;
+const METADATA_ERROR: &str = "Could not verify the installed SauceFX deployment. Try again.";
+const LATEST_VERSION: u32 = 2;
 
 type Info = HashMap<String, OwnedValue>;
 
@@ -29,7 +38,7 @@ pub enum Event {
 pub struct Updater {
     receiver: Option<Receiver<Event>>,
     worker: Option<JoinHandle<()>>,
-    restart_pending: bool,
+    pending_terminal: Option<Event>,
 }
 
 impl Updater {
@@ -46,10 +55,11 @@ impl Updater {
     }
 
     fn launch(&mut self, restart: bool) -> bool {
-        if self
-            .worker
-            .as_ref()
-            .is_some_and(|worker| !worker.is_finished())
+        if self.pending_terminal.is_some()
+            || self
+                .worker
+                .as_ref()
+                .is_some_and(|worker| !worker.is_finished())
         {
             return false;
         }
@@ -58,6 +68,7 @@ impl Updater {
         }
         let (sender, receiver) = mpsc::channel();
         self.receiver = Some(receiver);
+        self.pending_terminal = None;
         self.worker = Some(thread::spawn(move || {
             if !supported() {
                 let _ = sender.send(Event::Status(UpdateStatus::Unsupported));
@@ -76,7 +87,8 @@ impl Updater {
                     let _ = sender.send(Event::RestartLaunched);
                     Ok(())
                 } else {
-                    update(&connection, &sender).await
+                    let running_deployment = read_running_deployment()?;
+                    update(&connection, &sender, &running_deployment).await
                 }
             });
             if let Err(message) = result {
@@ -87,33 +99,52 @@ impl Updater {
     }
 
     pub fn poll(&mut self) -> Option<Event> {
-        let receiver = self.receiver.as_ref()?;
-        match receiver.try_recv() {
-            Ok(Event::Status(status)) => {
-                if status == UpdateStatus::RestartRequired {
-                    self.restart_pending = true;
-                }
-                let status = if self.restart_pending && status == UpdateStatus::UpToDate {
-                    UpdateStatus::RestartRequired
-                } else {
-                    status
-                };
-                Some(Event::Status(status))
+        if let Some(event) = self.pending_terminal.take() {
+            if self
+                .worker
+                .as_ref()
+                .is_some_and(|worker| !worker.is_finished())
+            {
+                self.pending_terminal = Some(event);
+                return None;
             }
-            Ok(event) => Some(event),
-            Err(TryRecvError::Empty) => None,
-            Err(TryRecvError::Disconnected) => {
-                self.receiver = None;
-                if let Some(worker) = self.worker.take() {
-                    if worker.join().is_err() {
-                        return Some(Event::Status(UpdateStatus::Failed(
-                            "The update service stopped unexpectedly. Try again.".into(),
-                        )));
-                    }
-                }
-                None
+            if let Some(worker) = self.worker.take()
+                && worker.join().is_err()
+            {
+                return Some(Event::Status(UpdateStatus::Failed(
+                    "The update service stopped unexpectedly. Try again.".into(),
+                )));
             }
+            return Some(event);
         }
+
+        let event = match self.receiver.as_ref()?.try_recv() {
+            Ok(event) => event,
+            Err(TryRecvError::Empty) => return None,
+            Err(TryRecvError::Disconnected) => {
+                if self
+                    .worker
+                    .as_ref()
+                    .is_some_and(|worker| !worker.is_finished())
+                {
+                    return None;
+                }
+                self.receiver = None;
+                if let Some(worker) = self.worker.take()
+                    && worker.join().is_err()
+                {
+                    return Some(Event::Status(UpdateStatus::Failed(
+                        "The update service stopped unexpectedly. Try again.".into(),
+                    )));
+                }
+                return None;
+            }
+        };
+        if matches!(event, Event::Status(ref status) if !status.busy()) {
+            self.pending_terminal = Some(event);
+            return self.poll();
+        }
+        Some(event)
     }
 }
 
@@ -159,7 +190,11 @@ fn service_error(error: impl std::fmt::Display) -> String {
     }
 }
 
-async fn update(connection: &zbus::Connection, sender: &Sender<Event>) -> Result<(), String> {
+async fn update(
+    connection: &zbus::Connection,
+    sender: &Sender<Event>,
+    running: &Deployment,
+) -> Result<(), String> {
     let portal = zbus::Proxy::new(connection, SERVICE, PATH, SERVICE)
         .await
         .map_err(service_error)?;
@@ -186,13 +221,14 @@ async fn update(connection: &zbus::Connection, sender: &Sender<Event>) -> Result
         let transaction = async {
             while let Some(message) = progress.next().await {
                 let (info,): (Info,) = message.body().deserialize().map_err(service_error)?;
-                let status = progress_status(&info)?;
-                let terminal = !status.busy();
+                let status =
+                    progress_status(&info, running, async { latest_deployment(&portal).await })
+                        .await?;
+                if !status.busy() {
+                    return Ok(status);
+                }
                 if sender.send(Event::Status(status)).is_err() {
                     return Err("The update window closed.".to_string());
-                }
-                if terminal {
-                    return Ok(());
                 }
             }
             Err("The update service disconnected. Try again.".into())
@@ -204,8 +240,224 @@ async fn update(connection: &zbus::Connection, sender: &Sender<Event>) -> Result
         .await
     }
     .await;
-    let _: Result<(), _> = monitor.call("Close", &()).await;
-    result
+    let close: Result<(), _> = monitor.call("Close", &()).await;
+    let status = result?;
+    let _ = close;
+    sender
+        .send(Event::Status(status))
+        .map_err(|_| "The update window closed.".to_string())
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct Deployment {
+    app_id: String,
+    arch: String,
+    branch: String,
+    installation: PathBuf,
+    commit: String,
+}
+
+fn read_running_deployment() -> Result<Deployment, String> {
+    let bytes = std::fs::read("/.flatpak-info").map_err(|_| METADATA_ERROR.to_string())?;
+    parse_deployment(&bytes).map_err(|_| METADATA_ERROR.to_string())
+}
+
+fn deployment_field<'a>(values: &HashMap<&str, &'a str>, key: &str) -> Result<&'a str, String> {
+    values
+        .get(key)
+        .copied()
+        .ok_or_else(|| METADATA_ERROR.to_string())
+}
+
+fn parse_deployment(bytes: &[u8]) -> Result<Deployment, String> {
+    if bytes.len() > METADATA_LIMIT {
+        return Err(METADATA_ERROR.into());
+    }
+    let text = std::str::from_utf8(bytes).map_err(|_| METADATA_ERROR)?;
+    let mut section = "";
+    let mut application = HashMap::new();
+    let mut instance = HashMap::new();
+    for line in text.lines() {
+        let line = line.trim_end_matches('\r');
+        if line.starts_with('[') && line.ends_with(']') {
+            section = &line[1..line.len() - 1];
+            continue;
+        }
+        let Some((key, raw_value)) = line.split_once('=') else {
+            continue;
+        };
+        let target = match section {
+            "Application" => &mut application,
+            "Instance" => &mut instance,
+            _ => continue,
+        };
+        if target.contains_key(key) {
+            return Err(METADATA_ERROR.into());
+        }
+        target.insert(key, raw_value);
+    }
+
+    let app_id = deployment_field(&application, "name")?.to_string();
+    let arch = deployment_field(&instance, "arch")?.to_string();
+    let branch = deployment_field(&instance, "branch")?.to_string();
+    let commit = deployment_field(&instance, "app-commit")?.to_string();
+    let deployment_path = instance
+        .get("original-app-path")
+        .or_else(|| instance.get("app-path"))
+        .ok_or_else(|| METADATA_ERROR.to_string())?;
+    let deployment_path = decode_keyfile_path(deployment_path)?;
+    if app_id != APP_ID || arch.is_empty() || branch.is_empty() {
+        return Err(METADATA_ERROR.into());
+    }
+    let installation = deployment_installation(&deployment_path, &app_id, &arch, &branch, &commit)?;
+
+    Ok(Deployment {
+        app_id,
+        arch,
+        branch,
+        installation,
+        commit,
+    })
+}
+
+fn deployment_installation(
+    app_path: &Path,
+    app_id: &str,
+    arch: &str,
+    branch: &str,
+    app_commit: &str,
+) -> Result<PathBuf, String> {
+    if !app_path.is_absolute()
+        || app_commit.len() != 64
+        || !app_commit
+            .bytes()
+            .all(|byte| matches!(byte, b'0'..=b'9' | b'a'..=b'f'))
+    {
+        return Err(METADATA_ERROR.into());
+    }
+    let components: Vec<_> = app_path.components().collect();
+    if components.len() < 7 {
+        return Err(METADATA_ERROR.into());
+    }
+    let suffix = &components[components.len() - 6..];
+    if !matches!(suffix[0], Component::Normal(name) if name == "app")
+        || !matches!(suffix[1], Component::Normal(name) if name.to_str() == Some(app_id))
+        || !matches!(suffix[2], Component::Normal(name) if name.to_str() == Some(arch))
+        || !matches!(suffix[3], Component::Normal(name) if name.to_str() == Some(branch))
+        || !matches!(suffix[5], Component::Normal(name) if name == "files")
+        || components
+            .iter()
+            .any(|component| matches!(component, Component::ParentDir | Component::CurDir))
+    {
+        return Err(METADATA_ERROR.into());
+    }
+    let checkout = match suffix[4] {
+        Component::Normal(name) => name.to_str().ok_or(METADATA_ERROR)?,
+        _ => return Err(METADATA_ERROR.into()),
+    };
+    if checkout != app_commit
+        && !checkout.strip_prefix(app_commit).is_some_and(|subpath| {
+            subpath.starts_with('-') && subpath.len() > 1 && subpath.len() <= 256
+        })
+    {
+        return Err(METADATA_ERROR.into());
+    }
+    app_path
+        .ancestors()
+        .nth(6)
+        .map(Path::to_path_buf)
+        .ok_or_else(|| METADATA_ERROR.into())
+}
+
+fn decode_keyfile_path(value: &str) -> Result<PathBuf, String> {
+    let mut path = String::with_capacity(value.len());
+    let mut chars = value.chars();
+    while let Some(ch) = chars.next() {
+        if ch == '\\' {
+            match chars.next() {
+                Some('s') => path.push(' '),
+                Some('t') => path.push('\t'),
+                Some('n') => path.push('\n'),
+                Some('r') => path.push('\r'),
+                Some('\\') => path.push('\\'),
+                _ => return Err(METADATA_ERROR.into()),
+            }
+        } else {
+            path.push(ch);
+        }
+    }
+    if !path.starts_with('/') {
+        return Err(METADATA_ERROR.into());
+    }
+    Ok(PathBuf::from(path))
+}
+
+async fn latest_deployment(portal: &zbus::Proxy<'_>) -> Result<Deployment, String> {
+    let mut exited = portal
+        .receive_signal("SpawnExited")
+        .await
+        .map_err(service_error)?;
+    let (reader, writer) = UnixStream::pair().map_err(|_| METADATA_ERROR.to_string())?;
+    reader
+        .set_nonblocking(true)
+        .map_err(|_| METADATA_ERROR.to_string())?;
+    let cwd = b"/app\0".to_vec();
+    let argv = vec![b"/usr/bin/cat\0".to_vec(), b"/.flatpak-info\0".to_vec()];
+    let envs = HashMap::<String, String>::new();
+    let fds = HashMap::from([(1u32, Fd::from(writer.as_fd()))]);
+    let options: HashMap<&str, Value<'_>> = HashMap::new();
+    let pid = portal
+        .call("Spawn", &(cwd, argv, fds, envs, LATEST_VERSION, options))
+        .await
+        .map_err(service_error)?;
+    if pid == 0 {
+        return Err(METADATA_ERROR.into());
+    }
+    drop(writer);
+
+    let capture = async {
+        let mut reader = async_io::Async::new(reader).map_err(|_| METADATA_ERROR.to_string())?;
+        let mut output = Vec::with_capacity(1024);
+        let mut buffer = [0u8; 2048];
+        loop {
+            let count = reader
+                .read(&mut buffer)
+                .await
+                .map_err(|_| METADATA_ERROR.to_string())?;
+            if count == 0 {
+                return Ok(output);
+            }
+            if output.len() + count > METADATA_LIMIT {
+                return Err(METADATA_ERROR.to_string());
+            }
+            output.extend_from_slice(&buffer[..count]);
+        }
+    };
+    let process_exit = async {
+        while let Some(message) = exited.next().await {
+            let (candidate, status): (u32, u32) =
+                message.body().deserialize().map_err(service_error)?;
+            if message
+                .header()
+                .path()
+                .is_some_and(|path| path == portal.path())
+                && candidate == pid
+            {
+                let wait_status = status as i32;
+                if !libc::WIFEXITED(wait_status) || libc::WEXITSTATUS(wait_status) != 0 {
+                    return Err(METADATA_ERROR.to_string());
+                }
+                return Ok(());
+            }
+        }
+        Err(METADATA_ERROR.to_string())
+    };
+    let (bytes, ()) = future::or(future::try_zip(capture, process_exit), async {
+        async_io::Timer::after(DEPLOYMENT_TIMEOUT).await;
+        Err(METADATA_ERROR.to_string())
+    })
+    .await?;
+    parse_deployment(&bytes).map_err(|_| METADATA_ERROR.to_string())
 }
 
 fn number(info: &Info, key: &str) -> Result<Option<u32>, String> {
@@ -217,7 +469,36 @@ fn number(info: &Info, key: &str) -> Result<Option<u32>, String> {
         .transpose()
 }
 
-fn progress_status(info: &Info) -> Result<UpdateStatus, String> {
+fn classify_terminal(
+    code: u32,
+    running: &Deployment,
+    deployed: &Deployment,
+) -> Result<UpdateStatus, String> {
+    if !matches!(code, 1 | 2) {
+        return Err(METADATA_ERROR.into());
+    }
+    if running.app_id != deployed.app_id
+        || running.arch != deployed.arch
+        || running.branch != deployed.branch
+        || running.installation != deployed.installation
+    {
+        return Err(METADATA_ERROR.into());
+    }
+    Ok(if running.commit == deployed.commit {
+        UpdateStatus::UpToDate
+    } else {
+        UpdateStatus::RestartRequired
+    })
+}
+
+async fn progress_status<F>(
+    info: &Info,
+    running: &Deployment,
+    deployment: F,
+) -> Result<UpdateStatus, String>
+where
+    F: Future<Output = Result<Deployment, String>>,
+{
     let status = number(info, "status")?.ok_or("The update service omitted its status.")?;
     match status {
         0 => {
@@ -228,8 +509,7 @@ fn progress_status(info: &Info) -> Result<UpdateStatus, String> {
                 (u64::from(operation) * 100 + u64::from(progress.min(100))) / u64::from(operations);
             Ok(UpdateStatus::Installing((percent as u32).min(99)))
         }
-        1 => Ok(UpdateStatus::UpToDate),
-        2 => Ok(UpdateStatus::RestartRequired),
+        1 | 2 => classify_terminal(status, running, &deployment.await?),
         3 => {
             let detail = info
                 .get("error_message")
@@ -319,8 +599,114 @@ async fn restart_latest(connection: &zbus::Connection) -> Result<(), String> {
 mod tests {
     use super::*;
 
+    const RUNNING_COMMIT: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const UPDATED_COMMIT: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+
+    fn metadata(root: &str, name: &str, arch: &str, branch: &str, commit: &str) -> String {
+        format!(
+            "[Application]\nname={name}\n\
+             [Instance]\narch={arch}\nbranch={branch}\napp-commit={commit}\n\
+             app-path={root}/app/{name}/{arch}/{branch}/{commit}/files\n"
+        )
+    }
+
+    fn deployment(commit: &str) -> Deployment {
+        parse_deployment(
+            metadata("/var/lib/flatpak", APP_ID, "x86_64", "master", commit).as_bytes(),
+        )
+        .unwrap()
+    }
+
+    fn terminal_status(
+        code: u32,
+        deployed: Result<Deployment, String>,
+    ) -> Result<UpdateStatus, String> {
+        future::block_on(progress_status(
+            &HashMap::from([("status".into(), code.into())]),
+            &deployment(RUNNING_COMMIT),
+            future::ready(deployed),
+        ))
+    }
+
     #[test]
-    fn empty_recheck_keeps_an_installed_update_pending_restart() {
+    fn validates_running_application_identity() {
+        assert_eq!(
+            application_name(&format!(
+                "[Instance]\nname=wrong\n[Application]\nname={APP_ID}\n"
+            )),
+            Some(APP_ID)
+        );
+        assert_eq!(
+            application_name("[Instance]\nname=io.github.sauucee.SauceFX\n"),
+            None
+        );
+        assert_eq!(
+            parse_deployment(
+                metadata(
+                    "/var/lib/flatpak",
+                    APP_ID,
+                    "x86_64",
+                    "master",
+                    RUNNING_COMMIT
+                )
+                .as_bytes()
+            )
+            .unwrap()
+            .commit,
+            RUNNING_COMMIT
+        );
+    }
+
+    #[test]
+    fn terminal_status_is_not_delivered_until_the_worker_can_accept_restart() {
+        let timeout = Duration::from_secs(5);
+        let (sender, receiver) = mpsc::channel();
+        let (ready_tx, ready_rx) = mpsc::channel();
+        let (release_tx, release_rx) = mpsc::channel();
+        let worker = thread::spawn(move || {
+            sender
+                .send(Event::Status(UpdateStatus::RestartRequired))
+                .unwrap();
+            ready_tx.send(()).unwrap();
+            let _ = release_rx.recv();
+        });
+        ready_rx
+            .recv_timeout(timeout)
+            .expect("worker sent terminal event before poll");
+        let mut updater = Updater {
+            receiver: Some(receiver),
+            worker: Some(worker),
+            ..Updater::default()
+        };
+        // A synchronous join regression must fail the test, not hang it.
+        let (polled_tx, polled_rx) = mpsc::channel();
+        let poller = thread::spawn(move || {
+            let _ = polled_tx.send(updater.poll());
+            updater
+        });
+        let first_poll = polled_rx
+            .recv_timeout(timeout)
+            .expect("poll must return while the worker is blocked");
+        assert!(first_poll.is_none());
+        let mut updater = poller.join().unwrap();
+        assert!(updater.pending_terminal.is_some());
+        release_tx.send(()).unwrap();
+        let deadline = std::time::Instant::now() + timeout;
+        while !updater.worker.as_ref().is_some_and(JoinHandle::is_finished) {
+            assert!(
+                std::time::Instant::now() < deadline,
+                "worker did not finish after release"
+            );
+            thread::sleep(Duration::from_millis(1));
+        }
+        assert!(matches!(
+            updater.poll(),
+            Some(Event::Status(UpdateStatus::RestartRequired))
+        ));
+    }
+
+    #[test]
+    fn receiver_only_updater_returns_stashed_terminal_event() {
         let (sender, receiver) = mpsc::channel();
         let mut updater = Updater {
             receiver: Some(receiver),
@@ -329,8 +715,25 @@ mod tests {
         sender
             .send(Event::Status(UpdateStatus::RestartRequired))
             .unwrap();
-        sender.send(Event::Status(UpdateStatus::UpToDate)).unwrap();
-        for _ in 0..2 {
+        assert!(matches!(
+            updater.poll(),
+            Some(Event::Status(UpdateStatus::RestartRequired))
+        ));
+    }
+
+    #[test]
+    fn empty_recheck_keeps_an_installed_update_pending_restart() {
+        let (sender, receiver) = mpsc::channel();
+        let mut updater = Updater {
+            receiver: Some(receiver),
+            ..Updater::default()
+        };
+        for code in [2, 1] {
+            sender
+                .send(Event::Status(
+                    terminal_status(code, Ok(deployment(UPDATED_COMMIT))).unwrap(),
+                ))
+                .unwrap();
             assert!(matches!(
                 updater.poll(),
                 Some(Event::Status(UpdateStatus::RestartRequired))
@@ -339,60 +742,258 @@ mod tests {
     }
 
     #[test]
-    fn validates_application_identity_in_the_application_section() {
+    fn a_fresh_current_deployment_can_clear_a_previous_restart_result() {
+        let (sender, receiver) = mpsc::channel();
+        let mut updater = Updater {
+            receiver: Some(receiver),
+            ..Updater::default()
+        };
+        for (commit, expected) in [
+            (UPDATED_COMMIT, UpdateStatus::RestartRequired),
+            (RUNNING_COMMIT, UpdateStatus::UpToDate),
+        ] {
+            sender
+                .send(Event::Status(
+                    terminal_status(2, Ok(deployment(commit))).unwrap(),
+                ))
+                .unwrap();
+            assert!(matches!(updater.poll(), Some(Event::Status(status)) if status == expected));
+        }
+    }
+
+    #[test]
+    fn newest_deployment_path_is_authoritative_over_the_previous_mount() {
+        let metadata = format!(
+            "[Application]\nname={APP_ID}\n[Instance]\narch=x86_64\nbranch=master\napp-commit={UPDATED_COMMIT}\napp-path=/var/lib/flatpak/app/{APP_ID}/x86_64/master/{RUNNING_COMMIT}/files\noriginal-app-path=/var/lib/flatpak/app/{APP_ID}/x86_64/master/{UPDATED_COMMIT}/files\n"
+        );
+        let updated = parse_deployment(metadata.as_bytes()).unwrap();
+        assert_eq!(updated.commit, UPDATED_COMMIT);
         assert_eq!(
-            application_name(
-                "[Instance]\nname=wrong\n[Application]\nname=io.github.sauucee.SauceFX\n"
-            ),
-            Some(APP_ID)
+            classify_terminal(2, &deployment(RUNNING_COMMIT), &updated).unwrap(),
+            UpdateStatus::RestartRequired
+        );
+
+        let missing_app_mount = format!(
+            "[Application]\nname={APP_ID}\n[Instance]\narch=x86_64\nbranch=master\napp-commit={UPDATED_COMMIT}\napp-path=\noriginal-app-path=/var/lib/flatpak/app/{APP_ID}/x86_64/master/{UPDATED_COMMIT}/files\n"
         );
         assert_eq!(
-            application_name("[Instance]\nname=io.github.sauucee.SauceFX\n"),
-            None
+            parse_deployment(missing_app_mount.as_bytes())
+                .unwrap()
+                .commit,
+            UPDATED_COMMIT
         );
     }
 
     #[test]
-    fn update_terminal_states_are_distinct() {
-        for (code, expected) in [
-            (1u32, UpdateStatus::UpToDate),
-            (2u32, UpdateStatus::RestartRequired),
-        ] {
+    fn current_app_never_requires_restart_after_empty_or_completed_transaction() {
+        for code in [1, 2] {
             assert_eq!(
-                progress_status(&HashMap::from([("status".into(), code.into())])).unwrap(),
-                expected
+                terminal_status(code, Ok(deployment(RUNNING_COMMIT))).unwrap(),
+                UpdateStatus::UpToDate
             );
         }
-        let result = progress_status(&HashMap::from([("status".into(), 3u32.into())])).unwrap();
-        assert!(matches!(result, UpdateStatus::Failed(_)));
+    }
+
+    #[test]
+    fn runtime_only_change_does_not_report_an_app_update() {
+        let running = metadata(
+            "/var/lib/flatpak",
+            APP_ID,
+            "x86_64",
+            "master",
+            RUNNING_COMMIT,
+        );
+        let deployed = format!("{running}runtime-commit={UPDATED_COMMIT}\n");
+        assert_eq!(
+            terminal_status(2, parse_deployment(deployed.as_bytes())).unwrap(),
+            UpdateStatus::UpToDate
+        );
+    }
+
+    #[test]
+    fn changed_app_commit_requires_restart_even_with_the_same_version() {
+        assert_eq!(
+            terminal_status(2, Ok(deployment(UPDATED_COMMIT))).unwrap(),
+            UpdateStatus::RestartRequired
+        );
+    }
+
+    #[test]
+    fn empty_transaction_detects_an_update_already_installed_outside_the_process() {
+        assert_eq!(
+            terminal_status(1, Ok(deployment(UPDATED_COMMIT))).unwrap(),
+            UpdateStatus::RestartRequired
+        );
+    }
+
+    #[test]
+    fn deployment_query_failure_never_reports_success() {
+        for code in [1, 2] {
+            assert_eq!(
+                terminal_status(code, Err("Deployment query failed.".into())),
+                Err("Deployment query failed.".into())
+            );
+        }
+    }
+
+    #[test]
+    fn deployment_identity_must_match_before_commits_are_compared() {
+        for text in [
+            metadata(
+                "/home/test/.local/share/flatpak",
+                APP_ID,
+                "x86_64",
+                "master",
+                UPDATED_COMMIT,
+            ),
+            metadata(
+                "/var/lib/flatpak",
+                APP_ID,
+                "aarch64",
+                "master",
+                UPDATED_COMMIT,
+            ),
+            metadata("/var/lib/flatpak", APP_ID, "x86_64", "beta", UPDATED_COMMIT),
+            metadata(
+                "/var/lib/flatpak",
+                "io.github.example.Other",
+                "x86_64",
+                "master",
+                UPDATED_COMMIT,
+            ),
+            format!(
+                "[Application]\nname={APP_ID}\n[Instance]\narch=x86_64\nbranch=master\napp-commit={UPDATED_COMMIT}\napp-path=/var/lib/flatpak/app/{APP_ID}/x86_64/master/{RUNNING_COMMIT}/files\noriginal-app-path=/home/test/.local/share/flatpak/app/{APP_ID}/x86_64/master/{UPDATED_COMMIT}/files\n"
+            ),
+        ] {
+            for code in [1, 2] {
+                assert!(terminal_status(code, parse_deployment(text.as_bytes())).is_err());
+            }
+        }
+    }
+
+    #[test]
+    fn deployment_metadata_requires_unambiguous_instance_fields_and_a_valid_layout() {
+        let valid = metadata(
+            "/var/lib/flatpak",
+            APP_ID,
+            "x86_64",
+            "master",
+            RUNNING_COMMIT,
+        );
+        for invalid in [
+            valid.replace("[Instance]", "[Other]"),
+            valid.replace("arch=x86_64\n", ""),
+            valid.replace("branch=master\n", ""),
+            valid.replace(&format!("app-commit={RUNNING_COMMIT}\n"), ""),
+            valid.replace(RUNNING_COMMIT, "not-a-commit"),
+            valid.replace("app-commit=", "app-commit=ABC"),
+            valid.replace("app-path=/var/lib", "app-path=var/lib"),
+            valid.replace(
+                "/app/io.github.sauucee.SauceFX/",
+                "/app/io.github.example.Other/",
+            ),
+            valid.replace("/x86_64/master/", "/aarch64/master/"),
+            valid.replace("/master/", "/beta/"),
+            valid.replace("/files\n", "/../files\n"),
+            format!("{valid}app-commit={UPDATED_COMMIT}\n"),
+            format!("{valid}[Application]\nname=io.github.example.Other\n"),
+            format!("{valid}\n[Instance]\noriginal-app-path=relative\n"),
+        ] {
+            assert!(
+                parse_deployment(invalid.as_bytes()).is_err(),
+                "accepted {invalid}"
+            );
+        }
+        assert!(parse_deployment(b"\xff").is_err());
+        assert!(parse_deployment(&vec![b' '; METADATA_LIMIT + 1]).is_err());
+    }
+
+    #[test]
+    fn escaped_installation_paths_compare_as_keyfile_strings() {
+        let escaped = metadata(
+            "/home/test/Flatpak\\sApps",
+            APP_ID,
+            "x86_64",
+            "master",
+            RUNNING_COMMIT,
+        );
+        let plain = metadata(
+            "/home/test/Flatpak Apps",
+            APP_ID,
+            "x86_64",
+            "master",
+            RUNNING_COMMIT,
+        );
+        assert_eq!(
+            parse_deployment(escaped.as_bytes()).unwrap(),
+            parse_deployment(plain.as_bytes()).unwrap()
+        );
+    }
+
+    #[test]
+    fn failed_transactions_do_not_query_or_report_a_deployment() {
+        for info in [
+            HashMap::from([("status".into(), 3u32.into())]),
+            HashMap::from([
+                ("status".into(), 3u32.into()),
+                (
+                    "error_message".into(),
+                    OwnedValue::from(zbus::zvariant::Str::from("signature rejected")),
+                ),
+            ]),
+        ] {
+            let result =
+                future::block_on(progress_status(&info, &deployment(RUNNING_COMMIT), async {
+                    panic!("failed transactions must not query a deployment")
+                }))
+                .unwrap();
+            assert!(matches!(result, UpdateStatus::Failed(_)));
+        }
     }
 
     #[test]
     fn malformed_progress_never_reports_success() {
-        assert!(progress_status(&HashMap::new()).is_err());
-        assert!(progress_status(&HashMap::from([("status".into(), 9u32.into())])).is_err());
-        assert!(progress_status(&HashMap::from([("status".into(), true.into())])).is_err());
+        for info in [
+            HashMap::new(),
+            HashMap::from([("status".into(), 9u32.into())]),
+            HashMap::from([("status".into(), true.into())]),
+        ] {
+            assert!(
+                future::block_on(progress_status(&info, &deployment(RUNNING_COMMIT), async {
+                    panic!("malformed progress must not query a deployment")
+                },))
+                .is_err()
+            );
+        }
     }
 
     #[test]
     fn progress_accounts_for_multiple_operations_and_waits_for_done() {
-        let info = HashMap::from([
-            ("status".into(), 0u32.into()),
-            ("n_ops".into(), 2u32.into()),
-            ("op".into(), 1u32.into()),
-            ("progress".into(), 50u32.into()),
-        ]);
-        assert_eq!(
-            progress_status(&info).unwrap(),
-            UpdateStatus::Installing(75)
-        );
-        let info = HashMap::from([
-            ("status".into(), 0u32.into()),
-            ("progress".into(), 100u32.into()),
-        ]);
-        assert_eq!(
-            progress_status(&info).unwrap(),
-            UpdateStatus::Installing(99)
-        );
+        for (info, expected) in [
+            (
+                HashMap::from([
+                    ("status".into(), 0u32.into()),
+                    ("n_ops".into(), 2u32.into()),
+                    ("op".into(), 1u32.into()),
+                    ("progress".into(), 50u32.into()),
+                ]),
+                UpdateStatus::Installing(75),
+            ),
+            (
+                HashMap::from([
+                    ("status".into(), 0u32.into()),
+                    ("progress".into(), 100u32.into()),
+                ]),
+                UpdateStatus::Installing(99),
+            ),
+        ] {
+            assert_eq!(
+                future::block_on(progress_status(&info, &deployment(RUNNING_COMMIT), async {
+                    panic!("progress must not query a deployment before completion")
+                },))
+                .unwrap(),
+                expected
+            );
+        }
     }
 }

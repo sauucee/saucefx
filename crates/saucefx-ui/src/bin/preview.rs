@@ -3,12 +3,15 @@
 //! This binary renders the real Slint window with the real Winit/FemtoVG
 //! backend. It never creates an audio handle, opens an audio server, reads a
 //! user file or writes to disk: every scene is synthetic and lives in memory.
+//! EQ gallery scenes include `eq-factory`, `eq-impulse`, `eq-step`, and
+//! `eq-endpoints`; CI renders them with the Skia preview binary.
 
 use std::rc::Rc;
 use std::time::Duration;
 
 use slint::ComponentHandle;
 
+use saucefx_core::state::BAND_COUNT;
 use saucefx_ui::AppWindow;
 use saucefx_ui::binding::UiBinding;
 
@@ -21,6 +24,30 @@ fn fixture_frame(step: usize) -> [f32; 10] {
     })
 }
 
+fn eq_fixture(scene: &str) -> Option<[f32; BAND_COUNT]> {
+    match scene {
+        "eq" | "eq-factory" | "eq-light-factory" => Some([
+            -6.0, -4.5, -3.0, -1.5, 0.0, 1.5, 3.0, 4.5, 6.0, 7.0, 8.0, 8.5, 9.0, 8.5, 8.0, 7.0,
+            6.0, 4.5, 3.0, 1.5, 0.0, -1.5, -3.0, -4.5, -6.0, -6.5, -5.0, -3.0, -1.0, 0.5, 1.0,
+        ]),
+        "eq-impulse" => {
+            let mut gains = [0.0; BAND_COUNT];
+            gains[17] = 12.0;
+            Some(gains)
+        }
+        "eq-step" => Some(std::array::from_fn(|band| {
+            if band < BAND_COUNT / 2 { -12.0 } else { 12.0 }
+        })),
+        "eq-endpoints" => {
+            let mut gains = [0.0; BAND_COUNT];
+            gains[0] = 12.0;
+            gains[30] = -12.0;
+            Some(gains)
+        }
+        _ => None,
+    }
+}
+
 fn apply_scene(binding: &mut UiBinding, scene: &str) {
     // A declared synthetic fixture: five centre-out frames, no audio involved.
     // The `empty-*` scenes stay at the host's all-zero starting history so they
@@ -28,6 +55,19 @@ fn apply_scene(binding: &mut UiBinding, scene: &str) {
     if !scene.starts_with("empty") {
         for step in 0..5 {
             binding.push_spectrum(&fixture_frame(step), step as u64 * 60);
+        }
+    }
+
+    if let Some(curve) = eq_fixture(scene) {
+        for (band, gain) in curve.iter().enumerate() {
+            binding.set_eq_gain(band, *gain);
+        }
+        if scene == "eq" || scene == "eq-factory" || scene == "eq-light-factory" {
+            binding.set_effect(0, 6.0);
+            binding.set_effect(1, 4.0);
+        }
+        if scene == "eq-light-factory" {
+            binding.set_light(true);
         }
     }
 
@@ -43,17 +83,7 @@ fn apply_scene(binding: &mut UiBinding, scene: &str) {
             binding.set_custom_accent(true);
             binding.set_accent(0xff3b_82f6);
         }
-        "eq" => {
-            let curve = [
-                -6.0, -4.5, -3.0, -1.5, 0.0, 1.5, 3.0, 4.5, 6.0, 7.0, 8.0, 8.5, 9.0, 8.5, 8.0, 7.0,
-                6.0, 4.5, 3.0, 1.5, 0.0, -1.5, -3.0, -4.5, -6.0, -6.5, -5.0, -3.0, -1.0, 0.5, 1.0,
-            ];
-            for (band, gain) in curve.iter().enumerate() {
-                binding.set_eq_gain(band, *gain);
-            }
-            binding.set_effect(0, 6.0);
-            binding.set_effect(1, 4.0);
-        }
+        "eq-factory" | "eq-impulse" | "eq-step" | "eq-endpoints" | "eq-light-factory" => {}
         "settings" => binding.open_settings(),
         "save" => {
             binding.open_settings();

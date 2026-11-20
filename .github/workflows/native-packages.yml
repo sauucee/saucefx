@@ -113,6 +113,24 @@ jobs:
           /tmp/cargo-gen/bin/python /tmp/fbt/cargo/flatpak-cargo-generator.py \
             Cargo.lock -o packaging/native/flatpak/cargo-sources.json
 
+      - name: Fetch Zenity source
+        run: |
+          archive=/tmp/zenity-4.0.2.tar.gz
+          url=https://gitlab.gnome.org/GNOME/zenity/-/archive/4.0.2/zenity-4.0.2.tar.gz
+          for attempt in 1 2 3; do
+            if curl --http1.1 -fL --retry 2 --retry-all-errors --retry-delay 2 \
+              "$url" -o "$archive"; then
+              break
+            fi
+            if [ "$attempt" = 3 ]; then
+              echo "Zenity source download failed after retries" >&2
+              exit 1
+            fi
+            sleep $((attempt * 3))
+          done
+          echo "fdbb74e882a6a56bb2f1a2381b81e08b06c627cc7e944edb71d107092c70dd80  $archive" | sha256sum -c -
+          install -m0644 "$archive" packaging/native/flatpak/zenity-4.0.2.tar.gz
+
       - name: Fetch prebuilt Skia binaries
         run: |
           # Key is specific to skia-bindings 0.153.3 + this target + the

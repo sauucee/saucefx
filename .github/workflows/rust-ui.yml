@@ -30,7 +30,7 @@ jobs:
       - name: Install build prerequisites
         run: |
           sudo apt-get update
-          sudo apt-get install -y ninja-build pkg-config libfontconfig1-dev libxkbcommon-dev libxkbcommon-x11-0 xvfb
+          sudo apt-get install -y ninja-build pkg-config libfontconfig1-dev libxkbcommon-dev libxkbcommon-x11-0 xvfb imagemagick x11-apps
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -62,6 +62,41 @@ jobs:
         with:
           name: updater-settings-${{ github.sha }}
           path: updater-scenes/*.png
+          if-no-files-found: error
+
+      - name: Capture EQ Skia scenes
+        run: |
+          chmod +x target/release/preview-skia
+          mkdir -p eq-scenes
+          Xvfb :99 -screen 0 1280x800x24 -noreset &
+          XVFB_PID=$!
+          trap 'kill "$XVFB_PID" 2>/dev/null || true' EXIT
+          sleep 1
+          render_eq() {
+            name=$1; scene=$2
+            env DISPLAY=:99 SAUCEFX_PREVIEW_SCENE="$scene" SAUCEFX_PREVIEW_EXIT_MS=15000 \
+              target/release/preview-skia >"eq-scenes/$name.log" 2>&1 &
+            pid=$!
+            sleep 5
+            xwd -root -display :99 -silent | convert xwd:- "eq-scenes/$name.png"
+            if [ "$(stat -c %s "eq-scenes/$name.png" 2>/dev/null || echo 0)" -lt 5000 ]; then
+              sleep 3
+              xwd -root -display :99 -silent | convert xwd:- "eq-scenes/$name.png"
+            fi
+            kill "$pid" 2>/dev/null || true
+            wait "$pid" 2>/dev/null || true
+          }
+          render_eq factory eq-factory
+          render_eq impulse eq-impulse
+          render_eq step eq-step
+          render_eq endpoints eq-endpoints
+          render_eq light eq-light-factory
+
+      - name: Upload EQ Skia captures
+        uses: actions/upload-artifact@v4
+        with:
+          name: eq-skia-scenes-${{ github.sha }}
+          path: eq-scenes/*.png
           if-no-files-found: error
 
       - name: Upload binaries
