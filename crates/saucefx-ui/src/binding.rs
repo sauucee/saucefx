@@ -1932,40 +1932,63 @@ fn now_ms() -> u64 {
 
 /// Equal-index positions and dB->y mapping from `Equalizer.tsx`:
 /// x = (index + 0.5) / 31 * 1000, y = TOP + (12 - gain) / 24 * (BOTTOM - TOP).
-fn eq_points(gains: &[f32; BAND_COUNT], width: f32) -> Vec<(f32, f32)> {
-    let top = geometry::EQ_PLOT_TOP;
-    let bottom = geometry::EQ_PLOT_BOTTOM;
+fn eq_points(gains: &[f32; BAND_COUNT], width: f32) -> Vec<(f64, f64)> {
+    let top = f64::from(geometry::EQ_PLOT_TOP);
+    let bottom = f64::from(geometry::EQ_PLOT_BOTTOM);
     (0..BAND_COUNT)
         .map(|index| {
-            let x = (index as f32 + 0.5) / BAND_COUNT as f32 * width;
-            let gain = gains[index].clamp(-12.0, 12.0);
+            let x = (index as f64 + 0.5) / BAND_COUNT as f64 * f64::from(width);
+            let gain = f64::from(gains[index].clamp(-12.0, 12.0));
             let y = top + (12.0 - gain) / 24.0 * (bottom - top);
             (x, y)
         })
         .collect()
 }
 
-/// The reference cubic smoothing: `previous` falls back to the current point
-/// and `after` falls back to `next`, exactly as `smoothPath()` does.
+/// Natural cubic interpolation in band-index space. The x coordinate is linear
+/// on every segment, so matching first/second derivatives here also matches
+/// slope and curvature after the chart's affine viewbox fit. Natural endpoints
+/// have zero second derivative; no duplicated endpoint or hard slope is needed.
+///
+/// This is the gain-control trace, not the combined DSP frequency response.
+/// Natural splines can overshoot between bands. Do not clamp the interpolated
+/// curve: doing so would create the flat spots and corners this path avoids.
 fn eq_path(gains: &[f32; BAND_COUNT], width: f32) -> String {
     let points = eq_points(gains, width);
-    let mut path = format!("M {:.2} {:.2}", points[0].0, points[0].1);
-    for index in 0..points.len() - 1 {
-        let previous = points[index.saturating_sub(1)];
+    let last = points.len() - 1;
+    let mut upper = [0.0; BAND_COUNT];
+    let mut second = [0.0; BAND_COUNT];
+
+    // Solve M[i-1] + 4 M[i] + M[i+1] = 6 (y[i+1] - 2 y[i] + y[i-1])
+    // with M[0] = M[last] = 0. All intervals are one band-index unit wide.
+    for index in 1..last {
+        let diagonal = 4.0 - upper[index - 1];
+        upper[index] = 1.0 / diagonal;
+        let difference = points[index + 1].1 - 2.0 * points[index].1 + points[index - 1].1;
+        second[index] = (6.0 * difference - second[index - 1]) / diagonal;
+    }
+    for index in (1..last).rev() {
+        second[index] -= upper[index] * second[index + 1];
+    }
+
+    // Six decimals keep serialized slopes/bends continuous well below a pixel,
+    // including after non-uniform fitting. Both stroke and fill reuse this path.
+    let mut path = format!("M {:.6} {:.6}", points[0].0, points[0].1);
+    for index in 0..last {
         let current = points[index];
         let next = points[index + 1];
-        let after = points[(index + 2).min(points.len() - 1)];
-        let control1 = (
-            current.0 + (next.0 - previous.0) / 6.0,
-            current.1 + (next.1 - previous.1) / 6.0,
-        );
-        let control2 = (
-            next.0 - (after.0 - current.0) / 6.0,
-            next.1 - (after.1 - current.1) / 6.0,
-        );
+        let third_width = (next.0 - current.0) / 3.0;
+        let delta = next.1 - current.1;
+        let start_slope = delta - (2.0 * second[index] + second[index + 1]) / 6.0;
+        let end_slope = delta + (second[index] + 2.0 * second[index + 1]) / 6.0;
         path.push_str(&format!(
-            " C {:.2} {:.2}, {:.2} {:.2}, {:.2} {:.2}",
-            control1.0, control1.1, control2.0, control2.1, next.0, next.1
+            " C {:.6} {:.6}, {:.6} {:.6}, {:.6} {:.6}",
+            current.0 + third_width,
+            current.1 + start_slope / 3.0,
+            next.0 - third_width,
+            next.1 - end_slope / 3.0,
+            next.0,
+            next.1
         ));
     }
     path

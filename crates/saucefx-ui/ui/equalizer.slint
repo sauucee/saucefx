@@ -182,6 +182,7 @@ export component EqualizerPanel inherits Rectangle {
                 viewbox-width: 1000;
                 viewbox-height: 200;
                 fit: fill;
+                anti-alias: true;
                 fill: Palette.accent.with-alpha(0.10);
                 stroke: transparent;
                 stroke-width: Layout.eq-curve-stroke;
@@ -198,6 +199,9 @@ export component EqualizerPanel inherits Rectangle {
                 fit: fill;
                 stroke: Palette.accent;
                 stroke-width: Layout.eq-curve-stroke;
+                stroke-line-cap: round;
+                stroke-line-join: round;
+                anti-alias: true;
                 fill: transparent;
             }
 

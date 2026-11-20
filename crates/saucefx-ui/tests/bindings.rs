@@ -8,7 +8,7 @@ use saucefx_core::state::{BAND_COUNT, EFFECT_COUNT};
 use saucefx_ui::binding::{
     ACCENT_ROSE, EditOutcome, FACTORY_PRESET_COUNT, PresetFixture, SPECTRUM_BANDS,
     SPECTRUM_HISTORY, SPECTRUM_SLOTS, SpectrumHistory, UiBinding, argb_to_color, color_to_argb,
-    eq_curve_commands, factory_fixtures, format_gain,
+    eq_curve_commands, eq_curve_fill_commands, factory_fixtures, format_gain,
 };
 
 const BLUE: u32 = 0xff3b82f6;
@@ -276,30 +276,226 @@ fn spectrum_colours_follow_the_source_gradient_maths() {
     );
 }
 
-#[test]
-fn eq_curve_is_a_closed_form_cubic_through_equal_index_positions() {
-    let gains = [0.0; BAND_COUNT];
-    let commands = eq_curve_commands(&gains, 1000.0, 200.0);
-    assert!(commands.starts_with("M 16.13 100.00"), "got {commands}");
-    assert!(
-        commands.contains("C "),
-        "the reference smooths with cubic segments, not a polyline"
-    );
-    assert_eq!(
-        commands.matches("C ").count(),
-        BAND_COUNT - 1,
-        "one cubic segment joins each pair of bands"
-    );
-    let last = commands.rsplit_once(' ').map(|(_, y)| y).unwrap_or("");
-    assert_eq!(last, "100.00", "the curve ends at the 31st band centre");
+type EqPoint = [f64; 2];
 
-    let top = eq_curve_commands(&[12.0; BAND_COUNT], 1000.0, 200.0);
+#[derive(Clone, Copy, Debug)]
+struct EqSegment {
+    from: EqPoint,
+    control1: EqPoint,
+    control2: EqPoint,
+    to: EqPoint,
+}
+
+impl EqSegment {
+    fn at(self, t: f64) -> EqPoint {
+        std::array::from_fn(|axis| {
+            (1.0 - t).powi(3) * self.from[axis]
+                + 3.0 * (1.0 - t).powi(2) * t * self.control1[axis]
+                + 3.0 * (1.0 - t) * t * t * self.control2[axis]
+                + t.powi(3) * self.to[axis]
+        })
+    }
+
+    fn derivative(self, t: f64) -> EqPoint {
+        std::array::from_fn(|axis| {
+            3.0 * (1.0 - t).powi(2) * (self.control1[axis] - self.from[axis])
+                + 6.0 * (1.0 - t) * t * (self.control2[axis] - self.control1[axis])
+                + 3.0 * t * t * (self.to[axis] - self.control2[axis])
+        })
+    }
+
+    fn second_derivative(self, t: f64) -> EqPoint {
+        std::array::from_fn(|axis| {
+            6.0 * (1.0 - t) * (self.control2[axis] - 2.0 * self.control1[axis] + self.from[axis])
+                + 6.0 * t * (self.to[axis] - 2.0 * self.control2[axis] + self.control1[axis])
+        })
+    }
+
+    fn slope(self, t: f64) -> f64 {
+        let [dx, dy] = self.derivative(t);
+        assert!(dx > 0.0, "EQ must progress left to right: {self:?}");
+        dy / dx
+    }
+
+    fn bend(self, t: f64) -> f64 {
+        let [dx, dy] = self.derivative(t);
+        let [ddx, ddy] = self.second_derivative(t);
+        (ddy * dx - dy * ddx) / dx.powi(3)
+    }
+}
+
+/// Read the actual SVG sent to Slint, including its decimal serialization.
+/// Reject extra move/line commands so disjoint or flattened paths cannot pass.
+fn eq_segments(commands: &str) -> Vec<EqSegment> {
+    let fields: Vec<_> = commands
+        .split(|ch: char| ch.is_ascii_whitespace() || ch == ',')
+        .filter(|field| !field.is_empty())
+        .collect();
+    assert_eq!(fields.len(), 3 + (BAND_COUNT - 1) * 7);
+    assert_eq!(fields[0], "M");
+    let coordinate = |raw: &str| {
+        let value = raw.parse::<f64>().expect("numeric EQ path coordinate");
+        assert!(value.is_finite(), "non-finite EQ coordinate: {raw}");
+        value
+    };
+    let mut from = [coordinate(fields[1]), coordinate(fields[2])];
+    fields[3..]
+        .chunks_exact(7)
+        .map(|fields| {
+            assert_eq!(fields[0], "C", "each band pair uses one connected cubic");
+            let segment = EqSegment {
+                from,
+                control1: [coordinate(fields[1]), coordinate(fields[2])],
+                control2: [coordinate(fields[3]), coordinate(fields[4])],
+                to: [coordinate(fields[5]), coordinate(fields[6])],
+            };
+            from = segment.to;
+            segment
+        })
+        .collect()
+}
+
+fn eq_profiles() -> Vec<(&'static str, [f32; BAND_COUNT])> {
+    let mut impulse = [0.0; BAND_COUNT];
+    impulse[17] = 12.0;
+    let mut endpoints = [0.0; BAND_COUNT];
+    endpoints[0] = 12.0;
+    endpoints[BAND_COUNT - 1] = -12.0;
+    vec![
+        ("flat", [0.0; BAND_COUNT]),
+        ("upper limit", [12.0; BAND_COUNT]),
+        ("lower limit", [-12.0; BAND_COUNT]),
+        ("isolated band", impulse),
+        ("endpoints", endpoints),
+        (
+            "ramp",
+            std::array::from_fn(|band| -12.0 + 24.0 * band as f32 / (BAND_COUNT - 1) as f32),
+        ),
+        (
+            "step",
+            std::array::from_fn(|band| if band < 17 { -12.0 } else { 12.0 }),
+        ),
+        (
+            "alternating limits",
+            std::array::from_fn(|band| if band % 2 == 0 { 12.0 } else { -12.0 }),
+        ),
+        (
+            "rounded preset",
+            [
+                -6.0, -5.0, -3.0, -2.0, 0.0, 2.0, 3.0, 5.0, 6.0, 7.0, 8.0, 9.0, 9.0, 9.0, 8.0, 7.0,
+                6.0, 5.0, 3.0, 2.0, 0.0, -2.0, -3.0, -5.0, -6.0, -7.0, -5.0, -3.0, -1.0, 1.0, 1.0,
+            ],
+        ),
+    ]
+}
+
+#[test]
+fn eq_curve_passes_through_every_band_without_turning_back() {
+    for (name, gains) in eq_profiles() {
+        for width in [480.0, 1000.0, 1600.0] {
+            let segments = eq_segments(&eq_curve_commands(&gains, width, 200.0));
+            for (band, segment) in segments.iter().enumerate() {
+                for (index, point) in [(band, segment.from), (band + 1, segment.to)] {
+                    let x = (index as f64 + 0.5) / BAND_COUNT as f64 * f64::from(width);
+                    let y = 12.0 + (12.0 - f64::from(gains[index])) / 24.0 * 176.0;
+                    assert!((point[0] - x).abs() < 1e-5, "{name}: band {index} x");
+                    assert!((point[1] - y).abs() < 1e-5, "{name}: band {index} y");
+                }
+                for sample in 0..=32 {
+                    let t = f64::from(sample) / 32.0;
+                    assert!(segment.derivative(t)[0] > 0.0, "{name}: band {band}");
+                    assert!(segment.at(t).iter().all(|value| value.is_finite()));
+                }
+            }
+        }
+    }
+}
+
+#[test]
+fn eq_curve_has_matching_slopes_and_bends_at_every_band() {
+    // The old /6 control construction is C1 but fails the bend check around
+    // the isolated +12 dB band. Parse serialized cubics, not a second spline.
+    for (name, gains) in eq_profiles() {
+        for width in [480.0, 1000.0, 1600.0] {
+            let segments = eq_segments(&eq_curve_commands(&gains, width, 200.0));
+            for (band, pair) in segments.windows(2).enumerate() {
+                assert_eq!(pair[0].to, pair[1].from);
+                assert!(
+                    (pair[0].slope(1.0) - pair[1].slope(0.0)).abs() < 2e-5,
+                    "{name}: slope jump at band {} (width {width})",
+                    band + 1
+                );
+                assert!(
+                    (pair[0].bend(1.0) - pair[1].bend(0.0)).abs() < 2e-5,
+                    "{name}: curvature jump at band {} (width {width})",
+                    band + 1
+                );
+            }
+        }
+    }
+}
+
+#[test]
+fn eq_curve_has_natural_endpoints_and_preserves_straight_profiles() {
+    for (name, gains) in eq_profiles() {
+        let segments = eq_segments(&eq_curve_commands(&gains, 1000.0, 200.0));
+        assert!(segments[0].bend(0.0).abs() < 2e-5, "{name}: first bend");
+        assert!(
+            segments.last().unwrap().bend(1.0).abs() < 2e-5,
+            "{name}: last bend"
+        );
+    }
+    for gain in [-12.0, 0.0, 12.0] {
+        let expected_y = 12.0 + (12.0 - f64::from(gain)) / 24.0 * 176.0;
+        let segments = eq_segments(&eq_curve_commands(&[gain; BAND_COUNT], 1000.0, 200.0));
+        for segment in segments {
+            for sample in 0..=16 {
+                assert!((segment.at(f64::from(sample) / 16.0)[1] - expected_y).abs() < 1e-5);
+            }
+        }
+    }
+    let ramp = std::array::from_fn(|band| -12.0 + 24.0 * band as f32 / 30.0);
+    for segment in eq_segments(&eq_curve_commands(&ramp, 1000.0, 200.0)) {
+        assert!(
+            segment.bend(0.5).abs() < 2e-5,
+            "a straight ramp stays straight"
+        );
+    }
+}
+
+#[test]
+fn eq_fill_uses_the_exact_same_trace_before_closing_to_the_plot_bottom() {
+    for (_, gains) in eq_profiles() {
+        let curve = eq_curve_commands(&gains, 1000.0, 200.0);
+        let fill = eq_curve_fill_commands(&gains, 1000.0, 200.0);
+        assert_eq!(fill, format!("{curve} L 1000.00 188.00 L 0.00 188.00 Z"));
+    }
+}
+
+#[test]
+fn eq_extreme_step_keeps_smooth_overshoot_instead_of_clipping_into_corners() {
+    let gains = std::array::from_fn(|band| if band < 17 { -12.0 } else { 12.0 });
+    let segments = eq_segments(&eq_curve_commands(&gains, 1000.0, 200.0));
+    let mut lowest = f64::INFINITY;
+    let mut highest = f64::NEG_INFINITY;
+    for segment in segments {
+        for sample in 0..=64 {
+            let y = segment.at(f64::from(sample) / 64.0)[1];
+            let gain = 12.0 - (y - 12.0) / 176.0 * 24.0;
+            lowest = lowest.min(gain);
+            highest = highest.max(gain);
+        }
+    }
+    // Natural interpolation is not monotone. Preserve its smooth overshoot;
+    // the input/DSP gains remain at +/-12 and the chart has visual padding.
     assert!(
-        top.contains("M 16.13 12.00"),
-        "+12 dB sits on the reference plot top (y=12)"
+        highest > 12.25 && highest < 18.0,
+        "upper step overshoot: {highest}"
     );
-    let bottom = eq_curve_commands(&[-12.0; BAND_COUNT], 1000.0, 200.0);
-    assert!(bottom.contains("M 16.13 188.00"), "-12 dB sits at y=188");
+    assert!(
+        lowest < -12.25 && lowest > -18.0,
+        "lower step overshoot: {lowest}"
+    );
 }
 
 #[test]

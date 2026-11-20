@@ -19,7 +19,9 @@ impl UpdateStatus {
             Self::Checking => "Checking for updates…".into(),
             Self::Installing(percent) => format!("Updating SauceFX… {}%", percent.min(&100)),
             Self::UpToDate => "SauceFX is up to date.".into(),
-            Self::RestartRequired => "Update installed. Restart SauceFX to use it.".into(),
+            Self::RestartRequired => {
+                "A newer app version is installed. Restart SauceFX to use it.".into()
+            }
             Self::Failed(message) => message.clone(),
             Self::Unsupported => "Updates for this package are managed outside SauceFX.".into(),
         }
@@ -75,6 +77,16 @@ mod tests {
             UpdateStatus::UpToDate.message()
         );
         assert!(UpdateStatus::RestartRequired.action_enabled());
+        assert!(
+            UpdateStatus::RestartRequired
+                .message()
+                .contains("newer app version is installed")
+        );
+        assert!(
+            UpdateStatus::RestartRequired
+                .message()
+                .contains("Restart SauceFX")
+        );
     }
 
     #[test]
