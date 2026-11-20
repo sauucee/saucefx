@@ -27,6 +27,9 @@ def publish(archive):
         for name in ("config", "summary", "summary.sig", "SauceFX.flatpakref", "SauceFX.flatpakrepo"):
             if not (extracted / name).is_file():
                 raise SystemExit(f"Signed repository is incomplete: {name}")
+        public_key = Path(__file__).resolve().parents[2] / "keys/saucefx-flatpak.gpg"
+        subprocess.run([sys.executable, "-I", str(Path(__file__).with_name("verify-repository.py")),
+                        str(extracted), str(public_key)], check=True)
         target = root / "repository"
         target.mkdir()
         git(target, "init", "-b", "flatpak-repository")

@@ -67,6 +67,14 @@
     <display_length compare="ge">768</display_length>
   </requires>
   <releases>
+    <release version="0.3.2" date="2026-11-20">
+      <description>
+        <p>Check for and install signed Flatpak updates from Settings, then
+        restart into the new version while retaining the saved session.
+        Update progress and errors are shown in the app. Installer scripts
+        are no longer included in releases.</p>
+      </description>
+    </release>
     <release version="0.3.1" date="2026-11-20">
       <description>
         <p>Restore factory presets in Flatpak installations and provide an

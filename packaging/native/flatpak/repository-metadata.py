@@ -3,6 +3,7 @@
 import base64
 from pathlib import Path
 import sys
+import subprocess
 
 
 def metadata(repository, keyfile, ref_output):
@@ -28,6 +29,10 @@ def metadata(repository, keyfile, ref_output):
     )
     Path(ref_output).write_text(ref)
     (repo / "SauceFX.flatpakref").write_text(ref)
+    commit = subprocess.check_output([
+        "ostree", f"--repo={repo}", "rev-parse", f"app/{values['APP_ID']}/x86_64/{values['BRANCH']}"
+    ], text=True).strip()
+    (repo / "app-commit.txt").write_text(commit + "\n")
     # GitHub Pages must serve OSTree's dotfiles and object tree verbatim.
     (repo / ".nojekyll").touch()
 

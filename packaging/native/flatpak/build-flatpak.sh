@@ -79,5 +79,6 @@ flatpak build-bundle --arch="$ARCH" --repo-url="$UPDATE_REPO_URL" \
     "$REPO_DIR" "$BUNDLE" "$APP_ID" "$BRANCH"
 python3 -I "$SCRIPT_DIR/repository-metadata.py" "$REPO_DIR" \
     "$SAUCEFX_PUBLIC_KEY" "$RELEASE_DIR/SauceFX.flatpakref"
+python3 -I "$SCRIPT_DIR/verify-repository.py" "$REPO_DIR" "$SAUCEFX_PUBLIC_KEY"
 tar -C "$REPO_DIR" -czf "$RELEASE_DIR/flatpak-repository.tar.gz" .
 echo "Flatpak bundle: $BUNDLE"

@@ -127,7 +127,7 @@ jobs:
       - name: Install Flatpak tooling and runtimes
         run: |
           sudo apt-get update
-          sudo apt-get install -y flatpak flatpak-builder appstream desktop-file-utils gnupg \
+          sudo apt-get install -y flatpak flatpak-builder ostree appstream desktop-file-utils gnupg \
             pipewire pipewire-pulse wireplumber pulseaudio-utils dbus-x11 xvfb xauth
           flatpak remote-add --user --if-not-exists flathub \
             https://dl.flathub.org/repo/flathub.flatpakrepo

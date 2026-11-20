@@ -6,6 +6,7 @@
 #   cp site/.github/workflows/pages.yml .github/workflows/pages.yml
 #
 name: Deploy site to GitHub Pages
+run-name: Deploy site and updates ${{ inputs.request_id || github.run_id }}
 
 on:
   push:
@@ -15,9 +16,15 @@ on:
       - 'site/**'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
-  workflow_run:
-    workflows: ['Release packages']
-    types: [completed]
+    inputs:
+      request_id:
+        description: Release deployment correlation ID
+        type: string
+        default: ''
+      update_commit:
+        description: Expected application commit in the update source
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -26,11 +33,10 @@ permissions:
 
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   build:
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     name: Build site
     runs-on: ubuntu-24.04
     defaults:
@@ -58,11 +64,17 @@ jobs:
 
       - name: Include signed update repository without replacing the site
         working-directory: .
+        env:
+          EXPECTED_COMMIT: ${{ inputs.update_commit }}
         run: |
           if git ls-remote --exit-code --heads origin flatpak-repository >/dev/null; then
             git fetch --depth=1 origin flatpak-repository
             mkdir -p site/dist/flatpak
             git archive FETCH_HEAD | tar -x -C site/dist/flatpak
+          fi
+          if [ -n "$EXPECTED_COMMIT" ]; then
+            test "$(< site/dist/flatpak/app-commit.txt)" = "$EXPECTED_COMMIT"
+            test -s site/dist/flatpak/summary.sig
           fi
 
       - name: Upload Pages artifact
