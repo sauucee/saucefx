@@ -27,8 +27,9 @@ export XDG_CACHE_HOME="$WORK/cache" XDG_STATE_HOME="$WORK/state"
 export FLATPAK_USER_DIR="$WORK/user-install" FLATPAK_SYSTEM_DIR="$WORK/system"
 export GNUPGHOME="$WORK/gnupg"
 mkdir -p "$GNUPGHOME" "$XDG_CONFIG_HOME" "$FLATPAK_USER_DIR" "$FLATPAK_SYSTEM_DIR"
-mkdir -p "$FLATPAK_SYSTEM_DIR/repo"
 chmod 700 "$GNUPGHOME"
+ostree init --repo="$FLATPAK_USER_DIR/repo" --mode=bare-user-only
+ostree init --repo="$FLATPAK_SYSTEM_DIR/repo" --mode=bare-user-only
 gpg --batch --pinentry-mode loopback --passphrase '' --quick-gen-key \
     'SauceFX CI update test <ci@saucefx.invalid>' rsa2048 sign 1d >"$WORK/key.log" 2>&1
 KEY=$(gpg --batch --with-colons --list-secret-keys 2>/dev/null | python3 -I -c 'import sys; print(next(line.split(":")[9] for line in sys.stdin if line.startswith("fpr:")))')
