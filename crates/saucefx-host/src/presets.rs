@@ -364,11 +364,8 @@ mod tests {
         // The corruption demonstrated on 2026-11-21: duplicated CF/Boost-Cut
         // lines inside one band block shift every later line; the legacy
         // parser accepted the file and applied a wild +21 dB gain.
-        let malformed = valid_fac().replacen(
-            "Band 5\n",
-            "   416.5: CF\n   0: Boost/Cut\nBand 5\n",
-            1,
-        );
+        let malformed =
+            valid_fac().replacen("Band 5\n", "   416.5: CF\n   0: Boost/Cut\nBand 5\n", 1);
         assert_eq!(malformed.lines().count(), valid_fac().lines().count() + 2);
         assert!(validate_fac_structure(&malformed).is_err());
     }
