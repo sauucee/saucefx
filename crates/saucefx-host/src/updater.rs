@@ -247,7 +247,13 @@ async fn restart_latest(connection: &zbus::Connection) -> Result<(), String> {
         .map_err(service_error)?;
     let cwd = b"/app\0".to_vec();
     let argv = vec![b"/app/bin/SauceFX\0".to_vec(), b"--restart-wait\0".to_vec()];
-    let fds: HashMap<u32, Fd<'_>> = HashMap::new();
+    // Inherit the normal stdout/stderr so a failed replacement startup is
+    // diagnosable, just like launching the application normally.
+    use std::os::fd::AsFd;
+    let stdout = std::io::stdout();
+    let stderr = std::io::stderr();
+    let fds: HashMap<u32, Fd<'_>> =
+        HashMap::from([(1, Fd::from(stdout.as_fd())), (2, Fd::from(stderr.as_fd()))]);
     // Preserve only the app's data paths. Older portal versions do not
     // retain XDG_STATE_HOME when creating the replacement sandbox.
     let envs: HashMap<String, String> = [

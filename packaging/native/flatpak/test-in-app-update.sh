@@ -62,12 +62,15 @@ mkdir -p "$APP/files/bin"
 cp "$PROBE" "$APP/files/bin/SauceFX"
 printf '[Application]\nname=%s\nruntime=io.github.sauucee.UpdateTestRuntime/x86_64/master\ncommand=SauceFX\n' "$APP_ID" > "$APP/metadata"
 printf old > "$APP/files/version-marker"
-flatpak build-finish --command=SauceFX "$APP"
+flatpak build-finish --command=SauceFX --filesystem="$XDG_STATE_HOME" "$APP"
 flatpak build-export --gpg-sign="$KEY" --gpg-homedir="$GNUPGHOME" \
     "$WORK/repo" "$APP" master >"$WORK/export-old.log" 2>&1
 flatpak build-update-repo --gpg-sign="$KEY" --gpg-homedir="$GNUPGHOME" "$WORK/repo"
 flatpak remote-add --user --gpg-import="$WORK/test-public.gpg" update-test "file://$WORK/repo"
 flatpak install --user -y --noninteractive update-test io.github.sauucee.UpdateTestRuntime//master "$APP_ID"
+# The fixture uses temporary XDG paths rather than a normal per-app home.
+# Mount and bind the same state directory for launch and portal restart.
+flatpak override --user --env=XDG_STATE_HOME="$XDG_STATE_HOME" "$APP_ID"
 OLD=$(flatpak info --user --show-commit "$APP_ID")
 # The installed app remains A while the authenticated source advances to B.
 printf new > "$APP/files/version-marker"

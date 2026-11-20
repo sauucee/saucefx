@@ -10,6 +10,11 @@ use std::time::{Duration, Instant};
 
 fn main() {
     let args: Vec<_> = std::env::args().collect();
+    eprintln!(
+        "updater probe: args={args:?}, state={:?}, version={:?}",
+        std::env::var("XDG_STATE_HOME"),
+        std::fs::read_to_string("/app/version-marker")
+    );
     let state = PathBuf::from(std::env::var("XDG_STATE_HOME").expect("Flatpak state directory"))
         .join("saucefx");
     std::fs::create_dir_all(&state).unwrap();
