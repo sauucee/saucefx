@@ -32,7 +32,7 @@ modules:
       - -Dbuildtype=release
     sources:
       - type: archive
-        url: https://gitlab.gnome.org/GNOME/zenity/-/archive/4.0.2/zenity-4.0.2.tar.gz
+        path: zenity-4.0.2.tar.gz
         sha256: fdbb74e882a6a56bb2f1a2381b81e08b06c627cc7e944edb71d107092c70dd80
 
   - name: saucefx
