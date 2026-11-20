@@ -75,6 +75,16 @@ jobs:
           LIBCLANG_PATH: /usr/lib/llvm-18/lib
         run: bash packaging/native/test-direct-output.sh
 
+      - name: Test native updater inside a signed Flatpak fixture
+        env:
+          CC: clang-18
+          CXX: clang++-18
+          LIBCLANG_PATH: /usr/lib/llvm-18/lib
+        run: |
+          sudo apt-get install -y flatpak gnupg ostree
+          cargo build --locked -p saucefx-host --example updater_probe --no-default-features --features renderer-skia
+          bash packaging/native/flatpak/test-in-app-update.sh target/debug/examples/updater_probe
+
       - name: Smoke-test portable AppImage
         run: packaging/native/appimage/smoke-test.sh release/SauceFX-*-x86_64.AppImage
 
@@ -90,6 +100,8 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
 
       # The build sandbox has no network: vendor every crate from Cargo.lock
       # and pre-fetch the Skia binaries archive skia-bindings would download.
@@ -115,7 +127,7 @@ jobs:
       - name: Install Flatpak tooling and runtimes
         run: |
           sudo apt-get update
-          sudo apt-get install -y flatpak flatpak-builder appstream desktop-file-utils \
+          sudo apt-get install -y flatpak flatpak-builder ostree appstream desktop-file-utils gnupg \
             pipewire pipewire-pulse wireplumber pulseaudio-utils dbus-x11 xvfb xauth
           flatpak remote-add --user --if-not-exists flathub \
             https://dl.flathub.org/repo/flathub.flatpakrepo
@@ -124,12 +136,16 @@ jobs:
             org.freedesktop.Sdk.Extension.rust-stable//26.08 \
             org.freedesktop.Sdk.Extension.llvm22//26.08
 
+      - name: Prepare update signing
+        env:
+          FLATPAK_SIGNING_KEY: ${{ secrets.FLATPAK_SIGNING_KEY }}
+        run: python3 -I packaging/native/flatpak/prepare-signing.py
+
       - name: Build Flatpak
         run: packaging/native/flatpak/build-flatpak.sh
 
       - name: Verify bundle upgrade from 0.2.4
         run: |
-          python3 -I packaging/native/flatpak/test-install.py
           mkdir -p /tmp/saucefx-old-release
           curl -fsSL -o /tmp/saucefx-old-release/SauceFX-0.2.4.flatpak \
             https://github.com/sauucee/saucefx/releases/download/v0.2.4/SauceFX-0.2.4-x86_64.flatpak
@@ -141,7 +157,6 @@ jobs:
           flatpak install --user -y --noninteractive --or-update release/SauceFX-*-x86_64.flatpak
           flatpak run --no-documents-portal --command=sh io.github.sauucee.SauceFX -c 'command -v zenity'
           packaging/native/flatpak/smoke-test.sh
-          cp packaging/native/flatpak/install-flatpak.sh release/install-flatpak.sh
 
       - name: Upload Flatpak artifact
         uses: actions/upload-artifact@v4
@@ -149,7 +164,8 @@ jobs:
           name: saucefx-native-flatpak
           path: |
             release/*.flatpak
-            release/install-flatpak.sh
+            release/*.flatpakref
+            release/flatpak-repository.tar.gz
           if-no-files-found: error
 
   arch:

@@ -66,9 +66,19 @@ echo "==> Building Flatpak $VERSION for $ARCH"
     "$BUILD_DIR" \
     "$MANIFEST"
 
-echo "==> Creating bundle"
-flatpak build-bundle --arch="$ARCH" \
-    --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo \
-    "$REPO_DIR" "$BUNDLE" io.github.sauucee.SauceFX
-
+source "$SCRIPT_DIR/repository.env"
+: "${SAUCEFX_SIGNING_KEY:?prepare the signing key before building a bundle}"
+: "${SAUCEFX_PUBLIC_KEY:?prepare the public signing key before building a bundle}"
+flatpak build-sign --arch="$ARCH" --gpg-sign="$SAUCEFX_SIGNING_KEY" \
+    --gpg-homedir="$GNUPGHOME" "$REPO_DIR" "$APP_ID" "$BRANCH"
+flatpak build-update-repo --gpg-sign="$SAUCEFX_SIGNING_KEY" \
+    --gpg-homedir="$GNUPGHOME" "$REPO_DIR"
+echo "==> Creating signed update-enabled bundle"
+flatpak build-bundle --arch="$ARCH" --repo-url="$UPDATE_REPO_URL" \
+    --gpg-keys="$SAUCEFX_PUBLIC_KEY" --runtime-repo="$RUNTIME_REPO_URL" \
+    "$REPO_DIR" "$BUNDLE" "$APP_ID" "$BRANCH"
+python3 -I "$SCRIPT_DIR/repository-metadata.py" "$REPO_DIR" \
+    "$SAUCEFX_PUBLIC_KEY" "$RELEASE_DIR/SauceFX.flatpakref"
+python3 -I "$SCRIPT_DIR/verify-repository.py" "$REPO_DIR" "$SAUCEFX_PUBLIC_KEY"
+tar -C "$REPO_DIR" -czf "$RELEASE_DIR/flatpak-repository.tar.gz" .
 echo "Flatpak bundle: $BUNDLE"

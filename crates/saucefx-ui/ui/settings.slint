@@ -92,6 +92,10 @@ export component SettingsDialog inherits Rectangle {
     in property <bool> autostart: true;
     in property <string> accent-label: "Rose";
     in property <string> version: "0.3.0";
+    in property <string> update-status: "Ready to check for updates.";
+    in property <string> update-action-label: "Check & update";
+    in property <bool> update-action-enabled: true;
+    in property <bool> update-busy: false;
     in property <string> save-error: "";
     callback theme-changed(bool);
     callback accent-chosen(int);
@@ -101,18 +105,27 @@ export component SettingsDialog inherits Rectangle {
     callback import-clicked();
     callback export-clicked();
     callback save-opened();
+    callback update-clicked();
     callback quit-clicked();
     callback closed();
     callback focus-changed(string);
     in property <int> refocus-count: 0;
 
     out property <bool> modal-focused: fs.has-focus;
+    out property <float> save-action-y: (preset-actions.absolute-position.y + preset-actions.height / 2) / 1px;
+    out property <float> update-action-y: (update-button.absolute-position.y + update-button.height / 2) / 1px;
     private property <int> focus-index: 0;
+    private property <bool> update-focusable: root.update-action-enabled && !root.update-busy;
     changed focus-index => { root.focus-changed("settings:" + root.focus-index); }
     // Only restore focus when the dialog is actually on screen; a Save that
     // was opened outside Settings must not pull focus into a hidden dialog.
     changed refocus-count => { if (self.visible) { root.focus-modal(); } }
-    // A fresh open focuses the Close button, as the Base UI dialog does.
+    changed update-action-enabled => {
+        if (!root.update-action-enabled && root.focus-index == 15) { root.focus-index = 10; }
+    }
+    changed update-busy => {
+        if (root.update-busy && root.focus-index == 15) { root.focus-index = 10; }
+    }
     changed visible => { if (self.visible) { root.select(0); } }
     // Re-edits that the host rejected (or canonicalised) restore the bound
     // text, because the first typed edit breaks the `text:` binding on the
@@ -187,11 +200,11 @@ export component SettingsDialog inherits Rectangle {
         }
     }
 
-    // Traversal follows the protected SettingsDialog.tsx DOM, not the numeric
-    // action IDs: Close(0), Dark(1), Light(2), accents(3-8), custom(9),
-    // Import(11), Export(12), Save preset(13), Start at login(10), Quit(14).
-    // IDs and callbacks (including the restored Save=13) are unchanged.
-    pure function next-focus(index: int) -> int {
+    // Traversal follows the SettingsDialog DOM: Close(0), Dark(1), Light(2),
+    // accents(3-8), custom(9), Import(11), Export(12), Save preset(13),
+    // Start at login(10), Update(15), Quit(14). Action IDs stay fixed so the
+    // existing Start and Quit references remain compatible.
+    function next-focus(index: int) -> int {
         if index == 0 { return 1; }
         if index == 1 { return 2; }
         if index == 2 { return 3; }
@@ -205,13 +218,15 @@ export component SettingsDialog inherits Rectangle {
         if index == 11 { return 12; }
         if index == 12 { return 13; }
         if index == 13 { return 10; }
-        if index == 10 { return 14; }
+        if index == 10 { return root.update-focusable ? 15 : 14; }
+        if index == 15 { return 14; }
         return 0;
     }
 
-    pure function prev-focus(index: int) -> int {
+    function prev-focus(index: int) -> int {
         if index == 0 { return 14; }
-        if index == 14 { return 10; }
+        if index == 14 { return root.update-focusable ? 15 : 10; }
+        if index == 15 { return 10; }
         if index == 10 { return 13; }
         if index == 13 { return 12; }
         if index == 12 { return 11; }
@@ -258,6 +273,7 @@ export component SettingsDialog inherits Rectangle {
         else if (index == 12) { root.export-clicked(); }
         else if (index == 13) { root.save-opened(); }
         else if (index == 14) { root.quit-clicked(); }
+        else if (index == 15 && root.update-focusable) { root.update-clicked(); }
     }
 
     // A hidden dialog must not own the window focus (a later pointer event
@@ -583,7 +599,7 @@ export component SettingsDialog inherits Rectangle {
                     font-size: 10px;
                     wrap: word-wrap;
                 }
-                HorizontalLayout {
+                preset-actions := HorizontalLayout {
                     spacing: 7px;
                     for action[i] in [0, 1, 2] : Rectangle {
                         horizontal-stretch: 1;
@@ -724,7 +740,7 @@ export component SettingsDialog inherits Rectangle {
             }
         }
 
-        // Footer: version + quit.
+        // Footer: updater action, version, and quit.
         Rectangle {
             background: Palette.surface;
             Rectangle {
@@ -734,55 +750,101 @@ export component SettingsDialog inherits Rectangle {
                 background: Palette.border-subtle;
             }
 
-            HorizontalLayout {
+            VerticalLayout {
                 padding-left: 21px;
                 padding-right: 21px;
-                // 12px below the 1px footer divider, as .settings-footer. The
-                // rendered footer was 42px vs the reference 44px; 13px top and
-                // 13px bottom restore the two missing pixels.
-                padding-top: 13px;
+                padding-top: 10px;
                 padding-bottom: 13px;
-                spacing: 7px;
-                Text {
-                    text: "SauceFX " + root.version;
-                    color: Palette.muted-2;
-                    font-family: Typography.family;
-                    font-size: 9.5px;
-                    vertical-alignment: center;
-                }
-                // The reference footer separates the version and licence with
-                // a text "·" whose font metrics centre it; a fixed-height
-                // rectangle in this layout gets pinned to the row top.
-                Text {
-                    text: "\u{00b7}";
-                    color: Palette.muted-2;
-                    font-family: Typography.family;
-                    font-size: 9.5px;
-                    vertical-alignment: center;
-                }
-                Text {
-                    text: "AGPL-3.0";
-                    color: Palette.muted-2;
-                    font-family: Typography.family;
-                    font-size: 9.5px;
-                    vertical-alignment: center;
-                }
-                Rectangle { horizontal-stretch: 1; }
-                Rectangle {
-                    width: quit-text.width;
-                    height: 20px;
-                    background: transparent;
-                    quit-text := Text {
-                        text: "Quit SauceFX";
-                        color: quit-ta.has-hover || root.focus-index == 14 ? Palette.danger : Palette.muted;
+                spacing: 8px;
+
+                HorizontalLayout {
+                    height: 28px;
+                    spacing: 12px;
+                    Text {
+                        text: root.update-status;
+                        color: Palette.muted;
                         font-family: Typography.family;
                         font-size: 10px;
-                        horizontal-alignment: center;
+                        wrap: word-wrap;
                         vertical-alignment: center;
                     }
-                    quit-ta := TouchArea {
-                        mouse-cursor: pointer;
-                        clicked => { root.select(14); root.quit-clicked(); }
+                    Rectangle { horizontal-stretch: 1; }
+                    update-button := Rectangle {
+                        width: 108px;
+                        height: 28px;
+                        border-radius: 6px;
+                        border-width: 1px;
+                        border-color: root.focus-index == 15
+                            ? Palette.accent
+                            : (update-ta.has-hover && root.update-focusable
+                                ? Palette.accent-border : Palette.border);
+                        background: root.update-focusable && (update-ta.has-hover || root.focus-index == 15)
+                            ? Palette.accent-wash
+                            : Palette.surface-2;
+                        Text {
+                            text: root.update-action-label;
+                            color: root.update-focusable ? Palette.text-soft : Palette.muted-2;
+                            font-family: Typography.family;
+                            font-size: 10px;
+                            font-weight: 600;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+                        update-ta := TouchArea {
+                            enabled: root.update-focusable;
+                            mouse-cursor: root.update-focusable ? pointer : default;
+                            clicked => {
+                                root.select(15);
+                                if (root.update-focusable) { root.update-clicked(); }
+                            }
+                        }
+                    }
+                }
+
+                HorizontalLayout {
+                    height: 20px;
+                    spacing: 7px;
+                    Text {
+                        text: "SauceFX " + root.version;
+                        color: Palette.muted-2;
+                        font-family: Typography.family;
+                        font-size: 9.5px;
+                        vertical-alignment: center;
+                    }
+                    // The reference footer separates the version and licence with
+                    // a text "·" whose font metrics centre it; a fixed-height
+                    // rectangle in this layout gets pinned to the row top.
+                    Text {
+                        text: "\u{00b7}";
+                        color: Palette.muted-2;
+                        font-family: Typography.family;
+                        font-size: 9.5px;
+                        vertical-alignment: center;
+                    }
+                    Text {
+                        text: "AGPL-3.0";
+                        color: Palette.muted-2;
+                        font-family: Typography.family;
+                        font-size: 9.5px;
+                        vertical-alignment: center;
+                    }
+                    Rectangle { horizontal-stretch: 1; }
+                    Rectangle {
+                        width: quit-text.width;
+                        height: 20px;
+                        background: transparent;
+                        quit-text := Text {
+                            text: "Quit SauceFX";
+                            color: quit-ta.has-hover || root.focus-index == 14 ? Palette.danger : Palette.muted;
+                            font-family: Typography.family;
+                            font-size: 10px;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+                        quit-ta := TouchArea {
+                            mouse-cursor: pointer;
+                            clicked => { root.select(14); root.quit-clicked(); }
+                        }
                     }
                 }
             }

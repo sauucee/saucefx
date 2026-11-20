@@ -14,6 +14,7 @@ use slint::platform::software_renderer::{
 use slint::platform::{Platform, PlatformError, WindowAdapter};
 use slint::{ComponentHandle, PhysicalSize};
 
+use saucefx_core::updates::UpdateStatus;
 use saucefx_ui::{AppWindow, binding::UiBinding};
 
 const WIDTH: usize = 1040;
@@ -52,6 +53,21 @@ fn apply_scene(binding: &mut UiBinding, scene: &str) {
         "menu" => binding.toggle_preset_menu(),
         "outputs" => binding.toggle_output_menu(),
         "settings" => binding.open_settings(),
+        "updates-busy" | "updates-error" | "updates-restart" | "updates-light" => {
+            binding.open_settings();
+            binding.set_update_status(match scene {
+                "updates-busy" => UpdateStatus::Installing(62),
+                "updates-error" => UpdateStatus::Failed(
+                    "Could not reach the update source. Check your connection and try again."
+                        .into(),
+                ),
+                "updates-restart" => UpdateStatus::RestartRequired,
+                _ => UpdateStatus::Ready,
+            });
+            if scene == "updates-light" {
+                binding.set_light(true);
+            }
+        }
         "save" => {
             binding.open_settings();
             binding.open_save();

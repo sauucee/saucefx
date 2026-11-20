@@ -3544,21 +3544,24 @@ dependencies = [
 
 [[package]]
 name = "saucefx-core"
-version = "0.3.1"
+version = "0.3.2"
 
 [[package]]
 name = "saucefx-host"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
+ "async-io",
+ "futures-lite",
  "libc",
  "saucefx-core",
  "saucefx-ui",
  "slint",
+ "zbus",
 ]
 
 [[package]]
 name = "saucefx-ui"
-version = "0.3.1"
+version = "0.3.2"
 dependencies = [
  "image",
  "saucefx-core",
