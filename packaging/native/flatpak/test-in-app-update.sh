@@ -71,10 +71,17 @@ flatpak build-export --gpg-sign="$KEY" --gpg-homedir="$GNUPGHOME" \
 flatpak build-update-repo --gpg-sign="$KEY" --gpg-homedir="$GNUPGHOME" "$WORK/repo"
 # Set permission only on this private D-Bus session to avoid interactive CI UI.
 flatpak permission-set flatpak updates "$APP_ID" yes
-flatpak run --no-documents-portal "$APP_ID" >"$WORK/update.log" 2>&1
+STATE=$(flatpak run --no-documents-portal "$APP_ID" --state-path)
+flatpak run --no-documents-portal "$APP_ID" --test-restart >"$WORK/update.log" 2>&1
 NEW=$(flatpak info --user --show-commit "$APP_ID")
 test "$OLD" != "$NEW"
 LOCATION=$(flatpak info --user --show-location "$APP_ID")
 test "$(< "$LOCATION/files/version-marker")" = new
+for ((i=0; i<100; ++i)); do
+    if [ -f "$STATE/restarted-version" ]; then break; fi
+    sleep 0.1
+done
+test "$(< "$STATE/restarted-version")" = new
+test "$(< "$STATE/saved-before-restart")" = saved
 flatpak run --no-documents-portal "$APP_ID" --expect-up-to-date >"$WORK/current.log" 2>&1
-printf '%s\n' 'PASS: the native updater installs a signed update inside Flatpak and reports current afterward'
+printf '%s\n' 'PASS: signed in-app update, latest-version restart, saved data and current-version check'

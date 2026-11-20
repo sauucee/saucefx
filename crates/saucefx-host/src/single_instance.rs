@@ -5,6 +5,27 @@
 //! launched via --autostart.
 
 use std::path::{Path, PathBuf};
+use std::time::{Duration, Instant};
+
+/// Try the process lock, optionally waiting for the previous version to exit.
+/// Restarted processes do not start an audio engine until this succeeds.
+pub fn acquire(file: &std::fs::File, wait: Duration) -> std::io::Result<bool> {
+    use std::os::fd::AsRawFd;
+    let deadline = Instant::now() + wait;
+    loop {
+        if unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } == 0 {
+            return Ok(true);
+        }
+        let error = std::io::Error::last_os_error();
+        if error.kind() != std::io::ErrorKind::WouldBlock {
+            return Err(error);
+        }
+        if Instant::now() >= deadline {
+            return Ok(false);
+        }
+        std::thread::sleep(Duration::from_millis(50));
+    }
+}
 
 /// The process lock (`app.lock` in the state directory).
 pub fn lock_file(state_dir: &Path) -> PathBuf {

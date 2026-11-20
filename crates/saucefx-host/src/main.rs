@@ -280,17 +280,12 @@ fn main() {
     let lock = std::fs::File::create(single_instance::lock_file(&state))
         .expect("create the app.lock file");
     {
-        use std::os::fd::AsRawFd;
-        let deadline = std::time::Instant::now() + Duration::from_secs(15);
-        let taken = loop {
-            let taken =
-                unsafe { libc::flock(lock.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) != 0 };
-            if !taken || !restart_launch || std::time::Instant::now() >= deadline {
-                break taken;
-            }
-            std::thread::sleep(Duration::from_millis(50));
+        let wait = if restart_launch {
+            Duration::from_secs(15)
+        } else {
+            Duration::ZERO
         };
-        if taken {
+        if !single_instance::acquire(&lock, wait).expect("acquire the SauceFX process lock") {
             if !auto_start_launch {
                 if !single_instance::write_show_request(&state) {
                     eprintln!(
