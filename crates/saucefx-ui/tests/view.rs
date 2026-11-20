@@ -21,6 +21,7 @@ use std::rc::Rc;
 
 use saucefx_core::settings::ThemeMode;
 use saucefx_core::state::{BAND_COUNT, EFFECT_COUNT};
+use saucefx_core::updates::UpdateStatus;
 use saucefx_ui::AppWindow;
 use saucefx_ui::binding::UiBinding;
 use slint::ComponentHandle;
@@ -860,10 +861,10 @@ fn scenario_settings_focus_order(
         "settings:0".to_string(),
     );
 
-    // Source order is 0..9,11,12,13,10,14: the Start-at-login switch (10)
-    // follows the Save opener (13), not the custom-accent button (9).
+    // Source order includes the update action when enabled. Its stable ID (15)
+    // leaves the existing Start (10) and Quit (14) references unchanged.
     let mut order = vec![0usize];
-    for _ in 0..14 {
+    for _ in 0..15 {
         press(window, "\t");
         let focus = report(window);
         let index = focus
@@ -873,13 +874,13 @@ fn scenario_settings_focus_order(
         order.push(index);
     }
     checks.eq(
-        "Settings Tab order follows the source 0..9,11,12,13,10,14",
+        "Settings Tab order follows the source 0..9,11,12,13,10,15,14",
         order,
-        vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 10, 14],
+        vec![0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 11, 12, 13, 10, 15, 14],
     );
 
-    // After a cancelled Save restores the Save opener (13), Tab must select
-    // Start (10), then Quit (14). A direct 13 -> 14 jump is the defect.
+    // After a cancelled Save restores the Save opener (13), Tab selects Start,
+    // then Update and Quit. The public IDs of Start/Quit remain unchanged.
     reset(window, binding);
     open_settings(window, binding);
     for _ in 0..12 {
@@ -915,9 +916,132 @@ fn scenario_settings_focus_order(
     );
     press(window, "\t");
     checks.eq(
-        "Tab after Start selects Quit",
+        "Tab after Start selects Update",
+        report(window),
+        "settings:15".to_string(),
+    );
+    press(window, "\t");
+    checks.eq(
+        "Tab after Update selects Quit",
         report(window),
         "settings:14".to_string(),
+    );
+}
+
+fn scenario_update_settings(
+    window: &AppWindow,
+    binding: &Rc<RefCell<UiBinding>>,
+    checks: &mut Checks,
+    update_clicks: &Rc<RefCell<usize>>,
+) {
+    reset(window, binding);
+    binding.borrow_mut().set_update_status(UpdateStatus::Ready);
+    sync(window, binding);
+    window.on_update_clicked({
+        let update_clicks = Rc::clone(update_clicks);
+        move || *update_clicks.borrow_mut() += 1
+    });
+    open_settings(window, binding);
+    checks.eq(
+        "initial update action label",
+        window.get_update_action_label().to_string(),
+        "Check & update".to_string(),
+    );
+    checks.eq(
+        "initial update status is neutral",
+        window.get_update_status().to_string(),
+        UpdateStatus::Ready.message(),
+    );
+    checks.is(
+        "ready update action enabled",
+        window.get_update_action_enabled(),
+        "ready action is disabled",
+    );
+
+    // The action is explicit: clicking it emits the normal AppWindow callback.
+    click(window, 750.0, 446.0);
+    settle();
+    checks.eq("update action callback", *update_clicks.borrow(), 1usize);
+
+    binding
+        .borrow_mut()
+        .set_update_status(UpdateStatus::Checking);
+    sync(window, binding);
+    checks.eq(
+        "checking action label",
+        window.get_update_action_label().to_string(),
+        "Working…".to_string(),
+    );
+    checks.is(
+        "checking action disabled",
+        !window.get_update_action_enabled(),
+        "checking action remains enabled",
+    );
+    checks.is(
+        "checking action busy state",
+        window.get_update_busy(),
+        "checking action does not expose busy state",
+    );
+    click(window, 750.0, 446.0);
+    settle();
+    checks.eq(
+        "busy update action does not emit callback",
+        *update_clicks.borrow(),
+        1usize,
+    );
+
+    binding
+        .borrow_mut()
+        .set_update_status(UpdateStatus::UpToDate);
+    sync(window, binding);
+    checks.is(
+        "up-to-date result has no false success label",
+        window.get_update_action_label().to_string() != "Updated",
+        "up-to-date is incorrectly presented as installed",
+    );
+    checks.is(
+        "up-to-date action can be explicitly retried",
+        window.get_update_action_enabled(),
+        "up-to-date action is disabled",
+    );
+
+    binding
+        .borrow_mut()
+        .set_update_status(UpdateStatus::Unsupported);
+    sync(window, binding);
+    checks.eq(
+        "unsupported status avoids package details",
+        window.get_update_status().to_string(),
+        "Updates for this package are managed outside SauceFX.".to_string(),
+    );
+    checks.is(
+        "unsupported update action is disabled",
+        !window.get_update_action_enabled(),
+        "unsupported action remains enabled",
+    );
+    click(window, 750.0, 446.0);
+    settle();
+    checks.eq(
+        "disabled unsupported action does not emit callback",
+        *update_clicks.borrow(),
+        1usize,
+    );
+
+    binding.borrow_mut().set_update_status(UpdateStatus::Ready);
+    sync(window, binding);
+    for _ in 0..14 {
+        press(window, "\t");
+    }
+    checks.eq(
+        "enabled Update receives keyboard focus at stable action ID 15",
+        report(window),
+        "settings:15".to_string(),
+    );
+    press(window, "\n");
+    checks.eq(
+        "Enter activates enabled Update",
+        *update_clicks.borrow(),
+        2usize,
     );
 }
 
@@ -1512,6 +1636,7 @@ fn bound_view_modal_and_eq_regressions() {
     scenario_save_padding(&window, &binding, &mut checks);
     scenario_settings_opener_return(&window, &binding, &mut checks);
     scenario_settings_focus_order(&window, &binding, &mut checks);
+    scenario_update_settings(&window, &binding, &mut checks, &Rc::new(RefCell::new(0)));
     scenario_eq_hit_areas(&window, &binding, &mut checks);
     scenario_eq_click_arrows(&window, &binding, &mut checks);
     scenario_eq_focus_after_leave(&window, &binding, &mut checks);

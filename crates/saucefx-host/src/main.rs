@@ -7,6 +7,7 @@ mod fxpw;
 mod paths;
 mod presets;
 mod single_instance;
+mod updater;
 
 use std::cell::RefCell;
 use std::path::{Path, PathBuf};
@@ -16,6 +17,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use saucefx_core::session::{PresetSession, SESSION_MAX_BANDS, encode_session, parse_session};
 use saucefx_core::settings::{GuiSettings, ThemeMode, encode_settings, parse_settings};
 use saucefx_core::state::BAND_COUNT;
+use saucefx_core::updates::UpdateStatus;
 use saucefx_ui::AppWindow;
 use saucefx_ui::binding::{MenuRow, UiBinding};
 use slint::{ComponentHandle, Timer, TimerMode};
@@ -274,11 +276,20 @@ fn main() {
     // launch came from login autostart (Main.cpp's instance lock).
     std::fs::create_dir_all(&state).ok();
     let auto_start_launch = std::env::args().any(|arg| arg == "--autostart");
+    let restart_launch = std::env::args().any(|arg| arg == "--restart-wait");
     let lock = std::fs::File::create(single_instance::lock_file(&state))
         .expect("create the app.lock file");
     {
         use std::os::fd::AsRawFd;
-        let taken = unsafe { libc::flock(lock.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) != 0 };
+        let deadline = std::time::Instant::now() + Duration::from_secs(15);
+        let taken = loop {
+            let taken =
+                unsafe { libc::flock(lock.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) != 0 };
+            if !taken || !restart_launch || std::time::Instant::now() >= deadline {
+                break taken;
+            }
+            std::thread::sleep(Duration::from_millis(50));
+        };
         if taken {
             if !auto_start_launch {
                 if !single_instance::write_show_request(&state) {
@@ -349,7 +360,75 @@ fn main() {
         &settings.output_port,
         settings.output_routed,
     );
+    let updates = Rc::new(RefCell::new(updater::Updater::new()));
+    if std::env::var("FLATPAK_ID").as_deref() != Ok("io.github.sauucee.SauceFX") {
+        binding
+            .borrow_mut()
+            .set_update_status(UpdateStatus::Unsupported);
+    }
     binding.borrow().sync(&window);
+
+    // The update service runs off the UI thread; only this explicit action
+    // starts a check/install or asks Flatpak to spawn the updated version.
+    {
+        let updates = Rc::clone(&updates);
+        let binding = Rc::clone(&binding);
+        let window_weak = window.as_weak();
+        window.on_update_clicked(move || {
+            let status = binding.borrow().update_status().clone();
+            if !status.action_enabled() {
+                return;
+            }
+            let started = if status == UpdateStatus::RestartRequired {
+                updates.borrow_mut().restart()
+            } else {
+                updates.borrow_mut().start()
+            };
+            if started {
+                binding
+                    .borrow_mut()
+                    .set_update_status(UpdateStatus::Checking);
+                if let Some(window) = window_weak.upgrade() {
+                    binding.borrow().sync(&window);
+                }
+            }
+        });
+    }
+    let update_timer = Timer::default();
+    {
+        let updates = Rc::clone(&updates);
+        let binding = Rc::clone(&binding);
+        let engine = Rc::clone(&engine);
+        let state = state.clone();
+        let factory_dir = factory_dir.clone();
+        let window = window.as_weak();
+        update_timer.start(TimerMode::Repeated, Duration::from_millis(100), move || {
+            loop {
+                let event = updates.borrow_mut().poll();
+                match event {
+                    Some(updater::Event::Status(status)) => {
+                        binding.borrow_mut().set_update_status(status);
+                        if let Some(window) = window.upgrade() {
+                            binding.borrow().sync(&window);
+                        }
+                    }
+                    Some(updater::Event::RestartLaunched) => {
+                        save_state(
+                            &binding,
+                            &engine.borrow(),
+                            &state,
+                            &factory_dir,
+                            &RefCell::new((String::new(), String::new())),
+                        );
+                        engine.borrow_mut().stop();
+                        let _ = slint::quit_event_loop();
+                        break;
+                    }
+                    None => break,
+                }
+            }
+        });
+    }
 
     // Settings -> Quit SauceFX: save, stop the engine, end the process.
     {

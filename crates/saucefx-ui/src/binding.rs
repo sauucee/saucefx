@@ -10,6 +10,7 @@ use slint::{ComponentHandle, Model};
 
 use saucefx_core::settings::ThemeMode;
 use saucefx_core::state::{BAND_COUNT, EFFECT_COUNT, EditError, UiState};
+use saucefx_core::updates::UpdateStatus;
 
 use crate::{AppWindow, MenuEntry, Palette};
 
@@ -503,6 +504,7 @@ pub struct UiBinding {
     custom_accent: bool,
     selected_accent: usize,
     autostart: bool,
+    update_status: UpdateStatus,
     history: SpectrumHistory,
     preset_open: bool,
     output_open: bool,
@@ -542,6 +544,7 @@ impl UiBinding {
             custom_accent: false,
             selected_accent: 0,
             autostart: true,
+            update_status: UpdateStatus::Ready,
             history: SpectrumHistory::default(),
             preset_open: false,
             output_open: false,
@@ -1129,6 +1132,16 @@ impl UiBinding {
         self.autostart = autostart;
     }
 
+    /// Set the updater status supplied by the host.
+    pub fn set_update_status(&mut self, status: UpdateStatus) {
+        self.update_status = status;
+    }
+
+    /// Current updater status.
+    pub fn update_status(&self) -> &UpdateStatus {
+        &self.update_status
+    }
+
     /// Open the save dialog pre-filled with the reference suggestion
     /// (`<preset> Custom`, numbered when taken).
     pub fn open_save(&mut self) {
@@ -1643,6 +1656,12 @@ impl UiBinding {
         window.set_app_version(Self::APP_VERSION.into());
         window.set_light(self.theme == ThemeMode::Light);
         window.set_autostart(self.autostart);
+        window.set_update_status(self.update_status.message().into());
+        window.set_update_action_label(self.update_status.action_label().into());
+        window.set_update_action_enabled(
+            self.update_status.action_enabled() && !self.update_status.busy(),
+        );
+        window.set_update_busy(self.update_status.busy());
         window.set_toast_visible(self.toast.is_some());
         window.set_toast_message(self.toast.clone().unwrap_or_default().into());
 

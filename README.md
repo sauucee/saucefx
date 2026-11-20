@@ -55,30 +55,25 @@ enabling login startup.
 
 ### Flatpak (any distro, sandboxed)
 
-Download the bundle and `install-flatpak.sh` from the same release, then run:
+Open the release's `.flatpakref` in your Software application to install from
+the SauceFX update source. A single-file `.flatpak` bundle is also available.
+No installer script is needed.
 
-```sh
-bash ./install-flatpak.sh ./SauceFX-<version>-x86_64.flatpak
-flatpak run io.github.sauucee.SauceFX
-```
+In **Settings → Updates**, choose **Check & update**. Flatpak checks the signed
+SauceFX repository and installs available updates for the running installation.
+The first update may ask for permission through your desktop. When installation
+finishes, choose **Restart now**; SauceFX saves your session before restarting.
+Updates run only when requested, and audio keeps playing during the download.
 
-The installer updates the existing user or system installation in place. New
-installations default to your user account. If both copies are installed, pass
-`--user` or `--system` before the bundle path to choose which one to update.
-Quit SauceFX from Settings and reopen it after upgrading to run the new version;
-closing its window only hides it. Your presets and settings are kept.
-
-Some graphical installers show a downloaded bundle as already installed instead
-of offering an upgrade. Use the command above; uninstalling the old version is
-not required. Without the helper, use `flatpak install --user --bundle --or-update`
-followed by the bundle path (replace `--user` with `--system` if needed). An
-identical bundle can report “already installed”; that means it is already current.
+If you currently use a release older than the Settings updater, install the
+newer `.flatpakref` or bundle once to gain the feature. Your custom presets and
+settings stay in the same application data directory. The application ID
+remains `io.github.sauucee.SauceFX`.
 
 The bundle uses the `org.gnome.Platform//51` runtime; Flatpak offers to install
 it from Flathub if missing. The sandbox has access to PipeWire, your audio
-output, and the Downloads folder for preset import/export. Bundles have no
-online SauceFX update repository: download a newer bundle to upgrade. The
-application ID remains the same as the 0.2.x releases.
+output, and the Downloads folder for preset import/export. In-app updates use
+the Flatpak portal and do not grant SauceFX host-command access.
 
 ### Fedora / openSUSE (RPM)
 

@@ -18,6 +18,9 @@ slint = { version = "=1.18.1", default-features = false, features = [
 ] }
 saucefx-core = { path = "../saucefx-core" }
 libc = "0.2"
+zbus = { version = "=5.19.0", default-features = false, features = ["async-io"] }
+futures-lite = "=2.6.1"
+async-io = "=2.6.0"
 saucefx-ui = { path = "../saucefx-ui", default-features = false }
 
 [features]

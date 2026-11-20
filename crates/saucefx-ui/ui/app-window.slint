@@ -88,6 +88,10 @@ export component AppWindow inherits Window {
     in property <string> save-help: "";
     in property <string> app-version: "0.3.0";
     in property <bool> autostart: true;
+    in property <string> update-status: "Ready to check for updates.";
+    in property <string> update-action-label: "Check & update";
+    in property <bool> update-action-enabled: true;
+    in property <bool> update-busy: false;
     in property <string> save-name: "";
     in property <bool> save-valid: false;
     in property <bool> toast-visible: false;
@@ -119,6 +123,7 @@ export component AppWindow inherits Window {
     callback custom-accent-text-changed(string);
     callback import-clicked();
     callback export-clicked();
+    callback update-clicked();
     callback quit-clicked();
     callback autostart-changed(bool);
     callback save-opened();
@@ -335,6 +340,10 @@ export component AppWindow inherits Window {
             accent-index: root.accent-index;
             accent-label: root.accent-label;
             version: root.app-version;
+            update-status: root.update-status;
+            update-action-label: root.update-action-label;
+            update-action-enabled: root.update-action-enabled;
+            update-busy: root.update-busy;
             refocus-count: root.settings-refocus;
             theme-changed(v) => { root.theme-changed(v); }
             accent-chosen(i) => { root.accent-chosen(i); }
@@ -344,6 +353,7 @@ export component AppWindow inherits Window {
             import-clicked => { root.import-clicked(); }
             export-clicked => { root.export-clicked(); }
             save-opened => { root.save-opened(); }
+            update-clicked => { root.update-clicked(); }
             quit-clicked => { root.quit-clicked(); }
             closed => {
                 // A Settings-level dismissal may never close the layer that is

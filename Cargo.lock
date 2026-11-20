@@ -3550,10 +3550,13 @@ version = "0.3.1"
 name = "saucefx-host"
 version = "0.3.1"
 dependencies = [
+ "async-io",
+ "futures-lite",
  "libc",
  "saucefx-core",
  "saucefx-ui",
  "slint",
+ "zbus",
 ]
 
 [[package]]

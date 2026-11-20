@@ -15,6 +15,9 @@ on:
       - 'site/**'
       - '.github/workflows/pages.yml'
   workflow_dispatch:
+  workflow_run:
+    workflows: ['Release packages']
+    types: [completed]
 
 permissions:
   contents: read
@@ -27,6 +30,7 @@ concurrency:
 
 jobs:
   build:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     name: Build site
     runs-on: ubuntu-24.04
     defaults:
@@ -51,6 +55,15 @@ jobs:
         run: |
           npm ci --no-audit --no-fund
           npm run build
+
+      - name: Include signed update repository without replacing the site
+        working-directory: .
+        run: |
+          if git ls-remote --exit-code --heads origin flatpak-repository >/dev/null; then
+            git fetch --depth=1 origin flatpak-repository
+            mkdir -p site/dist/flatpak
+            git archive FETCH_HEAD | tar -x -C site/dist/flatpak
+          fi
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v5

@@ -18,6 +18,7 @@ jobs:
   packages:
     name: Build native packages
     uses: ./.github/workflows/native-packages.yml
+    secrets: inherit
 
   publish:
     name: Publish GitHub release
@@ -25,6 +26,14 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-24.04
     steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Configure authenticated repository publication
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh auth setup-git
+
       - name: Download packages
         uses: actions/download-artifact@v4
         with:
@@ -35,7 +44,12 @@ jobs:
         run: |
           cd release
           find . -name '*debug*' -delete
-          sha256sum *.AppImage *.flatpak *.pkg.tar.zst *.rpm *.deb install-flatpak.sh > SHA256SUMS
+          sha256sum *.AppImage *.flatpak *.flatpakref *.pkg.tar.zst *.rpm *.deb > SHA256SUMS
+
+      - name: Publish signed Flatpak update source
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python3 -I packaging/native/flatpak/publish-repository.py release/flatpak-repository.tar.gz
 
       - name: Publish release assets
         uses: softprops/action-gh-release@v2
@@ -46,6 +60,6 @@ jobs:
             release/*.pkg.tar.zst
             release/*.rpm
             release/*.deb
-            release/install-flatpak.sh
+            release/*.flatpakref
             release/SHA256SUMS
           generate_release_notes: true

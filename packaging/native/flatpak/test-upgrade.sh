@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Exercise the installer with real bundles in a disposable installation.
+# Exercise Flatpak's built-in update path in a disposable installation.
 # The application and its audio engine are never launched.
 set -euo pipefail
 if [ "$#" -ne 2 ]; then
@@ -51,7 +51,7 @@ printf 'CLASS1 : Effect Type\n9: Version\nMy preset\n' > "$PRESET_DIR/My preset.
 sha256sum "$STATE_DIR/settings.txt" "$STATE_DIR/preset-session.txt" \
     "$PRESET_DIR/My preset.fac" > "$WORK/user-data.sha256"
 
-bash "$SCRIPT_DIR/install-flatpak.sh" "$NEW_BUNDLE"
+flatpak install --user --bundle --or-update "$NEW_BUNDLE"
 NEW_COMMIT=$(flatpak info --user --show-commit "$APP_ID")
 NEW_REF=$(flatpak info --user --show-ref "$APP_ID")
 test "$OLD_COMMIT" != "$NEW_COMMIT"
@@ -61,7 +61,7 @@ LOCATION=$(flatpak info --user --show-location "$APP_ID")
 test -r "$LOCATION/files/share/saucefx/presets/Factsoft/Default.fac"
 # Flatpak reports an identical bundle as already installed. Regardless of
 # that command's status, the deployed commit and saved data must stay intact.
-bash "$SCRIPT_DIR/install-flatpak.sh" "$NEW_BUNDLE" >"$WORK/repeat.log" 2>&1 || true
+flatpak install --user --bundle --or-update "$NEW_BUNDLE" >"$WORK/repeat.log" 2>&1 || true
 test "$(flatpak info --user --show-commit "$APP_ID")" = "$NEW_COMMIT"
 sha256sum --check "$WORK/user-data.sha256"
 if grep -qx uninstall "$SAUCEFX_TEST_CALLS"; then
