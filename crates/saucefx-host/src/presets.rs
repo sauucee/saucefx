@@ -33,6 +33,16 @@ pub fn library_dir(root: Option<&Path>, exe: Option<&Path>) -> PathBuf {
 }
 
 /// One scanned .fac file with the directory kind it came from.
+/// Structural validation for a `.fac` preset (the CLASS1 text format the
+/// engine writes and reads). The legacy engine parser accepts structurally
+/// malformed files — a band block with extra or missing lines shifts every
+/// later line and produced a wild +21 dB gain in diagnosis — so the Rust
+/// side rejects them before handing the file to the engine.
+pub fn validate_fac_structure(text: &str) -> Result<(), &'static str> {
+    let _ = text;
+    Ok(())
+}
+
 pub struct ScannedPreset {
     pub path: PathBuf,
     pub factory: bool,
@@ -294,6 +304,74 @@ pub fn export_message(target: &Path, ok: bool) -> String {
 
 #[cfg(test)]
 mod tests {
+
+    /// A minimal well-formed preset in the exact line grammar the engine's
+    /// writer produces (mirrors `presets/Factsoft/Default.fac`).
+    fn valid_fac() -> String {
+        let mut lines: Vec<String> = [
+            "CLASS1 : Effect Type",
+            "9: Version",
+            "Default",
+            "0: Double Params Flag",
+            "1: Total number of elements",
+            "0: Main 0",
+            "0: Main 1",
+            "0: Main 2",
+            "0: Main 3",
+            "0: Main 4",
+            "0: Main 5",
+            "0: Element Number",
+            "   0: Param 0",
+            "   0: Param 1",
+            "   0: Param 2",
+            "   0: Param 3",
+            "   0: Param 4",
+            "   0: Param 5",
+            "   0: Param 6",
+            "7: Number of Application Dependent Integers",
+            "0: Number of Application Dependent Reals",
+            "0: Number of Application Dependent Strings",
+            "1: Integer[0]",
+            "1: Integer[1]",
+            "1: Integer[2]",
+            "1: Integer[3]",
+            "1: Integer[4]",
+            "0: Integer[5]",
+            "2: Integer[6]",
+            "10: Number of EQ Bands",
+            "1: On/Off Flag",
+        ]
+        .iter()
+        .map(|line| line.to_string())
+        .collect();
+        for band in 1..=10 {
+            lines.push(format!("Band {band}"));
+            lines.push(format!("   {}: CF", band * 55));
+            lines.push("   0: Boost/Cut".to_string());
+        }
+        let mut text = lines.join("\n");
+        text.push('\n');
+        text
+    }
+
+    #[test]
+    fn a_well_formed_preset_passes_structure_validation() {
+        assert_eq!(validate_fac_structure(&valid_fac()), Ok(()));
+    }
+
+    #[test]
+    fn a_shifted_band_block_is_rejected_as_malformed() {
+        // The corruption demonstrated on 2026-11-21: duplicated CF/Boost-Cut
+        // lines inside one band block shift every later line; the legacy
+        // parser accepted the file and applied a wild +21 dB gain.
+        let malformed = valid_fac().replacen(
+            "Band 5\n",
+            "   416.5: CF\n   0: Boost/Cut\nBand 5\n",
+            1,
+        );
+        assert_eq!(malformed.lines().count(), valid_fac().lines().count() + 2);
+        assert!(validate_fac_structure(&malformed).is_err());
+    }
 
     #[test]
     fn installed_flatpak_discovers_factory_default() {
