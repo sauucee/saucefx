@@ -33,6 +33,7 @@ fn main() {
     }
     assert!(single_instance::acquire(&lock, Duration::ZERO).unwrap());
     let expect_current = args.iter().any(|arg| arg == "--expect-up-to-date");
+    let expect_error = args.iter().any(|arg| arg == "--expect-error");
     let restart_after_update = args.iter().any(|arg| arg == "--test-restart");
     let mut updater = updater::Updater::new();
     assert!(updater.start());
@@ -45,6 +46,13 @@ fn main() {
                     println!("{status:?}");
                     if status.busy() {
                         continue;
+                    }
+                    if expect_error {
+                        assert!(
+                            matches!(status, UpdateStatus::Failed(_)),
+                            "a failed update must not report success: {status:?}"
+                        );
+                        return;
                     }
                     let wanted = if expect_current {
                         UpdateStatus::UpToDate

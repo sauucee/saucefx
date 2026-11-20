@@ -70,6 +70,9 @@ flatpak build-export --gpg-sign="$KEY" --gpg-homedir="$GNUPGHOME" \
     "$WORK/repo" "$APP" master >"$WORK/export-new.log" 2>&1
 flatpak build-update-repo --gpg-sign="$KEY" --gpg-homedir="$GNUPGHOME" "$WORK/repo"
 # Set permission only on this private D-Bus session to avoid interactive CI UI.
+flatpak permission-set flatpak updates "$APP_ID" no
+flatpak run --no-documents-portal "$APP_ID" --expect-error >"$WORK/denied.log" 2>&1
+test "$(flatpak info --user --show-commit "$APP_ID")" = "$OLD"
 flatpak permission-set flatpak updates "$APP_ID" yes
 STATE=$(flatpak run --no-documents-portal "$APP_ID" --state-path)
 flatpak run --no-documents-portal "$APP_ID" --test-restart >"$WORK/update.log" 2>&1
@@ -84,4 +87,11 @@ done
 test "$(< "$STATE/restarted-version")" = new
 test "$(< "$STATE/saved-before-restart")" = saved
 flatpak run --no-documents-portal "$APP_ID" --expect-up-to-date >"$WORK/current.log" 2>&1
-printf '%s\n' 'PASS: signed in-app update, latest-version restart, saved data and current-version check'
+# A signed summary must not make an unsigned application commit installable.
+printf unsigned > "$APP/files/version-marker"
+flatpak build-export "$WORK/repo" "$APP" master >"$WORK/export-unsigned.log" 2>&1
+flatpak build-update-repo --gpg-sign="$KEY" --gpg-homedir="$GNUPGHOME" "$WORK/repo"
+flatpak run --no-documents-portal "$APP_ID" --expect-error >"$WORK/unsigned.log" 2>&1
+test "$(flatpak info --user --show-commit "$APP_ID")" = "$NEW"
+cat "$WORK/update.log" "$WORK/current.log" "$WORK/denied.log" "$WORK/unsigned.log"
+printf '%s\n' 'PASS: signed update, latest-version restart, saved data, permission denial and unsigned-update rejection'
