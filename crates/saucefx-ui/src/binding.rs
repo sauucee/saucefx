@@ -357,13 +357,6 @@ impl SceneCatalog {
         }
         presets.push(MenuRow::entry("Save current\u{2026}", ""));
         preset_values.push(None);
-        presets.push(MenuRow::group("DEVICES"));
-        preset_values.push(None);
-        presets.push(MenuRow {
-            disabled: true,
-            ..MenuRow::entry("Unavailable preset", "missing file")
-        });
-        preset_values.push(None);
 
         Self {
             presets,
@@ -1174,7 +1167,6 @@ impl UiBinding {
             .filter(|row| !row.is_group && !row.disabled)
             .map(|row| row.label.clone())
             .filter(|label| !label.starts_with("Save current"))
-            .filter(|label| label != "Unavailable preset")
             .collect()
     }
 
