@@ -21,6 +21,15 @@ def deploy(archive):
     if os.environ.get("GITHUB_ACTIONS") != "true" or not os.environ.get("GITHUB_REF", "").startswith("refs/tags/v"):
         raise SystemExit("Update deployment runs only for tagged GitHub releases.")
     repository = os.environ["GITHUB_REPOSITORY"]
+    # GitHub Pages cannot deploy while the repository is private (the Pages
+    # deployment API returns 404 without a paid plan). Skip the deployment and
+    # live verification with a clear warning instead of failing the release;
+    # the update source comes back with the next tagged run once public.
+    if json.loads(gh("api", f"repos/{repository}"))["private"]:
+        print("REPOSITORY IS PRIVATE: skipping update-source deployment and live verification.")
+        print("The in-app updater stays offline until the repository is made public;")
+        print("re-run the Release packages workflow then to deploy the update source.")
+        return
     request_id = f"{os.environ['GITHUB_RUN_ID']}-{os.environ['GITHUB_RUN_ATTEMPT']}"
     expected = {}
     with tarfile.open(archive) as bundle:
