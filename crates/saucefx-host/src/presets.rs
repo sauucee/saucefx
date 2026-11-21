@@ -58,7 +58,7 @@ pub fn validate_fac_structure(text: &str) -> Result<(), &'static str> {
         }
         for band in 1..=count {
             let header = lines.get(index).ok_or("band section ends early")?;
-            if header != format!("Band {band}") {
+            if *header != format!("Band {band}") {
                 return Err("band blocks do not match the declared count");
             }
             let cf = lines.get(index + 1).ok_or("band block ends early")?;
