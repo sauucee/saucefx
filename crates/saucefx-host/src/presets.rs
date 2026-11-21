@@ -721,16 +721,19 @@ mod tests {
         let user = dir.join("user");
         std::fs::create_dir_all(&user).unwrap();
         // A bare file on disk (no catalog label): the target exists, so the
-        // copy gets the numeric suffix instead of overwriting.
+        // copy gets the numeric suffix instead of overwriting. The existing
+        // file is only consulted for existence; the staged file must be
+        // structurally valid to pass the import guard.
         std::fs::write(user.join("Preset.fac"), "old").unwrap();
         let source = dir.join("new.fac");
-        std::fs::write(&source, "new").unwrap();
+        let staged = valid_fac();
+        std::fs::write(&source, &staged).unwrap();
         let entries = vec![(source, Some("Preset".to_string()))];
         let outcome = import_preset_files(&entries, &user, &[]);
         assert_eq!(outcome.imported, 1);
         let second = user.join("Preset 2.fac");
         assert!(second.is_file(), "the suffix chain avoids the collision");
-        assert_eq!(std::fs::read_to_string(&second).unwrap(), "new");
+        assert_eq!(std::fs::read_to_string(&second).unwrap(), staged);
         assert_eq!(
             std::fs::read_to_string(user.join("Preset.fac")).unwrap(),
             "old"
