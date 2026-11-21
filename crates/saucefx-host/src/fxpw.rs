@@ -29,7 +29,12 @@ const PRESET_NAME_LEN: usize = 256;
 /// list but must not appear as menu entries — a device belongs in the
 /// output menu only while it is connected.
 pub fn listable_outputs(entries: &[OutputEntry]) -> Vec<OutputEntry> {
-    entries.to_vec()
+    entries
+        .iter()
+        .filter(|entry| entry.available)
+        .filter(|entry| !entry.device.starts_with("auto_null"))
+        .cloned()
+        .collect()
 }
 
 /// One physical output as fxpw reports it (device + port tuple).
