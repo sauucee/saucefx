@@ -39,7 +39,50 @@ pub fn library_dir(root: Option<&Path>, exe: Option<&Path>) -> PathBuf {
 /// later line and produced a wild +21 dB gain in diagnosis — so the Rust
 /// side rejects them before handing the file to the engine.
 pub fn validate_fac_structure(text: &str) -> Result<(), &'static str> {
-    let _ = text;
+    let lines: Vec<&str> = text.lines().map(str::trim_start).collect();
+    let mut index = 0;
+    while index < lines.len() {
+        let Some(count) = lines[index]
+            .strip_suffix(": Number of EQ Bands")
+            .and_then(|prefix| prefix.parse::<usize>().ok())
+        else {
+            index += 1;
+            continue;
+        };
+        index += 1;
+        if lines
+            .get(index)
+            .is_some_and(|line| line.ends_with(": On/Off Flag"))
+        {
+            index += 1;
+        }
+        for band in 1..=count {
+            let header = lines.get(index).ok_or("band section ends early")?;
+            if header != format!("Band {band}") {
+                return Err("band blocks do not match the declared count");
+            }
+            let cf = lines.get(index + 1).ok_or("band block ends early")?;
+            let Some((cf_value, cf_label)) = cf.rsplit_once(':') else {
+                return Err("band block is missing a CF line");
+            };
+            if cf_label.trim() != "CF" || cf_value.trim().parse::<f64>().is_err() {
+                return Err("band block is missing a numeric CF line");
+            }
+            let gain = lines.get(index + 2).ok_or("band block ends early")?;
+            let Some((gain_value, gain_label)) = gain.rsplit_once(':') else {
+                return Err("band block is missing a Boost/Cut line");
+            };
+            if gain_label.trim() != "Boost/Cut" || gain_value.trim().parse::<i64>().is_err() {
+                return Err("band block is missing a Boost/Cut value");
+            }
+            index += 3;
+        }
+        // Nothing but blank lines may follow the last band block.
+        if lines[index..].iter().any(|line| !line.trim().is_empty()) {
+            return Err("unexpected lines inside or after the band section");
+        }
+        return Ok(());
+    }
     Ok(())
 }
 
