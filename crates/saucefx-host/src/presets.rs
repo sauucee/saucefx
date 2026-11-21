@@ -95,6 +95,11 @@ pub fn validate_fac_structure(text: &str) -> Result<(), &'static str> {
     labeled_int(&lines, &mut index, "Double Params Flag")?;
 
     let elements = labeled_int(&lines, &mut index, "Total number of elements")?;
+    // The six Main parameter lines sit between the element count and the
+    // first element block (writer layout verified across the corpus).
+    for main in 0..6 {
+        indexed_int(&lines, &mut index, "Main", main)?;
+    }
     for element in 0..elements {
         let number = labeled_int(&lines, &mut index, "Element Number")?;
         if number != element {
