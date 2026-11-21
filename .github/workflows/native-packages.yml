@@ -171,7 +171,11 @@ jobs:
           path: /tmp/saucefx-old-release
           key: upgrade-base-v0.2.4
 
+      # Anonymous release-asset downloads are the fragile path (recurring
+      # GitHub serving outages); authenticate with the workflow token.
       - name: Fetch the 0.2.4 bundle when not cached
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           if [ -s /tmp/saucefx-old-release/SauceFX-0.2.4.flatpak ]; then
             echo "upgrade base restored from cache"
@@ -179,11 +183,14 @@ jobs:
           fi
           mkdir -p /tmp/saucefx-old-release
           for attempt in 1 2 3 4 5; do
-            if curl -fsSL -o /tmp/saucefx-old-release/SauceFX-0.2.4.flatpak \
-              https://github.com/sauucee/saucefx/releases/download/v0.2.4/SauceFX-0.2.4-x86_64.flatpak; then
+            if gh release download v0.2.4 --repo sauucee/saucefx \
+              --pattern "SauceFX-0.2.4-x86_64.flatpak" \
+              --dir /tmp/saucefx-old-release --clobber; then
+              mv /tmp/saucefx-old-release/SauceFX-0.2.4-x86_64.flatpak \
+                /tmp/saucefx-old-release/SauceFX-0.2.4.flatpak
               break
             fi
-            rm -f /tmp/saucefx-old-release/SauceFX-0.2.4.flatpak
+            rm -f /tmp/saucefx-old-release/SauceFX-0.2.4-x86_64.flatpak
             if [ "$attempt" = 5 ]; then
               echo "0.2.4 bundle unavailable after retries" >&2
               exit 1
