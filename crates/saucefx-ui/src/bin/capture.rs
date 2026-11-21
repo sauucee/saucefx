@@ -4,7 +4,7 @@
 //!
 //! Usage: capture <scene> <output.png>
 //! Scenes mirror the preview's: default, menu, settings, save, off, light,
-//! eq, empty.
+//! eq, eq-hover, empty.
 
 use std::rc::Rc;
 
@@ -187,6 +187,16 @@ fn main() {
         render_frame(&window, &mut buffer);
         eprintln!("capture: eff-drag values={:?}", app.get_effect_values());
         release(&app, 230.0, 353.0);
+    }
+
+    // Hover probe for the EQ: park the pointer mid-plot so the rendered PNG
+    // shows the pointer-following accent guide at its tracked position
+    // together with the enlarged thumb and the readout.
+    if scene == "eq-hover" {
+        move_pointer(&app, 650.0, 435.0);
+        slint::platform::update_timers_and_animations();
+        render_frame(&window, &mut buffer);
+        eprintln!("capture: eq-hover rendered");
     }
 
     // The Save scene must show the focused name field (the reference fixture

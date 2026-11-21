@@ -16,6 +16,11 @@ export component EqualizerPanel inherits Rectangle {
     // `activeBand`. Slint sends the new cell's hover before the old cell's
     // exit, so exits must not clear a readout another cell already claimed.
     private property <int> active-band: -1;
+    // Pointer-following hover guide: the absolute plot x of the pointer, fed
+    // by every band cell's TouchArea so the line tracks the cursor smoothly
+    // instead of snapping to band centres.
+    private property <length> hover-x: 0px;
+    private property <bool> hover-line: false;
     callback band-changed(int, float);
     callback band-hovered(int);
     callback band-blurred(int);
@@ -205,6 +210,22 @@ export component EqualizerPanel inherits Rectangle {
                 fill: transparent;
             }
 
+            // Hover guide: a 2px rounded accent line that follows the pointer
+            // across the plot (hover-x is fed by every band cell's TouchArea),
+            // spanning the same viewBox 12..188 extent as the vertical grid
+            // guides. Drawn above the curve and below the thumbs, fading in
+            // and out instead of popping.
+            Rectangle {
+                x: min(parent.width - 2px, max(0px, root.hover-x - 1px));
+                width: 2px;
+                y: parent.height * 12 / 200;
+                height: parent.height * (188 - 12) / 200;
+                border-radius: 1px;
+                background: Palette.accent.with-alpha(0.28);
+                opacity: root.enabled && root.hover-line ? 1.0 : 0.0;
+                animate opacity { duration: 150ms; }
+            }
+
             // 31 focusable band sliders, 1 dB keyboard steps, right-click reset.
             // Equalizer.tsx .eq-band is `flex: 1 1 0`, so each band owns its
             // whole pitch slice: centres, gaps between thumbs and the plot
@@ -302,20 +323,6 @@ export component EqualizerPanel inherits Rectangle {
                     }
                 }
 
-                // The hovered cell gets a 1px accent guide at its centre,
-                // spanning the same viewBox 12..188 extent as the vertical
-                // guides. It is bound to this cell's live hover state, so it
-                // moves with the pointer from cell to cell and leaves with it;
-                // resting bands draw nothing and no geometry changes size.
-                Rectangle {
-                    x: (parent.width - 1px) / 2;
-                    width: 1px;
-                    y: parent.height * 12 / 200;
-                    height: parent.height * (188 - 12) / 200;
-                    background: Palette.accent-border;
-                    visible: touch.has-hover && root.enabled;
-                }
-
                 // styles.css .eq-thumb: 6x6 circle, 1.5px surface ring, 1.3x
                 // on hover/focus, 1.5x while dragging. No disabled dimming:
                 // `.eq-band .slider[data-disabled]` never matches these bands
@@ -373,6 +380,8 @@ export component EqualizerPanel inherits Rectangle {
                     mouse-cursor: root.enabled && root.keyboard-enabled ? ns-resize : default;
                     changed has-hover => {
                         if (self.has-hover) {
+                            root.hover-x = parent.x + self.mouse-x;
+                            root.hover-line = true;
                             root.active-band = i;
                             root.band-hovered(i);
                         } else {
@@ -382,14 +391,18 @@ export component EqualizerPanel inherits Rectangle {
                             // stays on this band so Up/Down still target a
                             // clicked band after the pointer leaves; the halo
                             // and readout stay hidden because keyboard-visible
-                            // is still false.
+                            // is still false. The hover line follows the same
+                            // rule: a neighbour that claimed the readout also
+                            // claimed the line's position.
                             if (root.active-band == i) {
                                 root.active-band = -1;
+                                root.hover-line = false;
                                 root.band-blurred(i);
                             }
                         }
                     }
                     moved => {
+                        root.hover-x = parent.x + self.mouse-x;
                         if (self.pressed && root.enabled && root.keyboard-enabled) {
                             let gain = 12 - ((self.mouse-y / self.height * 200 - 12) / 176) * 24;
                             root.band-changed(i, max(-12, min(12, round(gain))));
@@ -408,6 +421,7 @@ export component EqualizerPanel inherits Rectangle {
                     }
                     pointer-event(event) => {
                         if (event.kind == PointerEventKind.move) {
+                            root.hover-x = parent.x + self.mouse-x;
                             root.active-band = i;
                             root.band-hovered(i);
                         }

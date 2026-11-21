@@ -91,6 +91,10 @@ jobs:
           render_eq step eq-step
           render_eq endpoints eq-endpoints
           render_eq light eq-light-factory
+          # The hover probe runs through the offscreen capture binary (pointer
+          # dispatch is deterministic there), so the pointer-following guide
+          # line is verified against real pixels in the same gallery.
+          target/release/capture eq-hover eq-scenes/eq-hover.png
 
       - name: Upload EQ Skia captures
         uses: actions/upload-artifact@v4
