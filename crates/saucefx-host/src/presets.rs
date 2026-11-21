@@ -414,6 +414,66 @@ mod tests {
     }
 
     #[test]
+    fn a_missing_class1_header_is_rejected() {
+        let malformed = valid_fac().replacen("CLASS1 : Effect Type\n", "", 1);
+        assert!(validate_fac_structure(&malformed).is_err());
+    }
+
+    #[test]
+    fn a_missing_version_line_is_rejected() {
+        let malformed = valid_fac().replacen("9: Version\n", "", 1);
+        assert!(validate_fac_structure(&malformed).is_err());
+    }
+
+    #[test]
+    fn a_shifted_element_section_is_rejected() {
+        // One extra Param line after the element header shifts every later
+        // Param line: the same corruption class as the shifted band block.
+        let malformed = valid_fac().replacen(
+            "0: Element Number\n",
+            "0: Element Number\n   0: Param 0\n",
+            1,
+        );
+        assert!(validate_fac_structure(&malformed).is_err());
+    }
+
+    #[test]
+    fn a_missing_integer_value_is_rejected() {
+        // The declared integer count no longer matches the value lines that
+        // follow, which is how lost or duplicated lines announce themselves.
+        let malformed = valid_fac().replacen("0: Integer[5]\n", "", 1);
+        assert!(validate_fac_structure(&malformed).is_err());
+    }
+
+    #[test]
+    fn every_factory_preset_passes_structure_validation() {
+        // Regression lock over the real shipped library: the validator must
+        // accept every factory file, so strictness cannot break the catalog.
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../presets/Factsoft");
+        let mut checked = 0;
+        for entry in std::fs::read_dir(&dir).expect("factory preset library exists") {
+            let path = entry.expect("readable factory entry").path();
+            if path
+                .extension()
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("fac"))
+            {
+                let text = std::fs::read_to_string(&path).expect("factory preset is text");
+                assert_eq!(
+                    validate_fac_structure(&text),
+                    Ok(()),
+                    "factory preset {} must stay structurally valid",
+                    path.display()
+                );
+                checked += 1;
+            }
+        }
+        assert!(
+            checked >= 13,
+            "expected the 13 factory presets, found {checked}"
+        );
+    }
+
+    #[test]
     fn installed_flatpak_discovers_factory_default() {
         let dir =
             std::env::temp_dir().join(format!("saucefx-flatpak-library-{}", std::process::id()));
