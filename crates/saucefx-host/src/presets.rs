@@ -50,14 +50,8 @@ fn labeled_int(lines: &[&str], index: &mut usize, label: &str) -> Result<usize, 
     Ok(parsed)
 }
 
-/// Reads one `<int>: <kind> <n>` line, requiring the index to be `n`.
-fn indexed_int(
-    lines: &[&str],
-    index: &mut usize,
-    kind: &str,
-    n: usize,
-) -> Result<(), &'static str> {
-    let expected = format!("{kind} {n}");
+/// Reads one `<int>: <expected label>` line.
+fn indexed_int(lines: &[&str], index: &mut usize, expected: &str) -> Result<(), &'static str> {
     let line = *lines.get(*index).ok_or("preset ends early")?;
     let Some((value, seen)) = line.rsplit_once(':') else {
         return Err("expected a '<value>: <label>' line");
@@ -98,7 +92,7 @@ pub fn validate_fac_structure(text: &str) -> Result<(), &'static str> {
     // The six Main parameter lines sit between the element count and the
     // first element block (writer layout verified across the corpus).
     for main in 0..6 {
-        indexed_int(&lines, &mut index, "Main", main)?;
+        indexed_int(&lines, &mut index, &format!("Main {main}"))?;
     }
     for element in 0..elements {
         let number = labeled_int(&lines, &mut index, "Element Number")?;
@@ -106,7 +100,7 @@ pub fn validate_fac_structure(text: &str) -> Result<(), &'static str> {
             return Err("element numbering is out of order");
         }
         for param in 0..7 {
-            indexed_int(&lines, &mut index, "Param", param)?;
+            indexed_int(&lines, &mut index, &format!("Param {param}"))?;
         }
     }
 
@@ -116,7 +110,9 @@ pub fn validate_fac_structure(text: &str) -> Result<(), &'static str> {
         "Number of Application Dependent Integers",
     )?;
     for integer in 0..integers {
-        indexed_int(&lines, &mut index, "Integer", integer)?;
+        // The writer brackets the Integer label ("Integer[0]") while Main and
+        // Param labels are plain ("Main 0", "Param 0").
+        indexed_int(&lines, &mut index, &format!("Integer[{integer}]"))?;
     }
     // No nonzero Reals/Strings section exists in the corpus, so their value
     // lines are consumed as opaque: only the count is enforced.
@@ -182,6 +178,10 @@ fn scan_dir(dir: &Path, factory: bool) -> Vec<ScannedPreset> {
             && path
                 .extension()
                 .is_some_and(|extension| extension.eq_ignore_ascii_case("fac"))
+            // A structurally invalid file is never offered: the legacy engine
+            // parser would misread it (wild gains demonstrated in diagnosis).
+            && std::fs::read_to_string(&path)
+                .is_ok_and(|text| validate_fac_structure(&text).is_ok())
         {
             out.push(ScannedPreset { path, factory });
         }
@@ -322,6 +322,15 @@ pub fn import_preset_files(
         }
         if existing.contains(&name.to_lowercase()) {
             outcome.skipped += 1;
+            continue;
+        }
+        // A structurally malformed file must not enter the library: the
+        // legacy engine parser would misread it, so it counts as not readable
+        // like an engine-unresolvable file.
+        let structurally_valid =
+            std::fs::read_to_string(source).is_ok_and(|text| validate_fac_structure(&text).is_ok());
+        if !structurally_valid {
+            outcome.failed += 1;
             continue;
         }
         let mut safe_name = sanitize_filename(&name);
@@ -610,7 +619,7 @@ mod tests {
         let factory = dir.join("app/share/saucefx/presets/Factsoft");
         std::fs::create_dir_all(&factory).unwrap();
         let default = factory.join("Default.fac");
-        std::fs::write(&default, "CLASS1 : Effect Type\n9: Version\nDefault\n").unwrap();
+        std::fs::write(&default, valid_fac()).unwrap();
 
         let resolved = library_dir(None, Some(&exe));
         let scanned = scan(&resolved, &dir.join("user"));
@@ -635,7 +644,7 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let source = dir.join("staged").join("Evening.fac");
         std::fs::create_dir_all(source.parent().unwrap()).unwrap();
-        std::fs::write(&source, "CLASS1 : Effect Type\n").unwrap();
+        std::fs::write(&source, valid_fac()).unwrap();
         let user = dir.join("user");
         std::fs::create_dir_all(&user).unwrap();
 
@@ -663,7 +672,7 @@ mod tests {
         std::fs::create_dir_all(&user).unwrap();
         let make = |name: &str| {
             let source = dir.join(format!("{name}.fac"));
-            std::fs::write(&source, "x").unwrap();
+            std::fs::write(&source, valid_fac()).unwrap();
             (source, Some(name.to_string()))
         };
 
