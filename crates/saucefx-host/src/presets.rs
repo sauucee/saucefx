@@ -104,10 +104,18 @@ pub fn validate_fac_structure(text: &str) -> Result<(), &'static str> {
         }
     }
 
+    // The writer emits all three count lines consecutively, then the Integer
+    // value lines, then Real values, then String values.
     let integers = labeled_int(
         &lines,
         &mut index,
         "Number of Application Dependent Integers",
+    )?;
+    let reals = labeled_int(&lines, &mut index, "Number of Application Dependent Reals")?;
+    let strings = labeled_int(
+        &lines,
+        &mut index,
+        "Number of Application Dependent Strings",
     )?;
     for integer in 0..integers {
         // The writer brackets the Integer label ("Integer[0]") while Main and
@@ -116,13 +124,7 @@ pub fn validate_fac_structure(text: &str) -> Result<(), &'static str> {
     }
     // No nonzero Reals/Strings section exists in the corpus, so their value
     // lines are consumed as opaque: only the count is enforced.
-    let reals = labeled_int(&lines, &mut index, "Number of Application Dependent Reals")?;
     index += reals;
-    let strings = labeled_int(
-        &lines,
-        &mut index,
-        "Number of Application Dependent Strings",
-    )?;
     index += strings;
 
     let bands = labeled_int(&lines, &mut index, "Number of EQ Bands")?;
