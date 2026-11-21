@@ -67,6 +67,15 @@
     <display_length compare="ge">768</display_length>
   </requires>
   <releases>
+    <release version="0.3.3" date="2026-11-21">
+      <description>
+        <p>Draw the equalizer with a smooth natural cubic spline that bends
+        continuously through every band, report "up to date" only after
+        verifying the installed app's deployment, and reject structurally
+        malformed preset files before the engine loads them. The default
+        renderer is Skia everywhere, matching shipped packages.</p>
+      </description>
+    </release>
     <release version="0.3.2" date="2026-11-20">
       <description>
         <p>Check for and install signed Flatpak updates from Settings, then
