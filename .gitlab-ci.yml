@@ -21,13 +21,14 @@ test:
     - export DEBIAN_FRONTEND=noninteractive
     - apt-get update -qq
     - apt-get install -y -qq
-      g++ make pkg-config curl file
+      g++ gcc make pkg-config curl file clang libclang-dev
       libpipewire-0.3-dev libpulse-dev libasound2-dev
       libx11-dev libxext-dev libxinerama-dev libxrandr-dev
       libxcursor-dev libxcomposite-dev libfreetype6-dev libfontconfig1-dev
       libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev
       libxkbcommon-dev libxkbcommon-x11-0
       dbus-x11 xvfb xauth git
+    - rustup component add rustfmt
   script:
     # DSP archives the host crate links (same as the AppImage pipeline).
     - make -C src rt -j"$(nproc)"
