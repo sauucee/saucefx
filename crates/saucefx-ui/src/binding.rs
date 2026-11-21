@@ -1945,33 +1945,48 @@ fn eq_points(gains: &[f32; BAND_COUNT], width: f32) -> Vec<(f64, f64)> {
         .collect()
 }
 
-/// The reference Equalizer.tsx `smoothPath`, ported exactly: Catmull-Rom
-/// tangents `current +/- (neighbour gap) / 6` through points at band-cell
-/// centres, with the start/end clamps (`previous` clamps to the first point,
-/// `after` to the last). C1 by construction — the curvature jumps at knots
-/// are the bendy character the reference shows; a natural cubic spline
-/// minimises curvature and renders visibly flatter at small preset gains.
+/// Natural cubic interpolation in band-index space. The x coordinate is linear
+/// on every segment, so matching first/second derivatives here also matches
+/// slope and curvature after the chart's affine viewbox fit. Natural endpoints
+/// have zero second derivative; no duplicated endpoint or hard slope is needed.
 ///
 /// This is the gain-control trace, not the combined DSP frequency response.
-/// Catmull-Rom can overshoot between bands. Do not clamp the interpolated
-/// curve: doing so would create flat spots and corners.
+/// Natural splines can overshoot between bands. Do not clamp the interpolated
+/// curve: doing so would create the flat spots and corners this path avoids.
 fn eq_path(gains: &[f32; BAND_COUNT], width: f32) -> String {
     let points = eq_points(gains, width);
+    let last = points.len() - 1;
+    let mut upper = [0.0; BAND_COUNT];
+    let mut second = [0.0; BAND_COUNT];
 
-    // Six decimals keep serialized control points continuous well below a
-    // pixel. Both stroke and fill reuse this path.
+    // Solve M[i-1] + 4 M[i] + M[i+1] = 6 (y[i+1] - 2 y[i] + y[i-1])
+    // with M[0] = M[last] = 0. All intervals are one band-index unit wide.
+    for index in 1..last {
+        let diagonal = 4.0 - upper[index - 1];
+        upper[index] = 1.0 / diagonal;
+        let difference = points[index + 1].1 - 2.0 * points[index].1 + points[index - 1].1;
+        second[index] = (6.0 * difference - second[index - 1]) / diagonal;
+    }
+    for index in (1..last).rev() {
+        second[index] -= upper[index] * second[index + 1];
+    }
+
+    // Six decimals keep serialized slopes/bends continuous well below a pixel,
+    // including after non-uniform fitting. Both stroke and fill reuse this path.
     let mut path = format!("M {:.6} {:.6}", points[0].0, points[0].1);
-    for index in 0..points.len() - 1 {
+    for index in 0..last {
         let current = points[index];
         let next = points[index + 1];
-        let previous = points[index.saturating_sub(1)];
-        let after = points.get(index + 2).unwrap_or(&next);
+        let third_width = (next.0 - current.0) / 3.0;
+        let delta = next.1 - current.1;
+        let start_slope = delta - (2.0 * second[index] + second[index + 1]) / 6.0;
+        let end_slope = delta + (second[index] + 2.0 * second[index + 1]) / 6.0;
         path.push_str(&format!(
             " C {:.6} {:.6}, {:.6} {:.6}, {:.6} {:.6}",
-            current.0 + (next.0 - previous.0) / 6.0,
-            current.1 + (next.1 - previous.1) / 6.0,
-            next.0 - (after.0 - current.0) / 6.0,
-            next.1 - (after.1 - current.1) / 6.0,
+            current.0 + third_width,
+            current.1 + start_slope / 3.0,
+            next.0 - third_width,
+            next.1 - end_slope / 3.0,
             next.0,
             next.1
         ));
