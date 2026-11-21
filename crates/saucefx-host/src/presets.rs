@@ -33,6 +33,46 @@ pub fn library_dir(root: Option<&Path>, exe: Option<&Path>) -> PathBuf {
 }
 
 /// One scanned .fac file with the directory kind it came from.
+/// Reads one `<int>: <label>` line at `lines[index]`, advancing the index.
+fn labeled_int(lines: &[&str], index: &mut usize, label: &str) -> Result<usize, &'static str> {
+    let line = *lines.get(*index).ok_or("preset ends early")?;
+    let Some((value, seen)) = line.rsplit_once(':') else {
+        return Err("expected a '<value>: <label>' line");
+    };
+    if seen.trim() != label {
+        return Err("unexpected line in the preset structure");
+    }
+    let parsed = value
+        .trim()
+        .parse::<usize>()
+        .map_err(|_| "expected an integer value")?;
+    *index += 1;
+    Ok(parsed)
+}
+
+/// Reads one `<int>: <kind> <n>` line, requiring the index to be `n`.
+fn indexed_int(
+    lines: &[&str],
+    index: &mut usize,
+    kind: &str,
+    n: usize,
+) -> Result<(), &'static str> {
+    let expected = format!("{kind} {n}");
+    let line = *lines.get(*index).ok_or("preset ends early")?;
+    let Some((value, seen)) = line.rsplit_once(':') else {
+        return Err("expected a '<value>: <label>' line");
+    };
+    if seen.trim() != expected {
+        return Err("preset value lines are shifted or out of order");
+    }
+    value
+        .trim()
+        .parse::<usize>()
+        .map_err(|_| "expected an integer value")?;
+    *index += 1;
+    Ok(())
+}
+
 /// Structural validation for a `.fac` preset (the CLASS1 text format the
 /// engine writes and reads). The legacy engine parser accepts structurally
 /// malformed files — a band block with extra or missing lines shifts every
@@ -41,47 +81,80 @@ pub fn library_dir(root: Option<&Path>, exe: Option<&Path>) -> PathBuf {
 pub fn validate_fac_structure(text: &str) -> Result<(), &'static str> {
     let lines: Vec<&str> = text.lines().map(str::trim_start).collect();
     let mut index = 0;
-    while index < lines.len() {
-        let Some(count) = lines[index]
-            .strip_suffix(": Number of EQ Bands")
-            .and_then(|prefix| prefix.parse::<usize>().ok())
-        else {
-            index += 1;
-            continue;
-        };
+
+    if *lines.first().ok_or("preset is empty")? != "CLASS1 : Effect Type" {
+        return Err("the CLASS1 header line is missing");
+    }
+    index += 1;
+    labeled_int(&lines, &mut index, "Version")?;
+    // The display name is free text: any single line.
+    if lines.get(index).is_none() {
+        return Err("preset name line is missing");
+    }
+    index += 1;
+    labeled_int(&lines, &mut index, "Double Params Flag")?;
+
+    let elements = labeled_int(&lines, &mut index, "Total number of elements")?;
+    for element in 0..elements {
+        let number = labeled_int(&lines, &mut index, "Element Number")?;
+        if number != element {
+            return Err("element numbering is out of order");
+        }
+        for param in 0..7 {
+            indexed_int(&lines, &mut index, "Param", param)?;
+        }
+    }
+
+    let integers = labeled_int(
+        &lines,
+        &mut index,
+        "Number of Application Dependent Integers",
+    )?;
+    for integer in 0..integers {
+        indexed_int(&lines, &mut index, "Integer", integer)?;
+    }
+    // No nonzero Reals/Strings section exists in the corpus, so their value
+    // lines are consumed as opaque: only the count is enforced.
+    let reals = labeled_int(&lines, &mut index, "Number of Application Dependent Reals")?;
+    index += reals;
+    let strings = labeled_int(
+        &lines,
+        &mut index,
+        "Number of Application Dependent Strings",
+    )?;
+    index += strings;
+
+    let bands = labeled_int(&lines, &mut index, "Number of EQ Bands")?;
+    if lines
+        .get(index)
+        .is_some_and(|line| line.ends_with(": On/Off Flag"))
+    {
         index += 1;
-        if lines
-            .get(index)
-            .is_some_and(|line| line.ends_with(": On/Off Flag"))
-        {
-            index += 1;
+    }
+    for band in 1..=bands {
+        let header = *lines.get(index).ok_or("band section ends early")?;
+        if header != format!("Band {band}") {
+            return Err("band blocks do not match the declared count");
         }
-        for band in 1..=count {
-            let header = lines.get(index).ok_or("band section ends early")?;
-            if *header != format!("Band {band}") {
-                return Err("band blocks do not match the declared count");
-            }
-            let cf = lines.get(index + 1).ok_or("band block ends early")?;
-            let Some((cf_value, cf_label)) = cf.rsplit_once(':') else {
-                return Err("band block is missing a CF line");
-            };
-            if cf_label.trim() != "CF" || cf_value.trim().parse::<f64>().is_err() {
-                return Err("band block is missing a numeric CF line");
-            }
-            let gain = lines.get(index + 2).ok_or("band block ends early")?;
-            let Some((gain_value, gain_label)) = gain.rsplit_once(':') else {
-                return Err("band block is missing a Boost/Cut line");
-            };
-            if gain_label.trim() != "Boost/Cut" || gain_value.trim().parse::<i64>().is_err() {
-                return Err("band block is missing a Boost/Cut value");
-            }
-            index += 3;
+        let cf = lines.get(index + 1).ok_or("band block ends early")?;
+        let Some((cf_value, cf_label)) = cf.rsplit_once(':') else {
+            return Err("band block is missing a CF line");
+        };
+        if cf_label.trim() != "CF" || cf_value.trim().parse::<f64>().is_err() {
+            return Err("band block is missing a numeric CF line");
         }
-        // Nothing but blank lines may follow the last band block.
-        if lines[index..].iter().any(|line| !line.trim().is_empty()) {
-            return Err("unexpected lines inside or after the band section");
+        let gain = lines.get(index + 2).ok_or("band block ends early")?;
+        let Some((gain_value, gain_label)) = gain.rsplit_once(':') else {
+            return Err("band block is missing a Boost/Cut line");
+        };
+        if gain_label.trim() != "Boost/Cut" || gain_value.trim().parse::<i64>().is_err() {
+            return Err("band block is missing a Boost/Cut value");
         }
-        return Ok(());
+        index += 3;
+    }
+    // Nothing but blank lines may follow the last band block.
+    if lines[index..].iter().any(|line| !line.trim().is_empty()) {
+        return Err("unexpected lines at the end of the preset");
     }
     Ok(())
 }
