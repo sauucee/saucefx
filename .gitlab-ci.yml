@@ -1,0 +1,39 @@
+# Verification pipeline for the GitLab mirror. While GitHub Actions minutes
+# are exhausted, this runs the same checks as the GitHub workflows: fmt plus
+# the full workspace test suite, with the DSP archives built in-pipeline so
+# the host crate can compile.
+#
+# Deliberately light: no package builds, no release artifacts, no Skia —
+# the UI tests render through renderer-software, and the host links its
+# prebuilt archives after `make -C src rt`. GitLab's free tier gives 400
+# compute minutes per month; this pipeline costs ~15 minutes per run.
+stages: [test]
+
+variables:
+  GIT_DEPTH: "1"
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+
+test:
+  stage: test
+  image: rust:1-bookworm
+  before_script:
+    - export DEBIAN_FRONTEND=noninteractive
+    - apt-get update -qq
+    - apt-get install -y -qq
+      g++ make pkg-config curl file
+      libpipewire-0.3-dev libpulse-dev libasound2-dev
+      libx11-dev libxext-dev libxinerama-dev libxrandr-dev
+      libxcursor-dev libxcomposite-dev libfreetype6-dev libfontconfig1-dev
+      libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev
+      libxkbcommon-dev libxkbcommon-x11-0
+      dbus-x11 xvfb xauth git
+  script:
+    # DSP archives the host crate links (same as the AppImage pipeline).
+    - make -C src rt -j"$(nproc)"
+    - rustc --version && cargo --version
+    - cargo fmt --all -- --check
+    # UI tests render through renderer-software; Skia is not compiled here.
+    - xvfb-run -a cargo test -p saucefx-core -p saucefx-ui
+        --no-default-features --features renderer-software -- --test-threads=1
+    - cargo test -p saucefx-host
