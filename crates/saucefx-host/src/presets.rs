@@ -547,6 +547,56 @@ mod tests {
     }
 
     #[test]
+    fn scan_skips_malformed_presets() {
+        let dir = std::env::temp_dir().join("saucefx-scan-guard");
+        let _ = std::fs::remove_dir_all(&dir);
+        let factory = dir.join("factory");
+        std::fs::create_dir_all(&factory).unwrap();
+        std::fs::write(factory.join("Good.fac"), valid_fac()).unwrap();
+        let shifted =
+            valid_fac().replacen("Band 5\n", "   416.5: CF\n   0: Boost/Cut\nBand 5\n", 1);
+        std::fs::write(factory.join("Broken.fac"), shifted).unwrap();
+
+        let scanned = scan(&factory, &dir.join("user"));
+
+        assert_eq!(scanned.len(), 1, "only the well-formed preset is offered");
+        assert!(scanned[0].path.ends_with("Good.fac"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn importing_a_malformed_preset_counts_as_failed() {
+        let dir = std::env::temp_dir().join("saucefx-import-guard");
+        let _ = std::fs::remove_dir_all(&dir);
+        let staged = dir.join("staged");
+        std::fs::create_dir_all(&staged).unwrap();
+        let shifted =
+            valid_fac().replacen("Band 5\n", "   416.5: CF\n   0: Boost/Cut\nBand 5\n", 1);
+        let source = staged.join("Broken.fac");
+        std::fs::write(&source, shifted).unwrap();
+        let user = dir.join("user");
+        std::fs::create_dir_all(&user).unwrap();
+
+        let entries = vec![(source, Some("Broken preset".to_string()))];
+        let outcome = import_preset_files(&entries, &user, &[]);
+
+        assert_eq!(
+            outcome.imported, 0,
+            "a malformed file must not reach the library"
+        );
+        assert_eq!(
+            outcome.failed, 1,
+            "the malformed file counts as not readable"
+        );
+        assert_eq!(outcome.last, None);
+        assert!(
+            std::fs::read_dir(&user).unwrap().next().is_none(),
+            "nothing is copied"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
     fn installed_flatpak_discovers_factory_default() {
         let dir =
             std::env::temp_dir().join(format!("saucefx-flatpak-library-{}", std::process::id()));
