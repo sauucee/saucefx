@@ -412,9 +412,10 @@ fn eq_curve_passes_through_every_band_without_turning_back() {
 }
 
 #[test]
-fn eq_curve_has_matching_slopes_and_bends_at_every_band() {
-    // The old /6 control construction is C1 but fails the bend check around
-    // the isolated +12 dB band. Parse serialized cubics, not a second spline.
+fn eq_curve_has_matching_slopes_at_every_band() {
+    // The reference smoothPath is Catmull-Rom: C1 (shared knot tangents) but
+    // deliberately NOT curvature-continuous — the curvature jumps are the
+    // bendy character the reference shows.
     for (name, gains) in eq_profiles() {
         for width in [480.0, 1000.0, 1600.0] {
             let segments = eq_segments(&eq_curve_commands(&gains, width, 200.0));
@@ -425,26 +426,57 @@ fn eq_curve_has_matching_slopes_and_bends_at_every_band() {
                     "{name}: slope jump at band {} (width {width})",
                     band + 1
                 );
-                assert!(
-                    (pair[0].bend(1.0) - pair[1].bend(0.0)).abs() < 2e-5,
-                    "{name}: curvature jump at band {} (width {width})",
-                    band + 1
-                );
             }
         }
     }
 }
 
-#[test]
-fn eq_curve_has_natural_endpoints_and_preserves_straight_profiles() {
-    for (name, gains) in eq_profiles() {
-        let segments = eq_segments(&eq_curve_commands(&gains, 1000.0, 200.0));
-        assert!(segments[0].bend(0.0).abs() < 2e-5, "{name}: first bend");
-        assert!(
-            segments.last().unwrap().bend(1.0).abs() < 2e-5,
-            "{name}: last bend"
-        );
+/// The reference Equalizer.tsx `smoothPath`, ported line-for-line: points at
+/// band-cell centres, Catmull-Rom tangents `current +/- (neighbour gap)/6`
+/// with the start/end clamps (`previous` clamps to the first point, `after`
+/// to the last), six-decimal serialization.
+fn reference_smooth_path(gains: &[f32; BAND_COUNT], width: f64) -> String {
+    let points: Vec<(f64, f64)> = (0..BAND_COUNT)
+        .map(|index| {
+            let x = (index as f64 + 0.5) / BAND_COUNT as f64 * width;
+            let y = 12.0 + (12.0 - f64::from(gains[index])) / 24.0 * 176.0;
+            (x, y)
+        })
+        .collect();
+    let mut path = format!("M {:.6} {:.6}", points[0].0, points[0].1);
+    for index in 0..points.len() - 1 {
+        let current = points[index];
+        let next = points[index + 1];
+        let previous = points[index.saturating_sub(1)];
+        let after = points.get(index + 2).unwrap_or(&next);
+        path.push_str(&format!(
+            " C {:.6} {:.6}, {:.6} {:.6}, {:.6} {:.6}",
+            current.0 + (next.0 - previous.0) / 6.0,
+            current.1 + (next.1 - previous.1) / 6.0,
+            next.0 - (after.0 - current.0) / 6.0,
+            next.1 - (after.1 - current.1) / 6.0,
+            next.0,
+            next.1
+        ));
     }
+    path
+}
+
+#[test]
+fn eq_curve_matches_the_reference_smooth_path_exactly() {
+    for (name, gains) in eq_profiles() {
+        for width in [480.0, 1000.0, 1600.0] {
+            assert_eq!(
+                eq_curve_commands(&gains, width, 200.0),
+                reference_smooth_path(&gains, f64::from(width)),
+                "{name} width {width}"
+            );
+        }
+    }
+}
+
+#[test]
+fn eq_curve_preserves_straight_profiles() {
     for gain in [-12.0, 0.0, 12.0] {
         let expected_y = 12.0 + (12.0 - f64::from(gain)) / 24.0 * 176.0;
         let segments = eq_segments(&eq_curve_commands(&[gain; BAND_COUNT], 1000.0, 200.0));
