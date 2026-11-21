@@ -23,6 +23,15 @@ const OUTPUT_PORT_LEN: usize = 256;
 const START_ERROR_LEN: usize = 512;
 const PRESET_NAME_LEN: usize = 256;
 
+/// The outputs the menu should list: only devices that are actually
+/// available right now. Unplugged ports and PipeWire's automatic fallback
+/// sinks (`auto_null`, `auto_null.2`, ...) stay in the engine's routing
+/// list but must not appear as menu entries — a device belongs in the
+/// output menu only while it is connected.
+pub fn listable_outputs(entries: &[OutputEntry]) -> Vec<OutputEntry> {
+    entries.to_vec()
+}
+
 /// One physical output as fxpw reports it (device + port tuple).
 #[derive(Clone, Debug)]
 pub struct OutputEntry {
@@ -306,6 +315,44 @@ impl FxpwEngine {
 mod tests {
     use super::*;
     use saucefx_ui::binding::UiBinding;
+
+    fn output_entry(device: &str, description: &str, available: bool) -> OutputEntry {
+        OutputEntry {
+            device: device.to_string(),
+            description: description.to_string(),
+            port: String::new(),
+            port_description: String::new(),
+            available,
+        }
+    }
+
+    #[test]
+    fn menu_lists_only_currently_available_outputs() {
+        let entries = vec![
+            output_entry("alsa_output.pci-1.analog-stereo", "Built-in Audio", true),
+            output_entry("alsa_output.pci-1.hdmi-stereo", "HDMI Audio", false),
+            output_entry("auto_null.2", "Dummy Output", true),
+            output_entry("bluez_output.a1_b2_c3", "Headphones", true),
+        ];
+        let listed = listable_outputs(&entries);
+        let devices: Vec<&str> = listed.iter().map(|e| e.device.as_str()).collect();
+        assert!(
+            devices.contains(&"alsa_output.pci-1.analog-stereo"),
+            "the connected analog output is listed: {devices:?}"
+        );
+        assert!(
+            devices.contains(&"bluez_output.a1_b2_c3"),
+            "the connected headset is listed: {devices:?}"
+        );
+        assert!(
+            !devices.contains(&"alsa_output.pci-1.hdmi-stereo"),
+            "an unplugged port is not listed: {devices:?}"
+        );
+        assert!(
+            !devices.contains(&"auto_null.2"),
+            "PipeWire fallback sinks are not listed: {devices:?}"
+        );
+    }
     use std::process::Command;
     use std::thread;
     use std::time::{Duration, Instant};

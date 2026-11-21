@@ -134,6 +134,7 @@ fn zenity_save_file(title: &str, start: &Path) -> Option<PathBuf> {
 /// Output menu rows from the engine. Row 1 is Automatic; an empty device
 /// name routes automatically. Device and port together identify an output.
 fn output_rows(entries: Vec<fxpw::OutputEntry>) -> Vec<MenuRow> {
+    let entries = fxpw::listable_outputs(&entries);
     // The reference output menu: WITH SAUCEFX EFFECTS (automatic + devices),
     // WITHOUT EFFECTS (direct playback), matching webSetOutput's ids.
     let mut rows = vec![MenuRow::group("WITH SAUCEFX EFFECTS")];
