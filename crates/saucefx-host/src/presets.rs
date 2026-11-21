@@ -33,6 +33,135 @@ pub fn library_dir(root: Option<&Path>, exe: Option<&Path>) -> PathBuf {
 }
 
 /// One scanned .fac file with the directory kind it came from.
+/// Reads one `<int>: <label>` line at `lines[index]`, advancing the index.
+fn labeled_int(lines: &[&str], index: &mut usize, label: &str) -> Result<usize, &'static str> {
+    let line = *lines.get(*index).ok_or("preset ends early")?;
+    let Some((value, seen)) = line.rsplit_once(':') else {
+        return Err("expected a '<value>: <label>' line");
+    };
+    if seen.trim() != label {
+        return Err("unexpected line in the preset structure");
+    }
+    let parsed = value
+        .trim()
+        .parse::<usize>()
+        .map_err(|_| "expected an integer value")?;
+    *index += 1;
+    Ok(parsed)
+}
+
+/// Reads one `<int>: <expected label>` line.
+fn indexed_int(lines: &[&str], index: &mut usize, expected: &str) -> Result<(), &'static str> {
+    let line = *lines.get(*index).ok_or("preset ends early")?;
+    let Some((value, seen)) = line.rsplit_once(':') else {
+        return Err("expected a '<value>: <label>' line");
+    };
+    if seen.trim() != expected {
+        return Err("preset value lines are shifted or out of order");
+    }
+    value
+        .trim()
+        .parse::<usize>()
+        .map_err(|_| "expected an integer value")?;
+    *index += 1;
+    Ok(())
+}
+
+/// Structural validation for a `.fac` preset (the CLASS1 text format the
+/// engine writes and reads). The legacy engine parser accepts structurally
+/// malformed files — a band block with extra or missing lines shifts every
+/// later line and produced a wild +21 dB gain in diagnosis — so the Rust
+/// side rejects them before handing the file to the engine.
+pub fn validate_fac_structure(text: &str) -> Result<(), &'static str> {
+    let lines: Vec<&str> = text.lines().map(str::trim_start).collect();
+    let mut index = 0;
+
+    if *lines.first().ok_or("preset is empty")? != "CLASS1 : Effect Type" {
+        return Err("the CLASS1 header line is missing");
+    }
+    index += 1;
+    labeled_int(&lines, &mut index, "Version")?;
+    // The display name is free text: any single line.
+    if lines.get(index).is_none() {
+        return Err("preset name line is missing");
+    }
+    index += 1;
+    labeled_int(&lines, &mut index, "Double Params Flag")?;
+
+    let elements = labeled_int(&lines, &mut index, "Total number of elements")?;
+    // The six Main parameter lines sit between the element count and the
+    // first element block (writer layout verified across the corpus).
+    for main in 0..6 {
+        indexed_int(&lines, &mut index, &format!("Main {main}"))?;
+    }
+    for element in 0..elements {
+        let number = labeled_int(&lines, &mut index, "Element Number")?;
+        if number != element {
+            return Err("element numbering is out of order");
+        }
+        for param in 0..7 {
+            indexed_int(&lines, &mut index, &format!("Param {param}"))?;
+        }
+    }
+
+    // The writer emits all three count lines consecutively, then the Integer
+    // value lines, then Real values, then String values.
+    let integers = labeled_int(
+        &lines,
+        &mut index,
+        "Number of Application Dependent Integers",
+    )?;
+    let reals = labeled_int(&lines, &mut index, "Number of Application Dependent Reals")?;
+    let strings = labeled_int(
+        &lines,
+        &mut index,
+        "Number of Application Dependent Strings",
+    )?;
+    for integer in 0..integers {
+        // The writer brackets the Integer label ("Integer[0]") while Main and
+        // Param labels are plain ("Main 0", "Param 0").
+        indexed_int(&lines, &mut index, &format!("Integer[{integer}]"))?;
+    }
+    // No nonzero Reals/Strings section exists in the corpus, so their value
+    // lines are consumed as opaque: only the count is enforced.
+    index += reals;
+    index += strings;
+
+    let bands = labeled_int(&lines, &mut index, "Number of EQ Bands")?;
+    if lines
+        .get(index)
+        .is_some_and(|line| line.ends_with(": On/Off Flag"))
+    {
+        index += 1;
+    }
+    for band in 1..=bands {
+        let header = *lines.get(index).ok_or("band section ends early")?;
+        if header != format!("Band {band}") {
+            return Err("band blocks do not match the declared count");
+        }
+        let cf = lines.get(index + 1).ok_or("band block ends early")?;
+        let Some((cf_value, cf_label)) = cf.rsplit_once(':') else {
+            return Err("band block is missing a CF line");
+        };
+        if cf_label.trim() != "CF" || cf_value.trim().parse::<f64>().is_err() {
+            return Err("band block is missing a numeric CF line");
+        }
+        let gain = lines.get(index + 2).ok_or("band block ends early")?;
+        let Some((gain_value, gain_label)) = gain.rsplit_once(':') else {
+            return Err("band block is missing a Boost/Cut line");
+        };
+        if gain_label.trim() != "Boost/Cut" || gain_value.trim().parse::<i64>().is_err() {
+            return Err("band block is missing a Boost/Cut value");
+        }
+        index += 3;
+    }
+    // Nothing but blank lines may follow the last band block.
+    if lines[index..].iter().any(|line| !line.trim().is_empty()) {
+        return Err("unexpected lines at the end of the preset");
+    }
+    Ok(())
+}
+
 pub struct ScannedPreset {
     pub path: PathBuf,
     pub factory: bool,
@@ -51,6 +180,10 @@ fn scan_dir(dir: &Path, factory: bool) -> Vec<ScannedPreset> {
             && path
                 .extension()
                 .is_some_and(|extension| extension.eq_ignore_ascii_case("fac"))
+            // A structurally invalid file is never offered: the legacy engine
+            // parser would misread it (wild gains demonstrated in diagnosis).
+            && std::fs::read_to_string(&path)
+                .is_ok_and(|text| validate_fac_structure(&text).is_ok())
         {
             out.push(ScannedPreset { path, factory });
         }
@@ -193,6 +326,15 @@ pub fn import_preset_files(
             outcome.skipped += 1;
             continue;
         }
+        // A structurally malformed file must not enter the library: the
+        // legacy engine parser would misread it, so it counts as not readable
+        // like an engine-unresolvable file.
+        let structurally_valid =
+            std::fs::read_to_string(source).is_ok_and(|text| validate_fac_structure(&text).is_ok());
+        if !structurally_valid {
+            outcome.failed += 1;
+            continue;
+        }
         let mut safe_name = sanitize_filename(&name);
         if safe_name.is_empty() {
             safe_name = "Preset".to_string();
@@ -295,6 +437,181 @@ pub fn export_message(target: &Path, ok: bool) -> String {
 #[cfg(test)]
 mod tests {
 
+    /// A minimal well-formed preset in the exact line grammar the engine's
+    /// writer produces (mirrors `presets/Factsoft/Default.fac`).
+    fn valid_fac() -> String {
+        let mut lines: Vec<String> = [
+            "CLASS1 : Effect Type",
+            "9: Version",
+            "Default",
+            "0: Double Params Flag",
+            "1: Total number of elements",
+            "0: Main 0",
+            "0: Main 1",
+            "0: Main 2",
+            "0: Main 3",
+            "0: Main 4",
+            "0: Main 5",
+            "0: Element Number",
+            "   0: Param 0",
+            "   0: Param 1",
+            "   0: Param 2",
+            "   0: Param 3",
+            "   0: Param 4",
+            "   0: Param 5",
+            "   0: Param 6",
+            "7: Number of Application Dependent Integers",
+            "0: Number of Application Dependent Reals",
+            "0: Number of Application Dependent Strings",
+            "1: Integer[0]",
+            "1: Integer[1]",
+            "1: Integer[2]",
+            "1: Integer[3]",
+            "1: Integer[4]",
+            "0: Integer[5]",
+            "2: Integer[6]",
+            "10: Number of EQ Bands",
+            "1: On/Off Flag",
+        ]
+        .iter()
+        .map(|line| line.to_string())
+        .collect();
+        for band in 1..=10 {
+            lines.push(format!("Band {band}"));
+            lines.push(format!("   {}: CF", band * 55));
+            lines.push("   0: Boost/Cut".to_string());
+        }
+        let mut text = lines.join("\n");
+        text.push('\n');
+        text
+    }
+
+    #[test]
+    fn a_well_formed_preset_passes_structure_validation() {
+        assert_eq!(validate_fac_structure(&valid_fac()), Ok(()));
+    }
+
+    #[test]
+    fn a_shifted_band_block_is_rejected_as_malformed() {
+        // The corruption demonstrated on 2026-11-21: duplicated CF/Boost-Cut
+        // lines inside one band block shift every later line; the legacy
+        // parser accepted the file and applied a wild +21 dB gain.
+        let malformed =
+            valid_fac().replacen("Band 5\n", "   416.5: CF\n   0: Boost/Cut\nBand 5\n", 1);
+        assert_eq!(malformed.lines().count(), valid_fac().lines().count() + 2);
+        assert!(validate_fac_structure(&malformed).is_err());
+    }
+
+    #[test]
+    fn a_missing_class1_header_is_rejected() {
+        let malformed = valid_fac().replacen("CLASS1 : Effect Type\n", "", 1);
+        assert!(validate_fac_structure(&malformed).is_err());
+    }
+
+    #[test]
+    fn a_missing_version_line_is_rejected() {
+        let malformed = valid_fac().replacen("9: Version\n", "", 1);
+        assert!(validate_fac_structure(&malformed).is_err());
+    }
+
+    #[test]
+    fn a_shifted_element_section_is_rejected() {
+        // One extra Param line after the element header shifts every later
+        // Param line: the same corruption class as the shifted band block.
+        let malformed = valid_fac().replacen(
+            "0: Element Number\n",
+            "0: Element Number\n   0: Param 0\n",
+            1,
+        );
+        assert!(validate_fac_structure(&malformed).is_err());
+    }
+
+    #[test]
+    fn a_missing_integer_value_is_rejected() {
+        // The declared integer count no longer matches the value lines that
+        // follow, which is how lost or duplicated lines announce themselves.
+        let malformed = valid_fac().replacen("0: Integer[5]\n", "", 1);
+        assert!(validate_fac_structure(&malformed).is_err());
+    }
+
+    #[test]
+    fn every_factory_preset_passes_structure_validation() {
+        // Regression lock over the real shipped library: the validator must
+        // accept every factory file, so strictness cannot break the catalog.
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../presets/Factsoft");
+        let mut checked = 0;
+        for entry in std::fs::read_dir(&dir).expect("factory preset library exists") {
+            let path = entry.expect("readable factory entry").path();
+            if path
+                .extension()
+                .is_some_and(|ext| ext.eq_ignore_ascii_case("fac"))
+            {
+                let text = std::fs::read_to_string(&path).expect("factory preset is text");
+                assert_eq!(
+                    validate_fac_structure(&text),
+                    Ok(()),
+                    "factory preset {} must stay structurally valid",
+                    path.display()
+                );
+                checked += 1;
+            }
+        }
+        assert!(
+            checked >= 13,
+            "expected the 13 factory presets, found {checked}"
+        );
+    }
+
+    #[test]
+    fn scan_skips_malformed_presets() {
+        let dir = std::env::temp_dir().join("saucefx-scan-guard");
+        let _ = std::fs::remove_dir_all(&dir);
+        let factory = dir.join("factory");
+        std::fs::create_dir_all(&factory).unwrap();
+        std::fs::write(factory.join("Good.fac"), valid_fac()).unwrap();
+        let shifted =
+            valid_fac().replacen("Band 5\n", "   416.5: CF\n   0: Boost/Cut\nBand 5\n", 1);
+        std::fs::write(factory.join("Broken.fac"), shifted).unwrap();
+
+        let scanned = scan(&factory, &dir.join("user"));
+
+        assert_eq!(scanned.len(), 1, "only the well-formed preset is offered");
+        assert!(scanned[0].path.ends_with("Good.fac"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn importing_a_malformed_preset_counts_as_failed() {
+        let dir = std::env::temp_dir().join("saucefx-import-guard");
+        let _ = std::fs::remove_dir_all(&dir);
+        let staged = dir.join("staged");
+        std::fs::create_dir_all(&staged).unwrap();
+        let shifted =
+            valid_fac().replacen("Band 5\n", "   416.5: CF\n   0: Boost/Cut\nBand 5\n", 1);
+        let source = staged.join("Broken.fac");
+        std::fs::write(&source, shifted).unwrap();
+        let user = dir.join("user");
+        std::fs::create_dir_all(&user).unwrap();
+
+        let entries = vec![(source, Some("Broken preset".to_string()))];
+        let outcome = import_preset_files(&entries, &user, &[]);
+
+        assert_eq!(
+            outcome.imported, 0,
+            "a malformed file must not reach the library"
+        );
+        assert_eq!(
+            outcome.failed, 1,
+            "the malformed file counts as not readable"
+        );
+        assert_eq!(outcome.last, None);
+        assert!(
+            std::fs::read_dir(&user).unwrap().next().is_none(),
+            "nothing is copied"
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     #[test]
     fn installed_flatpak_discovers_factory_default() {
         let dir =
@@ -304,7 +621,7 @@ mod tests {
         let factory = dir.join("app/share/saucefx/presets/Factsoft");
         std::fs::create_dir_all(&factory).unwrap();
         let default = factory.join("Default.fac");
-        std::fs::write(&default, "CLASS1 : Effect Type\n9: Version\nDefault\n").unwrap();
+        std::fs::write(&default, valid_fac()).unwrap();
 
         let resolved = library_dir(None, Some(&exe));
         let scanned = scan(&resolved, &dir.join("user"));
@@ -329,7 +646,7 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let source = dir.join("staged").join("Evening.fac");
         std::fs::create_dir_all(source.parent().unwrap()).unwrap();
-        std::fs::write(&source, "CLASS1 : Effect Type\n").unwrap();
+        std::fs::write(&source, valid_fac()).unwrap();
         let user = dir.join("user");
         std::fs::create_dir_all(&user).unwrap();
 
@@ -357,7 +674,7 @@ mod tests {
         std::fs::create_dir_all(&user).unwrap();
         let make = |name: &str| {
             let source = dir.join(format!("{name}.fac"));
-            std::fs::write(&source, "x").unwrap();
+            std::fs::write(&source, valid_fac()).unwrap();
             (source, Some(name.to_string()))
         };
 
@@ -404,16 +721,19 @@ mod tests {
         let user = dir.join("user");
         std::fs::create_dir_all(&user).unwrap();
         // A bare file on disk (no catalog label): the target exists, so the
-        // copy gets the numeric suffix instead of overwriting.
+        // copy gets the numeric suffix instead of overwriting. The existing
+        // file is only consulted for existence; the staged file must be
+        // structurally valid to pass the import guard.
         std::fs::write(user.join("Preset.fac"), "old").unwrap();
         let source = dir.join("new.fac");
-        std::fs::write(&source, "new").unwrap();
+        let staged = valid_fac();
+        std::fs::write(&source, &staged).unwrap();
         let entries = vec![(source, Some("Preset".to_string()))];
         let outcome = import_preset_files(&entries, &user, &[]);
         assert_eq!(outcome.imported, 1);
         let second = user.join("Preset 2.fac");
         assert!(second.is_file(), "the suffix chain avoids the collision");
-        assert_eq!(std::fs::read_to_string(&second).unwrap(), "new");
+        assert_eq!(std::fs::read_to_string(&second).unwrap(), staged);
         assert_eq!(
             std::fs::read_to_string(user.join("Preset.fac")).unwrap(),
             "old"
