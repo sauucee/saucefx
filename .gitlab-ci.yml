@@ -42,9 +42,8 @@ test:
         --no-default-features -- --test-threads=1
     - cargo test -p saucefx-host
 
-  # Build the AppImage for the current release and upload it to the GitHub
-  # release with the configured GITHUB_TOKEN. Only runs when that variable
-  # exists, so the light test pipeline stays the default.
+  # Build the AppImage for the current release tag. The package + checksums
+  # are job artifacts, downloadable from the job page.
   build-appimage:
     stage: package
     image: ubuntu:24.04
@@ -72,24 +71,3 @@ test:
       paths:
         - release/*.AppImage
         - release/SHA256SUMS
-
-  # A separate job owns the release: keyword. An empty $CI_COMMIT_TAG on
-  # branch pipelines would fail job generation for the whole pipeline —
-  # this job only exists on tag pipelines, where the tag is always set.
-  publish-release:
-    stage: package
-    needs: ["build-appimage"]
-    rules:
-      - if: '$CI_COMMIT_TAG =~ /^v/'
-    image: alpine:latest
-    script:
-      - echo "Publishing $CI_COMMIT_TAG from the build-appimage artifacts."
-    release:
-      tag_name: '$CI_COMMIT_TAG'
-      name: 'SauceFX $CI_COMMIT_TAG'
-      description: 'Test build from the GitLab mirror. Unsigned; the in-app
-        updater is not part of this pipeline.'
-      assets:
-        links:
-          - name: 'Packages (download from the build job artifacts)'
-            url: '$CI_PIPELINE_URL'
