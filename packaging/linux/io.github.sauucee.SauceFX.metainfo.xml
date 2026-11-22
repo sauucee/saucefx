@@ -67,6 +67,15 @@
     <display_length compare="ge">768</display_length>
   </requires>
   <releases>
+    <release version="0.3.4" date="2026-11-22">
+      <description>
+        <p>Fix the autostart hang at login (the audio engine now starts with
+        retries instead of blocking before the window exists), draw the
+        equalizer with the reference Catmull-Rom curve, list only connected
+        output devices, and remove the placeholder entries from the preset
+        menu. The EQ hover guide now follows the pointer.</p>
+      </description>
+    </release>
     <release version="0.3.3" date="2026-11-21">
       <description>
         <p>Draw the equalizer with a smooth natural cubic spline that bends
