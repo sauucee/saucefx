@@ -311,8 +311,21 @@ fn main() {
         .unwrap_or_default();
 
     // The pipeline must exist before the catalog can read preset names.
-    let engine = fxpw::FxpwEngine::start().unwrap_or_else(|error| {
-        eprintln!("saucefx: {error}");
+    // At login the session audio stack can lag the app by seconds, so the
+    // start is retried within a budget instead of leaving a windowless
+    // process behind (the boot failure reported while testing 0.3.3).
+    let engine = fxpw::start_with_retry(
+        || {
+            fxpw::FxpwEngine::start().map_err(|error| {
+                eprintln!("saucefx: {error}; retrying the audio engine");
+                error.to_string()
+            })
+        },
+        fxpw::ENGINE_START_MAX_ATTEMPTS,
+        &mut |delay| std::thread::sleep(delay),
+    )
+    .unwrap_or_else(|| {
+        eprintln!("saucefx: audio engine did not come up after retries");
         std::process::exit(1);
     });
 

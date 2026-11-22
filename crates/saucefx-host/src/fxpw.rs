@@ -7,6 +7,7 @@ use std::cell::RefCell;
 use std::ffi::{CStr, CString, c_char, c_int, c_longlong, c_void};
 use std::path::Path;
 use std::rc::Rc;
+use std::time::Duration;
 
 /// Linux `wchar_t` is 32-bit UTF-32. fxpw is a Linux-only bridge, so the
 /// type is defined here instead of pulling in libc.
@@ -22,6 +23,33 @@ const OUTPUT_NAME_LEN: usize = 512;
 const OUTPUT_PORT_LEN: usize = 256;
 const START_ERROR_LEN: usize = 512;
 const PRESET_NAME_LEN: usize = 256;
+
+/// Engine-start retry budget: at login the session audio stack (PipeWire,
+/// pipewire-pulse) can lag the app by seconds, and the bridge's sink wait
+/// blocks the whole process before any window exists. The retry keeps the
+/// autostarted app alive until the stack is up instead of leaving a
+/// windowless process behind.
+pub const ENGINE_START_MAX_ATTEMPTS: u32 = 30;
+pub const ENGINE_START_RETRY_DELAY: Duration = Duration::from_secs(2);
+
+/// Runs `attempt` up to `max_attempts` times, waiting
+/// `ENGINE_START_RETRY_DELAY` after every failed attempt, and returns the
+/// first success (or None when the budget runs out). The injected `sleep`
+/// keeps the policy testable without real waiting.
+pub fn start_with_retry<T>(
+    mut attempt: impl FnMut() -> Result<T, String>,
+    max_attempts: u32,
+    sleep: &mut impl FnMut(Duration),
+) -> Option<T> {
+    for index in 0..max_attempts {
+        match attempt() {
+            Ok(engine) => return Some(engine),
+            Err(_) if index + 1 < max_attempts => sleep(ENGINE_START_RETRY_DELAY),
+            Err(_) => {}
+        }
+    }
+    None
+}
 
 /// The outputs the menu should list: only devices that are actually
 /// available right now. Unplugged ports and PipeWire's automatic fallback
@@ -320,6 +348,57 @@ impl FxpwEngine {
 mod tests {
     use super::*;
     use saucefx_ui::binding::UiBinding;
+
+    #[test]
+    fn engine_start_retries_until_the_audio_stack_is_ready() {
+        // The boot race: at login the audio stack lags the app and the
+        // first attempts fail. The retry keeps trying within its budget
+        // instead of leaving a windowless process behind.
+        let attempts = RefCell::new(0u32);
+        let mut sleeps: Vec<Duration> = Vec::new();
+        let started = start_with_retry(
+            || {
+                let count = *attempts.borrow();
+                *attempts.borrow_mut() = count + 1;
+                if count < 2 {
+                    Err("audio stack not ready".to_string())
+                } else {
+                    Ok(count)
+                }
+            },
+            ENGINE_START_MAX_ATTEMPTS,
+            &mut |delay| sleeps.push(delay),
+        );
+        assert_eq!(*attempts.borrow(), 3, "two failures then a success");
+        assert_eq!(started, Some(2));
+        assert_eq!(sleeps.len(), 2, "one wait after each failed attempt");
+        assert!(
+            sleeps
+                .iter()
+                .all(|delay| *delay == ENGINE_START_RETRY_DELAY)
+        );
+    }
+
+    #[test]
+    fn engine_start_retry_gives_up_after_the_budget() {
+        let mut attempts = 0u32;
+        let mut sleeps: Vec<Duration> = Vec::new();
+        let started = start_with_retry(
+            || {
+                attempts += 1;
+                Err::<u32, String>("still down".to_string())
+            },
+            4,
+            &mut |delay| sleeps.push(delay),
+        );
+        assert!(started.is_none());
+        assert_eq!(attempts, 4, "the budget caps the attempts");
+        assert_eq!(
+            sleeps.len(),
+            3,
+            "a wait between attempts, none after the final failure"
+        );
+    }
 
     fn output_entry(device: &str, description: &str, available: bool) -> OutputEntry {
         OutputEntry {
