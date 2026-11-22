@@ -23,8 +23,9 @@ test:
     - apt-get install -y -qq
       g++ gcc make pkg-config curl file clang libclang-dev
       libpipewire-0.3-dev libpulse-dev libasound2-dev
-      libx11-dev libxext-dev libxinerama-dev libxrandr-dev
-      libxcursor-dev libxcomposite-dev libfreetype6-dev libfontconfig1-dev
+      libx11-dev libx11-xcb1 libxcb1 libxi6 libxext-dev libxinerama1
+      libxrandr2 libxcursor1 libxcomposite1 libxfixes3 libxrender1
+      libfreetype6-dev libfontconfig1-dev
       libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev
       libxkbcommon-dev libxkbcommon-x11-0
       dbus-x11 xvfb xauth git
