@@ -41,7 +41,14 @@ pub fn start_with_retry<T>(
     max_attempts: u32,
     sleep: &mut impl FnMut(Duration),
 ) -> Option<T> {
-    attempt().ok()
+    for index in 0..max_attempts {
+        match attempt() {
+            Ok(engine) => return Some(engine),
+            Err(_) if index + 1 < max_attempts => sleep(ENGINE_START_RETRY_DELAY),
+            Err(_) => {}
+        }
+    }
+    None
 }
 
 /// The outputs the menu should list: only devices that are actually
@@ -347,13 +354,12 @@ mod tests {
         // The boot race: at login the audio stack lags the app and the
         // first attempts fail. The retry keeps trying within its budget
         // instead of leaving a windowless process behind.
-        let attempts = TestRefCell::new(0u32);
+        let attempts = RefCell::new(0u32);
         let mut sleeps: Vec<Duration> = Vec::new();
-        let attempts_clone = TestRefCell::clone(&attempts);
         let started = start_with_retry(
             || {
-                let count = *attempts_clone.borrow();
-                *attempts_clone.borrow_mut() = count + 1;
+                let count = *attempts.borrow();
+                *attempts.borrow_mut() = count + 1;
                 if count < 2 {
                     Err("audio stack not ready".to_string())
                 } else {
@@ -387,7 +393,11 @@ mod tests {
         );
         assert!(started.is_none());
         assert_eq!(attempts, 4, "the budget caps the attempts");
-        assert_eq!(sleeps.len(), 4);
+        assert_eq!(
+            sleeps.len(),
+            3,
+            "a wait between attempts, none after the final failure"
+        );
     }
 
     fn output_entry(device: &str, description: &str, available: bool) -> OutputEntry {
