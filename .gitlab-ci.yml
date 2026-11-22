@@ -49,7 +49,7 @@ test:
     stage: package
     image: ubuntu:24.04
     rules:
-      - if: '$CI_COMMIT_BRANCH == "main" && $GITHUB_TOKEN'
+      - if: '$CI_COMMIT_TAG =~ /^v/'
     before_script:
       - export DEBIAN_FRONTEND=noninteractive
       - apt-get update -qq
@@ -68,21 +68,16 @@ test:
       - make -C src rt -j"$(nproc)"
       - packaging/native/appimage/build-appimage.sh
       - cd release && sha256sum *.AppImage > SHA256SUMS
-      - |
-        RELEASE_JSON=$(curl -sS -H "Authorization: Bearer $GITHUB_TOKEN" \
-          https://api.github.com/repos/sauucee/saucefx/releases/tags/v0.3.4)
-        RELEASE_ID=$(echo "$RELEASE_JSON" | python3 -c "import json,sys; print(json.load(sys.stdin).get('id', ''))")
-        if [ -z "$RELEASE_ID" ]; then
-          curl -sS -X POST -H "Authorization: Bearer $GITHUB_TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            https://api.github.com/repos/sauucee/saucefx/releases \
-            -d "{\"tag_name\":\"v0.3.4\",\"target_commitish\":\"$CI_COMMIT_SHA\",\"name\":\"SauceFX 0.3.4\",\"body\":\"Test build from the GitLab mirror.\"}" > /tmp/rel.json
-          RELEASE_ID=$(python3 -c "import json; print(json.load(open('/tmp/rel.json'))['id'])")
-        fi
-        for f in *.AppImage SHA256SUMS; do
-          curl -sS -X POST -H "Authorization: Bearer $GITHUB_TOKEN" \
-            -H "Content-Type: application/octet-stream" \
-            "https://uploads.github.com/repos/sauucee/saucefx/releases/$RELEASE_ID/assets?name=$f" \
-            --data-binary @"$f" > /tmp/upload.json
-          python3 -c "import json; r=json.load(open('/tmp/upload.json')); print('uploaded', r.get('name'), r.get('state'))"
-        done
+    artifacts:
+      paths:
+        - release/*.AppImage
+        - release/SHA256SUMS
+    release:
+      tag_name: '$CI_COMMIT_TAG'
+      name: 'SauceFX $CI_COMMIT_TAG'
+      description: 'Test build from the GitLab mirror. Unsigned; the in-app
+        updater is not part of this pipeline.'
+      assets:
+        links:
+          - name: 'Packages (download from the job artifacts)'
+            url: '$CI_JOB_URL/artifacts/browse'
