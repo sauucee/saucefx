@@ -7,7 +7,7 @@
 # the UI tests render through renderer-software, and the host links its
 # prebuilt archives after `make -C src rt`. GitLab's free tier gives 400
 # compute minutes per month; this pipeline costs ~15 minutes per run.
-stages: [test]
+stages: [test, package]
 
 variables:
   GIT_DEPTH: "1"
@@ -41,3 +41,48 @@ test:
     - xvfb-run -a cargo test -p saucefx-core -p saucefx-ui
         --no-default-features -- --test-threads=1
     - cargo test -p saucefx-host
+
+  # Build the AppImage for the current release and upload it to the GitHub
+  # release with the configured GITHUB_TOKEN. Only runs when that variable
+  # exists, so the light test pipeline stays the default.
+  build-appimage:
+    stage: package
+    image: ubuntu:24.04
+    rules:
+      - if: '$CI_COMMIT_BRANCH == "main" && $GITHUB_TOKEN'
+    before_script:
+      - export DEBIAN_FRONTEND=noninteractive
+      - apt-get update -qq
+      - apt-get install -y -qq
+        g++ gcc make pkg-config curl file patchelf clang libclang-dev
+        libpipewire-0.3-dev libpulse-dev libasound2-dev
+        libx11-dev libx11-xcb1 libxi6 libxext-dev libxinerama1 libxrandr2
+        libxcursor-dev libxcomposite-dev libfreetype6-dev libfontconfig1-dev
+        libgl1-mesa-dev libegl1-mesa-dev libgles2-mesa-dev
+        libxkbcommon-dev libxkbcommon-x11-0 desktop-file-utils
+        pipewire pipewire-pulse wireplumber pulseaudio-utils
+        dbus-x11 xvfb xauth git
+      - curl -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable --profile minimal -c rustfmt
+      - source "$HOME/.cargo/env"
+    script:
+      - make -C src rt -j"$(nproc)"
+      - packaging/native/appimage/build-appimage.sh
+      - cd release && sha256sum *.AppImage > SHA256SUMS
+      - |
+        RELEASE_JSON=$(curl -sS -H "Authorization: Bearer $GITHUB_TOKEN" \
+          https://api.github.com/repos/sauucee/saucefx/releases/tags/v0.3.4)
+        RELEASE_ID=$(echo "$RELEASE_JSON" | python3 -c "import json,sys; print(json.load(sys.stdin).get('id', ''))")
+        if [ -z "$RELEASE_ID" ]; then
+          curl -sS -X POST -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            https://api.github.com/repos/sauucee/saucefx/releases \
+            -d "{\"tag_name\":\"v0.3.4\",\"target_commitish\":\"$CI_COMMIT_SHA\",\"name\":\"SauceFX 0.3.4\",\"body\":\"Test build from the GitLab mirror.\"}" > /tmp/rel.json
+          RELEASE_ID=$(python3 -c "import json; print(json.load(open('/tmp/rel.json'))['id'])")
+        fi
+        for f in *.AppImage SHA256SUMS; do
+          curl -sS -X POST -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H "Content-Type: application/octet-stream" \
+            "https://uploads.github.com/repos/sauucee/saucefx/releases/$RELEASE_ID/assets?name=$f" \
+            --data-binary @"$f" > /tmp/upload.json
+          python3 -c "import json; r=json.load(open('/tmp/upload.json')); print('uploaded', r.get('name'), r.get('state'))"
+        done
