@@ -34,7 +34,9 @@ test:
     - make -C src rt -j"$(nproc)"
     - rustc --version && cargo --version
     - cargo fmt --all -- --check
-    # UI tests render through renderer-software; Skia is not compiled here.
+    # UI tests render through renderer-software, which this crate builds
+    # unconditionally — no renderer feature is needed or defined. Dropping
+    # default features skips the Skia compile entirely.
     - xvfb-run -a cargo test -p saucefx-core -p saucefx-ui
-        --no-default-features --features renderer-software -- --test-threads=1
+        --no-default-features -- --test-threads=1
     - cargo test -p saucefx-host
