@@ -7,6 +7,12 @@ import tailwindcss from '@tailwindcss/vite';
 export default defineConfig({
   base: './',
   plugins: [react(), tailwindcss()],
+  // `src/content/site.ts` inlines the root Cargo.toml with `?raw` so the
+  // release version is derived at build time. Allow only this site directory
+  // and that single file — not the whole parent folder.
+  server: {
+    fs: { allow: ['.', '../Cargo.toml'] },
+  },
   build: {
     target: 'es2020',
     cssMinify: 'lightningcss',

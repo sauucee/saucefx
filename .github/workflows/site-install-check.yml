@@ -1,0 +1,44 @@
+name: Website install instructions
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'site/**'
+      - 'Cargo.toml'
+      - '.github/workflows/site-install-check.yml'
+permissions:
+  contents: read
+jobs:
+  install-page:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    defaults:
+      run:
+        working-directory: site
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: npm run build
+      - run: npx --no-install playwright install --with-deps chromium
+      - name: Check published-path install panel on desktop and mobile
+        run: |
+          mkdir -p "$RUNNER_TEMP/website" "$RUNNER_TEMP/screens"
+          ln -s "$PWD/dist" "$RUNNER_TEMP/website/saucefx"
+          python3 -m http.server 4173 --bind 127.0.0.1 --directory "$RUNNER_TEMP/website" >/dev/null 2>&1 &
+          pid=$!; trap 'kill "$pid" 2>/dev/null || true' EXIT
+          for i in {1..40}; do curl -fsS -o /dev/null http://127.0.0.1:4173/saucefx/ && break; sleep .2; done
+          version=$(python3 -c "import tomllib; print(tomllib.load(open('../Cargo.toml','rb'))['workspace']['package']['version'])")
+          node scripts/check-release-install.mjs http://127.0.0.1:4173/saucefx/ "$version" "$RUNNER_TEMP/screens"
+      - uses: actions/upload-artifact@v4
+        if: success()
+        with:
+          name: install-page-screens
+          path: ${{ runner.temp }}/screens/*.png
+          if-no-files-found: error
