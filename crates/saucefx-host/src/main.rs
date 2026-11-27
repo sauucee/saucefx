@@ -663,6 +663,9 @@ fn main() {
     }
     autostart::show_on_launch(window.window(), auto_start_launch)
         .expect("set initial SauceFX window visibility");
+    if !auto_start_launch {
+        visualizer::request_first_frame(&window);
+    }
 
     // Keep the device menu current without applying routing again.
     let output_timer = Timer::default();
@@ -718,6 +721,7 @@ fn main() {
             if single_instance::consume_show_request(&state) {
                 if let Some(window) = window_weak.upgrade() {
                     window.show().expect("show the SauceFX window");
+                    visualizer::request_first_frame(&window);
                     binding.borrow().sync(&window);
                 }
                 eprintln!("saucefx: window restored from background");

@@ -91,8 +91,8 @@ cd "$WORK"
 if [ "${SAUCEFX_TEST_WAYLAND:-0}" = 1 ]; then
     # No XWayland fallback: prove the app runs on a native Wayland surface.
     unset DISPLAY WAYLAND_DISPLAY WAYLAND_SOCKET
-    printf 'xwayland disable\noutput * resolution 1280x800\n' > "$WORK/sway.conf"
-    WLR_BACKENDS=headless WLR_LIBINPUT_NO_DEVICES=1 WLR_RENDERER=pixman \
+    printf 'xwayland disable\nseat seat0 fallback true\noutput * resolution 1280x800\n' > "$WORK/sway.conf"
+    WLR_BACKENDS=headless WLR_HEADLESS_OUTPUTS=1 WLR_LIBINPUT_NO_DEVICES=1 WLR_RENDERER=pixman \
         sway -c "$WORK/sway.conf" >"$WORK/wm.log" 2>&1 &
     wm_pid=$!
     PIDS+=("$wm_pid")
@@ -106,7 +106,8 @@ if [ "${SAUCEFX_TEST_WAYLAND:-0}" = 1 ]; then
         sleep .1
     done
     test -S "$XDG_RUNTIME_DIR/${WAYLAND_DISPLAY:?missing Wayland display}"
-    swaymsg -t get_outputs >/dev/null
+    swaymsg -r -t get_outputs | python3 -c 'import sys,json; assert any(o["active"] for o in json.load(sys.stdin)), "no active headless output"'
+    swaymsg workspace number 1 >/dev/null
 else
     # Xvfb alone has no minimize/restore; use a real window manager.
     openbox >"$WORK/wm.log" 2>&1 &

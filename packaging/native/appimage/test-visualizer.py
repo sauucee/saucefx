@@ -56,6 +56,9 @@ def wait(description, condition):
         if condition():
             return
         time.sleep(.05)
+    if os.environ.get('SAUCEFX_TEST_WAYLAND') == '1':
+        print('test workspaces:', sway('-t', 'get_workspaces'), flush=True)
+        print('test window tree:', sway('-t', 'get_tree'), flush=True)
     raise AssertionError(description)
 
 
