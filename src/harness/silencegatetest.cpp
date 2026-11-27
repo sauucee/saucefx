@@ -31,6 +31,11 @@ static int failures;
 #define BIAS_B 3.1401e-25f
 #define ABOVE_FLOOR 1e-19f
 
+/* 4000 ms input settle at 48 kHz / 256 frames = 750 blocks; the independent
+ * 500 ms output residual is 94 blocks. Loops run past both. */
+#define INPUT_SETTLE_BLOCKS 750
+#define IDLE_BLOCKS 1000
+
 struct FakeProcessor {
 	long tail_samples;   /* 1e-6f output samples left (interleaved) */
 	float bias;          /* held output after any tail */
@@ -182,14 +187,14 @@ static void test_bias_on_silent_input_eventually_skips(void)
 		harness_init(&h, RATE);
 		h.dsp.bias = biases[i];
 		first_skip = 0;
-		for (long b = 1; b <= 400; b++) {
+		for (long b = 1; b <= IDLE_BLOCKS; b++) {
 			if (harness_block(&h, 0.0f) && first_skip == 0)
 				first_skip = b;
 		}
-		CHECK(first_skip >= 94 && first_skip <= 96,
+		CHECK(first_skip == INPUT_SETTLE_BLOCKS,
 		      biases[i] > 0.0f ?
-		      "bias +3.1477e-25: skip after both guard windows" :
-		      "bias -3.1401e-25: skip after both guard windows");
+		      "bias +3.1477e-25: skips exactly at the 4 s input settle" :
+		      "bias -3.1401e-25: skips exactly at the 4 s input settle");
 		CHECK(h.skipped > 0 && h.last_frames == COUNT,
 		      "bias: skipped blocks keep the same frame count");
 		CHECK(!h.last_processed_exact_zero &&
@@ -199,16 +204,69 @@ static void test_bias_on_silent_input_eventually_skips(void)
 	}
 }
 
+/*
+ * Quiet-wake regression: with below-floor output the engine is processed for
+ * the entire 4 s input settle, then genuinely sleeps.
+ */
+static void test_quiet_engine_settles_before_sleep(void)
+{
+	struct Harness h;
+	long early_skips = 0;
+
+	harness_init(&h, RATE);
+	h.dsp.bias = BIAS_A;
+	for (long b = 1; b < INPUT_SETTLE_BLOCKS; b++)
+		if (harness_block(&h, 0.0f))
+			early_skips++;
+	CHECK(early_skips == 0 && h.processed == INPUT_SETTLE_BLOCKS - 1,
+	      "settle: quiet engine processed for the first 3.99 s");
+	CHECK(harness_block(&h, 0.0f) == 1,
+	      "settle: skipping starts exactly at the 4 s input guard");
+	CHECK(harness_block(&h, 0.0f) == 1 && h.skipped >= 2,
+	      "settle: gate genuinely skips after the input guard");
+}
+
+/*
+ * The input settle and output residual guards are independent and scale with
+ * the negotiated rate. The residual is full long before the settle ends, so
+ * the skip point follows the 4 s input guard at each rate.
+ */
+static void test_guards_scale_with_rate(void)
+{
+	struct saucefx_silence_gate g;
+	struct Harness h;
+	long first_skip = 0;
+
+	saucefx_gate_init(&g, 48000);
+	CHECK(g.in_hold == 192000 && g.out_hold == 24000,
+	      "rate: 48 kHz = 4000 ms input settle, 500 ms output residual");
+	saucefx_gate_init(&g, 44100);
+	CHECK(g.in_hold == 176400 && g.out_hold == 22050,
+	      "rate: 44.1 kHz guards scale with the rate");
+	saucefx_gate_init(&g, 96000);
+	CHECK(g.in_hold == 384000 && g.out_hold == 48000,
+	      "rate: 96 kHz guards scale with the rate");
+
+	harness_init(&h, 44100);
+	h.dsp.bias = BIAS_A;
+	for (long b = 1; b <= IDLE_BLOCKS; b++) {
+		if (harness_block(&h, 0.0f) && first_skip == 0)
+			first_skip = b;
+	}
+	CHECK(first_skip == 690,
+	      "rate: 44.1 kHz skips at its own 4 s settle, not 48 kHz's 750");
+}
+
 static void test_output_above_floor_never_skips(void)
 {
 	struct Harness h;
 
 	harness_init(&h, RATE);
 	h.dsp.bias = ABOVE_FLOOR;
-	for (long b = 0; b < 600; b++)   /* 3.2 s, past any guard window */
+	for (long b = 0; b < IDLE_BLOCKS; b++)   /* 5.3 s, past both guards */
 		harness_block(&h, 0.0f);
 	CHECK(h.skipped == 0,
-	      "above floor: continuous 1e-19 output never skips after 3 s");
+	      "above floor: continuous 1e-19 output never skips after 5.3 s");
 	CHECK(h.gate.out_run == 0,
 	      "above floor: output guard window stays empty");
 	CHECK(h.last_peak >= ABOVE_FLOOR,
@@ -223,7 +281,7 @@ static void test_nonfinite_output_never_skips(void)
 	for (kind = 1; kind <= 3; kind++) {
 		harness_init(&h, RATE);
 		h.dsp.nonfinite = kind;
-		for (long b = 0; b < 400; b++)
+		for (long b = 0; b < IDLE_BLOCKS; b++)
 			harness_block(&h, 0.0f);
 		CHECK(h.skipped == 0,
 		      kind == 1 ? "nonfinite: NaN output never skips" :
@@ -235,14 +293,15 @@ static void test_nonfinite_output_never_skips(void)
 }
 
 /*
- * A 3.75 s tail at 48 kHz is longer than any fixed hold used earlier: every
- * block whose real output is nonzero must be processed and queued, and the
- * first skip may only follow a full below-floor output window.
+ * A 5.25 s continuous tail is longer than the 4 s input settle guard: the
+ * expired input guard must never cut it. Every block whose real output is
+ * nonzero is processed and queued, and skipping may only follow the
+ * independent 500 ms output residual.
  */
-static void test_tail_longer_than_any_hold_is_never_skipped(void)
+static void test_tail_longer_than_input_settle_is_never_skipped(void)
 {
 	struct Harness h;
-	const long tail_samples = 180000 * CHANNELS;   /* 3.75 s interleaved */
+	const long tail_samples = 252000 * CHANNELS;   /* 5.25 s interleaved */
 	const long tail_blocks = (tail_samples + COUNT - 1) / COUNT;
 	long first_skip = 0;
 	long skipped_during_tail = 0;
@@ -263,7 +322,7 @@ static void test_tail_longer_than_any_hold_is_never_skipped(void)
 		}
 	}
 	CHECK(h.dsp.tail_samples == 0,
-	      "tail: the whole 3.75 s decay was fed to the processor");
+	      "tail: the whole 5.25 s decay was fed to the processor");
 	CHECK(skipped_during_tail == 0,
 	      "tail: every nonzero-output block was processed and queued");
 	CHECK(first_skip == 0,
@@ -277,7 +336,7 @@ static void test_tail_longer_than_any_hold_is_never_skipped(void)
 		}
 	}
 	CHECK(first_skip > tail_blocks + 90,
-	      "tail: skipping waits for a full below-floor output window");
+	      "tail: skipping waits for the 500 ms output residual");
 	CHECK(skipped_after_tail > 0,
 	      "tail: skipping resumes once output stays below floor");
 }
@@ -296,7 +355,7 @@ static void test_first_nonzero_input_wakes(void)
 		long processed_before;
 
 		harness_init(&h, RATE);
-		for (long b = 0; b < 400; b++)
+		for (long b = 0; b < IDLE_BLOCKS; b++)
 			harness_block(&h, 0.0f);
 		if (h.skipped == 0) {
 			CHECK(0, "wake: precondition, gate is skipping");
@@ -329,7 +388,7 @@ static void test_skipped_output_framing_is_unchanged(void)
 	struct Harness h;
 
 	harness_init(&h, RATE);
-	for (long b = 0; b < 1000; b++)
+	for (long b = 0; b < IDLE_BLOCKS; b++)
 		harness_block(&h, 0.0f);
 	CHECK(h.last_frames == COUNT,
 	      "framing: skipped blocks keep the production frame count");
@@ -341,7 +400,7 @@ static void test_reset_after_control_or_format_disarms_skip(void)
 	long skipped_before;
 
 	harness_init(&h, RATE);
-	for (long b = 0; b < 400; b++)
+	for (long b = 0; b < IDLE_BLOCKS; b++)
 		harness_block(&h, 0.0f);
 	CHECK(h.skipped > 0, "reset: precondition, gate is skipping");
 
@@ -353,8 +412,10 @@ static void test_reset_after_control_or_format_disarms_skip(void)
 	CHECK(h.skipped == skipped_before,
 	      "reset: no skip on the invalidation block");
 
-	/* Production format change re-initialises the windows. */
+	/* Production format change re-initialises both guards at the new rate. */
 	saucefx_gate_init(&h.gate, 44100);
+	CHECK(h.gate.in_hold == 176400 && h.gate.out_hold == 22050,
+	      "reset: format change rescales the 4 s/500 ms guards");
 	CHECK(harness_block(&h, 0.0f) == 0,
 	      "reset: new format is processed, never skipped");
 }
@@ -364,7 +425,7 @@ static void test_unknown_rate_fails_open(void)
 	struct Harness h;
 
 	harness_init(&h, 0);
-	for (long b = 0; b < 400; b++)
+	for (long b = 0; b < IDLE_BLOCKS; b++)
 		harness_block(&h, 0.0f);
 	CHECK(h.skipped == 0,
 	      "unknown rate: helper never authorises skipping");
@@ -382,8 +443,8 @@ static void test_counters_stay_bounded(void)
 	CHECK(h.gate.in_run == h.gate.in_hold &&
 	      h.gate.out_run == h.gate.out_hold,
 	      "counters: both clamp at their window after long idle");
-	CHECK(h.gate.in_hold == 24000 && h.gate.out_hold == 24000,
-	      "counters: 500 ms windows at 48 kHz are 24000 frames");
+	CHECK(h.gate.in_hold == 192000 && h.gate.out_hold == 24000,
+	      "counters: 4000 ms input settle and 500 ms output residual");
 }
 
 int main(void)
@@ -392,9 +453,11 @@ int main(void)
 	test_input_exact_zero_rule();
 	test_output_floor_definition();
 	test_bias_on_silent_input_eventually_skips();
+	test_quiet_engine_settles_before_sleep();
+	test_guards_scale_with_rate();
 	test_output_above_floor_never_skips();
 	test_nonfinite_output_never_skips();
-	test_tail_longer_than_any_hold_is_never_skipped();
+	test_tail_longer_than_input_settle_is_never_skipped();
 	test_first_nonzero_input_wakes();
 	test_skipped_output_framing_is_unchanged();
 	test_reset_after_control_or_format_disarms_skip();

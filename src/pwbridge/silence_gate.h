@@ -5,10 +5,20 @@
  * The decision needs evidence from both sides of the processor, because the
  * input can be silent while the engine is still emitting an effect tail:
  *
- *   - in_run  counts consecutive frames of exact-zero input;
+ *   - in_run  counts consecutive frames of exact-zero input and must reach
+ *     the input settle guard (4000 ms below);
  *   - out_run counts consecutive frames of post-process output that is
- *     finite and strictly inside the output floor (below);
- *   - both windows must be full before a block may be skipped.
+ *     finite and strictly inside the output floor and must reach the
+ *     independent output residual guard (500 ms below);
+ *   - both guards must be full before a block may be skipped.
+ *
+ * The input settle guard is deliberately four seconds, not a tail estimate.
+ * CI found that Voice, Gaming and Movies wake quietly but need up to four
+ * seconds of exact-zero-input processing before their output matches the
+ * always-processing reference; a 0.5, 1 or 2 second guard did not. It
+ * applies on startup, on resumed nonzero input, and after any format or
+ * settings invalidation. The output residual guard stays short because it
+ * follows the processor's actual output rather than a timer.
  *
  * processAudio() runs in place, so the caller re-scans the same buffer after
  * the call. Any nonzero input sample restarts the input window. Any output
@@ -32,9 +42,19 @@
 
 #include <stddef.h>
 
-/* Guard windows in milliseconds of continuous silence. Both are reset by any
- * change to engine state or format, so they must refill before skipping. */
-#define SAUCEFX_GATE_INPUT_MS 500
+/* Two independent guards, both scaled by the negotiated rate and zero when
+ * the rate is unknown (fail open).
+ *
+ * INPUT (settle): exact-zero input must persist for 4000 ms. This is the
+ * minimum processing time on startup, on resumed signal, and after format or
+ * settings invalidation, so a quiet engine's settling transient is fully
+ * processed before any sleep.
+ *
+ * OUTPUT (residual): post-process output must stay finite and strictly
+ * inside the output floor for 500 ms. It tracks the real residual and is
+ * independent of the input settle guard.
+ */
+#define SAUCEFX_GATE_INPUT_MS 4000
 #define SAUCEFX_GATE_OUTPUT_MS 500
 
 /* Output-only absolute floor. Input remains an exact-zero test; this floor
@@ -44,14 +64,14 @@
 #define SAUCEFX_GATE_OUTPUT_FLOOR 1e-20f
 
 struct saucefx_silence_gate {
-	long long in_run;
-	long long out_run;
-	long long in_hold;
-	long long out_hold;
+	long long in_run;    /* consecutive exact-zero input frames */
+	long long out_run;   /* consecutive below-floor output frames */
+	long long in_hold;   /* input settle guard in frames (4000 ms) */
+	long long out_hold;  /* output residual guard in frames (500 ms) */
 	int skipping;
 };
 
-/* Frames in a window; zero when the rate is unknown (fail open). */
+/* Frames in one guard window at this rate; zero if unknown (fail open). */
 static inline long long saucefx_gate_hold(long long rate, int ms)
 {
 	if (rate <= 0)
@@ -69,7 +89,8 @@ static inline void saucefx_gate_init(struct saucefx_silence_gate *gate,
 	gate->skipping = 0;
 }
 
-/* Re-arm after a control mutation or format change: both windows restart. */
+/* Re-arm after a control mutation or format change: the 4 s input settle
+ * and the independent 500 ms output residual guard both restart. */
 static inline void saucefx_gate_reset(struct saucefx_silence_gate *gate)
 {
 	gate->in_run = 0;
@@ -124,8 +145,9 @@ static inline long long saucefx_gate_bump(long long value, long long add,
 /*
  * Decide whether processAudio() may be skipped for this block.
  * in_zero: the current input contains no nonzero sample.
- * Returns 1 only when both guard windows are already full; in every other
- * case the caller must process the block. A nonzero input always returns 0.
+ * Returns 1 only when the input settle guard and the output residual guard
+ * are both already full; in every other case the caller must process the
+ * block. A nonzero input always returns 0.
  */
 static inline int saucefx_gate_decision(struct saucefx_silence_gate *gate,
 					int in_zero, long long frames)
