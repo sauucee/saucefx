@@ -8,6 +8,9 @@ set -euo pipefail
 SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)
 IMAGE=$(realpath "${1:?pass the AppImage path}")
 if [ "${2:-}" != --isolated ]; then
+    if [ "${SAUCEFX_TEST_WAYLAND:-0}" = 1 ]; then
+        exec dbus-run-session -- bash "$0" "$IMAGE" --isolated
+    fi
     exec dbus-run-session -- xvfb-run -a bash "$0" "$IMAGE" --isolated
 fi
 
@@ -85,9 +88,30 @@ for i, frequency in enumerate(frequencies):
 Path(sys.argv[1]).write_text('\n'.join(lines) + '\n')
 PY
 cd "$WORK"
-# A real window manager is required for minimize/restore; Xvfb alone cannot do it.
-openbox >"$WORK/wm.log" 2>&1 &
-PIDS+=("$!")
+if [ "${SAUCEFX_TEST_WAYLAND:-0}" = 1 ]; then
+    # No XWayland fallback: prove the app runs on a native Wayland surface.
+    unset DISPLAY WAYLAND_DISPLAY WAYLAND_SOCKET
+    printf 'xwayland disable\noutput * resolution 1280x800\n' > "$WORK/sway.conf"
+    WLR_BACKENDS=headless WLR_LIBINPUT_NO_DEVICES=1 WLR_RENDERER=pixman \
+        sway -c "$WORK/sway.conf" >"$WORK/wm.log" 2>&1 &
+    wm_pid=$!
+    PIDS+=("$wm_pid")
+    export SWAYSOCK="$XDG_RUNTIME_DIR/sway-ipc.$(id -u).$wm_pid.sock"
+    for ((i=0; i<100; ++i)); do
+        for socket in "$XDG_RUNTIME_DIR"/wayland-*; do
+            if [ -S "$socket" ]; then export WAYLAND_DISPLAY="${socket##*/}"; break; fi
+        done
+        if [ -n "${WAYLAND_DISPLAY:-}" ] && swaymsg -t get_outputs >/dev/null 2>&1; then break; fi
+        kill -0 "$wm_pid"
+        sleep .1
+    done
+    test -S "$XDG_RUNTIME_DIR/${WAYLAND_DISPLAY:?missing Wayland display}"
+    swaymsg -t get_outputs >/dev/null
+else
+    # Xvfb alone has no minimize/restore; use a real window manager.
+    openbox >"$WORK/wm.log" 2>&1 &
+    PIDS+=("$!")
+fi
 SAUCEFX_TRACE_SPECTRUM=1 APPIMAGE="$IMAGE" "$APPDIR_TEST/AppRun" --autostart >"$WORK/app.log" 2>&1 &
 APP_PID=$!
 PIDS+=("$APP_PID")
