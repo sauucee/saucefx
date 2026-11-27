@@ -6,20 +6,26 @@
  * input can be silent while the engine is still emitting an effect tail:
  *
  *   - in_run  counts consecutive frames of exact-zero input;
- *   - out_run counts consecutive frames of exact-zero post-process output;
+ *   - out_run counts consecutive frames of post-process output that is
+ *     finite and strictly inside the output floor (below);
  *   - both windows must be full before a block may be skipped.
  *
  * processAudio() runs in place, so the caller re-scans the same buffer after
- * the call. Any nonzero sample anywhere in the input or the output restarts
- * the relevant window, so every block of a decay tail is processed and
- * queued. If the output never becomes exactly zero, out_run stays empty and
- * the processor keeps running indefinitely.
+ * the call. Any nonzero input sample restarts the input window. Any output
+ * sample at or above the floor, or any NaN/Inf, restarts the output window,
+ * so every block of an audible decay is processed and queued. If the output
+ * never falls below the floor, out_run stays empty and the processor keeps
+ * running indefinitely.
  *
- * A nonzero input sample always wins, regardless of magnitude (including
- * subnormals): the block it appears in is processed, not skipped.
+ * The input rule stays exact: a block is only ever a skip candidate when
+ * every input sample is exactly +/-0.0f. A nonzero input sample always wins,
+ * regardless of magnitude (including subnormals), so the first audible
+ * sample is never lost - even one below the output floor.
  *
- * No amplitude threshold is used anywhere; "silent" means every float is
- * exactly +/-0.0f.
+ * The floor applies only to the processor's own output. The core DSP holds
+ * deliberate tiny filter biases (measured peaks 3.1477e-25 and 3.1401e-25
+ * on digital-zero input with the Music preset), which never reach exact
+ * zero; dfxpUniversal.cpp documents the same 1e-20f silence convention.
  */
 #ifndef SAUCEFX_SILENCE_GATE_H
 #define SAUCEFX_SILENCE_GATE_H
@@ -30,6 +36,12 @@
  * change to engine state or format, so they must refill before skipping. */
 #define SAUCEFX_GATE_INPUT_MS 500
 #define SAUCEFX_GATE_OUTPUT_MS 500
+
+/* Output-only absolute floor. Input remains an exact-zero test; this floor
+ * only decides when the processor's residual is quiet enough to sleep.
+ * Silence requires |sample| strictly below the floor, so a sample exactly at
+ * +/-1e-20f keeps processing. */
+#define SAUCEFX_GATE_OUTPUT_FLOOR 1e-20f
 
 struct saucefx_silence_gate {
 	long long in_run;
@@ -71,6 +83,29 @@ static inline int saucefx_gate_zero(const float *samples, long count)
 	for (long i = 0; i < count; i++)
 		if (samples[i] != 0.0f)
 			return 0;
+	return 1;
+}
+
+/*
+ * 1 when every post-process sample is strictly inside the output floor. The
+ * bounds are ordered comparisons (not fabs or bit manipulation), so they use
+ * the shipped build's ordinary IEEE semantics, without fast-math:
+ *
+ *   - NaN fails both comparisons, so !(v > -floor && v < floor) is true;
+ *   - +Inf fails v < floor and -Inf fails v > -floor, so both are rejected;
+ *   - +/-0.0f pass, and a sample exactly at the floor is not silent.
+ *
+ * Non-finite output therefore always keeps the processor awake.
+ */
+static inline int saucefx_gate_output_silent(const float *samples, long count)
+{
+	for (long i = 0; i < count; i++) {
+		float v = samples[i];
+
+		if (!(v > -SAUCEFX_GATE_OUTPUT_FLOOR &&
+		      v < SAUCEFX_GATE_OUTPUT_FLOOR))
+			return 0;
+	}
 	return 1;
 }
 
@@ -121,14 +156,14 @@ static inline int saucefx_gate_decision(struct saucefx_silence_gate *gate,
 }
 
 /*
- * Record the post-process output of the block that just ran. A nonzero output
- * restarts the output window, so the next block is processed even when the
- * input has already gone silent.
+ * Record the post-process output of the block that just ran. Output outside
+ * the floor (or non-finite) restarts the output window, so the next block is
+ * processed even when the input has already gone silent.
  */
 static inline void saucefx_gate_processed(struct saucefx_silence_gate *gate,
-					  int out_zero, long long frames)
+					  int out_silent, long long frames)
 {
-	if (out_zero)
+	if (out_silent)
 		gate->out_run = saucefx_gate_bump(gate->out_run, frames,
 						  gate->out_hold);
 	else

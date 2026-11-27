@@ -7,6 +7,7 @@ on:
       - src/harness/silencegatetest.cpp
       - src/harness/silencefloor.cpp
       - src/harness/idle_audio.py
+      - src/harness/compare_idle_waveforms.py
       - .github/workflows/audio-idle.yml
 permissions:
   contents: read
@@ -37,10 +38,14 @@ jobs:
           make -C src -j2 rt > "$RUNNER_TEMP/candidate-build.log" || { tail -40 "$RUNNER_TEMP/candidate-build.log"; exit 1; }
           sha256sum "$RUNNER_TEMP/control/src/build/bin/saucefxrt" src/build/bin/saucefxrt
       - name: Measure the actual capture callback on zero input
+        id: probe
         run: |
           make -C src build/bin/silencefloor
           FXSOUND_REG_FILE="$RUNNER_TEMP/floor-registry" src/build/bin/silencefloor "$PWD/presets/Factsoft/2.fac"
+      - name: Compare every factory preset against always processing
+        run: python3 src/harness/compare_idle_waveforms.py src/build/bin/silencefloor presets/Factsoft "$RUNNER_TEMP/audio-results/presets.json"
       - name: Compare the real engines sequentially, without hardware
+        if: ${{ !cancelled() && steps.probe.outcome == 'success' }}
         run: |
           python3 src/harness/idle_audio.py "$RUNNER_TEMP/control/src/build/bin/saucefxrt" src/build/bin/saucefxrt presets/Factsoft/2.fac "$RUNNER_TEMP/audio-results"
       - uses: actions/upload-artifact@v4

@@ -333,10 +333,12 @@ static void capture_process(void *data)
 					     (int)frames, 0);
 			/* The engine writes in place. Its output decides
 			 * whether the tail can be considered finished: a
-			 * still-decaying block is nonzero, restarts the output
-			 * window and is queued as-is. */
+			 * block at or above the 1e-20f output floor, or one
+			 * holding NaN/Inf, restarts the output window and is
+			 * queued as-is. The residual filter bias below that
+			 * floor lets the window advance on truly silent input. */
 			saucefx_gate_processed(&a->gate,
-				saucefx_gate_zero(src, frames * nch),
+				saucefx_gate_output_silent(src, frames * nch),
 				frames);
 		}
 	}
