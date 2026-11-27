@@ -1,0 +1,46 @@
+name: Audio idle regression
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - src/pwbridge/**
+      - src/harness/silencegatetest.cpp
+      - src/harness/idle_audio.py
+      - .github/workflows/audio-idle.yml
+permissions:
+  contents: read
+jobs:
+  compare:
+    name: Compare idle CPU, wake and effects decay
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Install audio tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends make g++ pkg-config libpipewire-0.3-dev libpulse-dev libasound2-dev pipewire pipewire-pulse wireplumber pulseaudio-utils dbus
+      - name: Exercise the production decision helper
+        run: |
+          c++ -std=c++17 -O2 -Wall -Wextra -Werror -Isrc/pwbridge src/harness/silencegatetest.cpp -o "$RUNNER_TEMP/silencegatetest"
+          "$RUNNER_TEMP/silencegatetest"
+      - name: Build control and candidate on the same runner
+        run: |
+          # Pin the known always-processing implementation, not a moving branch.
+          git worktree add --detach "$RUNNER_TEMP/control" 41bf098a3bc1faa9b29f970725d8b33c570930b5
+          make -C "$RUNNER_TEMP/control/src" -j2 rt > "$RUNNER_TEMP/control-build.log" || { tail -40 "$RUNNER_TEMP/control-build.log"; exit 1; }
+          make -C src -j2 rt > "$RUNNER_TEMP/candidate-build.log" || { tail -40 "$RUNNER_TEMP/candidate-build.log"; exit 1; }
+          sha256sum "$RUNNER_TEMP/control/src/build/bin/saucefxrt" src/build/bin/saucefxrt
+      - name: Compare the real engines sequentially, without hardware
+        run: |
+          python3 src/harness/idle_audio.py "$RUNNER_TEMP/control/src/build/bin/saucefxrt" src/build/bin/saucefxrt presets/Factsoft/2.fac "$RUNNER_TEMP/audio-results"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: idle-comparison-${{ github.event.pull_request.head.sha }}
+          path: ${{ runner.temp }}/audio-results/*.json
+          if-no-files-found: warn

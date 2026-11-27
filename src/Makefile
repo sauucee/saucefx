@@ -102,6 +102,8 @@ rt: $(RT)
 $(BUILD)/libfxpw.a: $(BUILD)/pwbridge/fxpw.o $(BUILD)/pwbridge/outputs.o
 	ar rcs $@ $^
 
+$(BUILD)/pwbridge/fxpw.o: $(PWDIR)/silence_gate.h
+
 $(BUILD)/pwbridge/%.o: $(PWDIR)/%.cpp $(PWDIR)/fxpw.h $(PWDIR)/outputs.h $(LIB)
 	@mkdir -p $(dir $@)
 	$(CXX) $(CXXFLAGS) $(DEFINES) $(PW_DFLAGS) $(PW_CFLAGS) \
