@@ -2,12 +2,29 @@
  * Everything the site asserts about SauceFX lives here, and every string in
  * this file comes from the project README. Marketing copy elsewhere describes
  * the page, never an unverified product capability.
+ *
+ * The release version is not hardcoded: the root Cargo.toml is inlined at build
+ * time (`?raw`), so the site always reports the version the workspace ships.
  */
+import workspaceManifest from '../../../Cargo.toml?raw';
 
 export const REPO_URL = 'https://github.com/sauucee/saucefx';
 export const RELEASES_URL = `${REPO_URL}/releases`;
+export const RELEASES_LATEST_URL = `${REPO_URL}/releases/latest`;
 export const LICENSE_URL = 'https://www.gnu.org/licenses/agpl-3.0.html';
-export const VERSION = '0.2.4';
+
+/** `[workspace.package]` in the root Cargo.toml is the single source of truth. */
+const workspacePackage = workspaceManifest
+  .split(/^\[/m)
+  .find((section) => section.startsWith('workspace.package]'));
+
+const versionMatch = workspacePackage?.match(/^version\s*=\s*"([^"]+)"/m);
+
+if (!versionMatch) {
+  throw new Error('SauceFX site: could not read the workspace version from Cargo.toml.');
+}
+
+export const VERSION = versionMatch[1];
 
 export const EFFECTS = [
   'Clarity',
@@ -32,40 +49,35 @@ export const STATS = [
   { value: 5, label: 'effects in the rack', detail: 'Clarity to Bass Boost' },
   { value: 31, label: 'EQ bands', detail: 'graphic, with live spectrum' },
   { value: 6, label: 'accent presets', detail: 'or a custom colour' },
-  { value: 3, label: 'install formats', detail: 'Flatpak, Fedora RPM and AppImage' },
+  { value: 5, label: 'install formats', detail: 'AppImage, Flatpak, Arch, RPM or DEB' },
 ] as const;
 
 export const FLATPAK_COMMANDS = [
-  `flatpak install --user ./SauceFX-${VERSION}-x86_64.flatpak`,
+  'flatpak install --user --from https://sauucee.github.io/saucefx/flatpak/SauceFX.flatpakref',
   'flatpak run io.github.sauucee.SauceFX',
 ];
 
-export const RPM_COMMANDS = [
-  'sudo dnf install --setopt=install_weak_deps=False https://github.com/sauucee/saucefx/releases/latest/download/SauceFX-x86_64.rpm',
-];
+/** CI builds the native RPM from this workspace, so the name follows VERSION. */
+export const RPM_COMMANDS = [`sudo dnf install ./saucefx-${VERSION}-1.fc42.x86_64.rpm`];
 
 export const REQUIREMENTS = [
   'Linux with PipeWire and WirePlumber, plus the PipeWire Pulse server and pactl (Fedora: pulseaudio-utils) for the virtual sink.',
-  'CMake 3.22+, a C++17 compiler, make, and pkg-config.',
-  'PipeWire and PulseAudio client development headers (pipewire-devel and pulseaudio-libs-devel on Fedora).',
-  'X11, Xext, Xrandr, Xinerama, Xcursor, FreeType and Fontconfig development headers.',
-  'Node.js ^20.19.0 or >=22.12.0 together with npm.',
-  'WebKitGTK 4.1, GTK3 and libsoup3 development headers.',
-  'JUCE 9.x (not vendored).',
+  'Rust (stable, via rustup), make, a C++17 compiler, pkg-config and ninja.',
+  'Clang/LLVM with libclang — Skia generates its bindings at build time.',
+  'PipeWire and PulseAudio client development headers.',
+  'FreeType, Fontconfig, libxkbcommon (with X11 support), OpenGL and EGL development headers.',
 ];
 
 export const FEDORA_SETUP = [
-  'sudo dnf install cmake gcc-c++ make pkg-config pipewire-devel pulseaudio-libs-devel \\',
-  '  libX11-devel libXext-devel libXinerama-devel libXrandr-devel \\',
-  '  libXcursor-devel libXcomposite-devel mesa-libGL-devel \\',
-  '  freetype-devel fontconfig-devel \\',
-  '  nodejs npm webkit2gtk4.1-devel gtk3-devel libsoup3-devel \\',
+  'sudo dnf install make gcc-c++ clang llvm-devel pkgconf-pkg-config ninja-build \\',
+  '  pipewire-devel pulseaudio-libs-devel freetype-devel fontconfig-devel \\',
+  '  libxkbcommon-devel libxkbcommon-x11-devel mesa-libGL-devel mesa-libEGL-devel \\',
   '  pulseaudio-utils pipewire-pulseaudio',
 ];
 
 /** Framing straight from the README: these are source-build requirements. */
 export const REQUIREMENTS_INTRO =
-  'Only needed when building SauceFX from source — Flatpak and RPM packages bring every runtime dependency with them.';
+  'Only needed when building SauceFX from source — packaged installs skip this step. Either way, SauceFX needs a working PipeWire session (PipeWire and WirePlumber) at runtime.';
 
 export const FEATURES = [
   {
@@ -90,8 +102,9 @@ export const FEATURES = [
   },
   {
     title: 'Frameless window',
-    body: 'A custom title bar, native window dragging, and rounded corners on X11. React and Base UI render the whole interface.',
-    detail: 'The visible UI is WebKitGTK through JUCE’s WebBrowserComponent.',
+    body: 'A custom title bar and native window dragging. The window, controls and text are rendered natively with Slint and Skia — no browser, no WebKit, no JavaScript.',
+    detail:
+      'Crisp native text: fractional glyph positioning with slight hinting, verified against the original interface.',
   },
 ] as const;
 

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ArrowUpRight, Check, Copy, Plus } from 'lucide-react';
 import {
   FLATPAK_COMMANDS,
+  RELEASES_LATEST_URL,
   RELEASES_URL,
   REQUIREMENTS,
   REQUIREMENTS_INTRO,
@@ -10,8 +11,18 @@ import {
 } from '../content/site';
 
 const TABS = [
-  { id: 'flatpak', label: 'Flatpak', commands: FLATPAK_COMMANDS, note: 'Bundle ships the engine; the org.gnome.Platform//51 runtime is offered from Flathub if it is missing.' },
-  { id: 'rpm', label: 'Fedora RPM', commands: RPM_COMMANDS, note: 'One command, latest release, straight from GitHub. DNF resolves every runtime dependency — no compiler, headers, Node.js or JUCE required.' },
+  {
+    id: 'flatpak',
+    label: 'Flatpak',
+    commands: FLATPAK_COMMANDS,
+    note: 'Installs from the SauceFX Flatpak repository. The org.gnome.Platform//51 runtime is offered from Flathub if it is missing.',
+  },
+  {
+    id: 'rpm',
+    label: 'Fedora RPM',
+    commands: RPM_COMMANDS,
+    note: `Download saucefx-${VERSION}-1.fc42.x86_64.rpm from GitHub Releases first, then run this in your download folder. DNF resolves every runtime dependency — no build tools or headers required.`,
+  },
 ] as const;
 
 export function Install() {
@@ -50,14 +61,15 @@ export function Install() {
               <em>That’s it.</em>
             </h2>
             <p>
-              Ready-to-install packages are attached to tagged GitHub Releases. Pick the
-              format for your distro, copy the block and run it.
+              Ready-to-install packages — AppImage, Flatpak, Arch, Fedora RPM and DEB —
+              are attached to tagged GitHub Releases. Flatpak and the Fedora RPM are the
+              one-liners below; the other formats are on the release page.
             </p>
 
             <div className="install__actions">
               <a
                 className="btn btn--fill"
-                href={RELEASES_URL}
+                href={RELEASES_LATEST_URL}
                 target="_blank"
                 rel="noreferrer noopener"
               >
