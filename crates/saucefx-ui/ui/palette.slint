@@ -52,7 +52,8 @@ export global Layout {
     out property <length> eq-chart-inset-bottom: 20px;
     out property <length> eq-chart-inset-right: 26px;
     out property <length> eq-scale-width: 19px;
-    out property <length> eq-curve-stroke: 2px;
+    // Equalizer.tsx uses a non-scaling stroke; styles.css sets it to 1.45px.
+    out property <length> eq-curve-stroke: 1.45px;
     out property <length> eq-frequency-height: 16px;
     // Equalizer.tsx paints the trace in a 1000x200 viewbox; kept for the
     // binding-layer geometry contract.

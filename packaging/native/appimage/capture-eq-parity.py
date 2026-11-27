@@ -71,9 +71,10 @@ for label, file in [('Music', '2.fac'), ('Movies', '10.fac')]:
     capture(label, select(file))
 flat = select('Default.fac')
 assert flat == [0.0]*31
-# Drag the 1 kHz thumb from the centre to +12 dB; leave the plot before capture.
+# Drag the 1 kHz thumb to the top of the full slider track (+12 dB),
+# not to the inset top of the SVG trace; leave the plot before capture.
 run('xdotool', 'mousemove', '--window', wid, 694, 434, 'mousedown', 1,
-    'sleep', '.1', 'mousemove', '--window', wid, 694, 344, 'sleep', '.1',
+    'sleep', '.1', 'mousemove', '--window', wid, 694, 338, 'sleep', '.1',
     'mouseup', 1, 'mousemove', '--window', wid, 3, 3)
 flat[17] = 12.0
 capture('Single-band', wait_state('Default.fac', flat))

@@ -231,6 +231,9 @@ export component EqualizerPanel inherits Rectangle {
             // whole pitch slice: centres, gaps between thumbs and the plot
             // edges all land on a cell. Thumb/curve geometry is unchanged.
             for band[i] in Layout.eq-bands : Rectangle {
+                // The web thumb travels the full track. The line has its own inset
+                // (12..188 in the SVG): at an extremum this leaves the curved tip visible.
+                property <length> thumb-center-y: (12 - root.gains[i]) / 24 * self.height;
                 // Source `.eq-band` is `flex: 1 1 0`, so the 31 cells abut
                 // across the whole chart: no dead strip between bands and no
                 // strip outside the first/last cell. Both edges of every cell
@@ -337,9 +340,8 @@ export component EqualizerPanel inherits Rectangle {
                 Rectangle {
                     property <length> thumb-size: touch.pressed ? 9px : (touch.has-hover || focus.keyboard-visible ? 8px : 6px);
                     property <length> ring-size: 1.5px;
-                    property <length> centre: max(thumb-size / 2 + ring-size, min(parent.height - thumb-size / 2 - ring-size, (12 + (12 - root.gains[i]) / 24 * 176) / 200 * parent.height));
                     x: (parent.width - thumb-size - ring-size * 2) / 2;
-                    y: centre - (thumb-size / 2) - ring-size;
+                    y: parent.thumb-center-y - (thumb-size / 2) - ring-size;
                     width: thumb-size + ring-size * 2;
                     height: thumb-size + ring-size * 2;
                     border-radius: (thumb-size + ring-size * 2) / 2;
@@ -347,10 +349,8 @@ export component EqualizerPanel inherits Rectangle {
                 }
                 Rectangle {
                     property <length> thumb-size: touch.pressed ? 9px : (touch.has-hover || focus.keyboard-visible ? 8px : 6px);
-                    property <length> ring-size: 1.5px;
-                    property <length> centre: max(thumb-size / 2 + ring-size, min(parent.height - thumb-size / 2 - ring-size, (12 + (12 - root.gains[i]) / 24 * 176) / 200 * parent.height));
                     x: (parent.width - thumb-size) / 2;
-                    y: centre - thumb-size / 2;
+                    y: parent.thumb-center-y - thumb-size / 2;
                     width: thumb-size;
                     height: thumb-size;
                     border-radius: thumb-size / 2;
@@ -364,7 +364,7 @@ export component EqualizerPanel inherits Rectangle {
                 if focus.keyboard-visible || touch.pressed : Rectangle {
                     property <length> halo-size: 15px;
                     x: (parent.width - halo-size) / 2;
-                    y: max(0px, min(parent.height - halo-size, (12 + (12 - root.gains[i]) / 24 * 176) / 200 * parent.height - halo-size / 2));
+                    y: parent.thumb-center-y - halo-size / 2;
                     width: halo-size;
                     height: halo-size;
                     border-radius: halo-size / 2;
@@ -404,7 +404,7 @@ export component EqualizerPanel inherits Rectangle {
                     moved => {
                         root.hover-x = parent.x + self.mouse-x;
                         if (self.pressed && root.enabled && root.keyboard-enabled) {
-                            let gain = 12 - ((self.mouse-y / self.height * 200 - 12) / 176) * 24;
+                            let gain = 12 - (self.mouse-y / self.height) * 24;
                             root.band-changed(i, max(-12, min(12, round(gain))));
                         }
                     }
@@ -412,7 +412,7 @@ export component EqualizerPanel inherits Rectangle {
                         if (root.enabled && root.keyboard-enabled) {
                             root.active-band = i;
                             root.band-hovered(i);
-                            let gain = 12 - ((self.mouse-y / self.height * 200 - 12) / 176) * 24;
+                            let gain = 12 - (self.mouse-y / self.height) * 24;
                             root.band-changed(i, max(-12, min(12, round(gain))));
                         }
                     }

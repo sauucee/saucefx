@@ -32,7 +32,25 @@ for row, case in enumerate(cases):
         labels.text((12+664*col, 42+231*row), case, font=font, fill='#c3c9d2')
         sheet.paste(chart, (12+664*col, 70+231*row))
     original, native = map(stroke, crops)
-    # Exclude handles; an equal row of dots must never pass as a smooth line.
+    if case == 'Single-band':
+        # The web slider uses the whole track for its thumb, but the SVG
+        # insets its trace. At +12 the circular handle and the rounded crest
+        # must both be visible. Comparing only between handles misses this.
+        center = math.floor(17.5*w/31)
+        def peak_runs(mask):
+            groups = []
+            for py in mask[center]:
+                if py > h/5:
+                    break
+                if not groups or py != groups[-1][-1]+1:
+                    groups.append([])
+                groups[-1].append(py)
+            return [(ys[0], ys[-1]) for ys in groups]
+        reference, candidate = map(peak_runs, (original, native))
+        assert len(reference) == 2 and reference[1][0] - reference[0][1] >= 4, ('reference peak fixture', reference)
+        assert len(candidate) == 2, ('handle obscures the rounded crest', reference, candidate)
+        assert all(abs(a-b) <= 2 for ra, ca in zip(reference, candidate) for a, b in zip(ra, ca)), ('peak shape', reference, candidate)
+    # Exclude handles in the stroke-only check; an equal row of dots must never pass as a smooth line.
     columns = [i for i in range(math.ceil(w/62), math.floor(w-w/62))
                if min(abs(i-(k+.5)*w/31) for k in range(31)) > 6]
     if case == 'Single-band':
