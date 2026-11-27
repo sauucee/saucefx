@@ -20,6 +20,7 @@
 
 #include "fxpw.h"
 #include "outputs.h"
+#include "silence_gate.h"
 
 #include <math.h>
 #include <stdarg.h>
@@ -176,6 +177,13 @@ struct FXPW {
 	bool stats;
 	long cap_buffers;
 
+	/* digital-silence decision; counters are capture/loop-thread only */
+	struct saucefx_silence_gate gate;
+	int gate_ch;
+	int gate_rate;
+	unsigned int gate_seq;
+	std::atomic<unsigned int> dsp_change_seq{0};
+
 	bool power_on;              /* GUI power switch */
 	bool pending_preset;         /* push this preset on the next buffer */
 	std::wstring pending_preset_path;
@@ -261,6 +269,14 @@ static void dsp_setup(FXPW *a, int bps, int nch, int srate)
 	}
 }
 
+/* Invalidate the digital-silence decision after engine state changed. The
+ * sequence is bumped *after* the mutation; the capture callback re-arms both
+ * guard windows when it observes a new value. No lock is taken. */
+static void invalidate_gate(FXPW *a)
+{
+	a->dsp_change_seq.fetch_add(1, std::memory_order_relaxed);
+}
+
 /* ------------------------------------------------------------------ */
 /* capture stream: SauceFX sink monitor -> DSP -> ring                */
 
@@ -284,9 +300,47 @@ static void capture_process(void *data)
 	long frames = (long)d->chunk->size / (long)(sizeof(float) * nch);
 
 	if (frames > 0 && !a->bypass) {
+		/* Unconditional, exactly as before: format, preset and first
+		 * power-on still get serviced on every buffer. Only the
+		 * processor call below can be skipped. */
 		dsp_setup(a, 32, nch, a->rate);
-		a->dsp->processAudio((short int *)src, (short int *)src,
-				     (int)frames, 0);
+
+		/* A control mutation bumps the sequence after it changes the
+		 * engine; a new negotiation changes the windows. Either way
+		 * the old silence evidence is discarded. */
+		unsigned int seq = a->dsp_change_seq.load(
+			std::memory_order_relaxed);
+		if (seq != a->gate_seq) {
+			a->gate_seq = seq;
+			saucefx_gate_reset(&a->gate);
+		}
+		if (nch != a->gate_ch || a->rate != a->gate_rate) {
+			a->gate_ch = nch;
+			a->gate_rate = a->rate;
+			saucefx_gate_init(&a->gate,
+				a->rate > 0 ? a->rate : 0);
+		}
+
+		/* Unknown rate fails open: in_zero stays false. */
+		int in_zero = a->rate > 0 &&
+			saucefx_gate_zero(src, frames * nch);
+
+		if (saucefx_gate_decision(&a->gate, in_zero, frames)) {
+			saucefx_gate_skipped(&a->gate, frames);
+		} else {
+			a->dsp->processAudio((short int *)src,
+					     (short int *)src,
+					     (int)frames, 0);
+			/* The engine writes in place. Its output decides
+			 * whether the tail can be considered finished: a
+			 * block at or above the 1e-20f output floor, or one
+			 * holding NaN/Inf, restarts the output window and is
+			 * queued as-is. The residual filter bias below that
+			 * floor lets the window advance on truly silent input. */
+			saucefx_gate_processed(&a->gate,
+				saucefx_gate_output_silent(src, frames * nch),
+				frames);
+		}
 	}
 
 	long long cap = frames;
@@ -1141,6 +1195,7 @@ extern "C" int fxpw_load_preset(FXPW *h, const wchar_t *path)
 		int rc = push_preset(h, h->pending_preset_path);
 		if (rc != 0)
 			h->pending_preset = true;
+		invalidate_gate(h);
 		return rc;
 	}
 
@@ -1149,7 +1204,9 @@ extern "C" int fxpw_load_preset(FXPW *h, const wchar_t *path)
 	/* Try immediately; if the engine is not initialized yet the call
 	 * no-ops engine-side and the pending push fires on the next buffer
 	 * (dsp_setup) exactly like a startup preset would. */
-	return push_preset(h, h->pending_preset_path);
+	int rc = push_preset(h, h->pending_preset_path);
+	invalidate_gate(h);
+	return rc;
 }
 
 extern "C" void fxpw_set_power(FXPW *h, int on)
@@ -1158,6 +1215,7 @@ extern "C" void fxpw_set_power(FXPW *h, int on)
 		return;
 	h->power_on = on != 0;
 	h->dsp->powerOn(h->power_on);
+	invalidate_gate(h);
 }
 
 extern "C" int fxpw_get_power(FXPW *h)
@@ -1174,6 +1232,7 @@ extern "C" void fxpw_set_effect_value(FXPW *h, int effect, float value)
 	if (value > 10.0f)
 		value = 10.0f;
 	h->dsp->setEffectValue(static_cast<DfxDsp::Effect>(effect), value);
+	invalidate_gate(h);
 }
 
 extern "C" float fxpw_get_effect_value(FXPW *h, int effect)
@@ -1205,6 +1264,7 @@ extern "C" void fxpw_set_eq_band(FXPW *h, int band, float freq, float gain)
 		return;
 	h->dsp->setEqBandFrequency(band, freq);
 	h->dsp->setEqBandBoostCut(band, gain);
+	invalidate_gate(h);
 }
 
 extern "C" int fxpw_preset_name(FXPW *h, const wchar_t *path, char *out, size_t outsz)
