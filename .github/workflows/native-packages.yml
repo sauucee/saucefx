@@ -48,7 +48,7 @@ jobs:
             libxkbcommon-dev libxkbcommon-x11-0 \
             desktop-file-utils imagemagick \
             pipewire pipewire-pulse wireplumber pulseaudio-utils \
-            dbus-x11 xvfb xauth openbox xdotool sway python3
+            dbus-x11 xvfb xauth x11-utils openbox xdotool sway python3 python3-pil
 
       - name: Build AppImage
         env:
@@ -86,12 +86,43 @@ jobs:
           bash packaging/native/flatpak/test-in-app-update.sh target/debug/examples/updater_probe
 
       - name: Smoke-test portable AppImage
+        env:
+          SAUCEFX_EQ_PARITY_OUT: ${{ github.event_name == 'pull_request' && format('{0}/eq-parity', runner.temp) || '' }}
         run: packaging/native/appimage/smoke-test.sh release/SauceFX-*-x86_64.AppImage
 
       - name: Check background visualizer on native Wayland
         env:
           SAUCEFX_TEST_WAYLAND: "1"
         run: packaging/native/appimage/smoke-test.sh release/SauceFX-*-x86_64.AppImage
+
+      - name: Check out the actual last pre-Rust release for EQ comparison
+        if: github.event_name == 'pull_request'
+        uses: actions/checkout@v4
+        with:
+          ref: 44bff906b2865055dbd86d48c1f1c314ba7820fd
+          path: eq-baseline
+          persist-credentials: false
+      - name: Set up Node for the original frontend
+        if: github.event_name == 'pull_request'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Render the original UI and compare the real EQ strokes
+        if: github.event_name == 'pull_request'
+        run: |
+          (cd eq-baseline/frontend && npm ci --no-audit --no-fund && npm run build && npx --no-install playwright install --with-deps chromium)
+          python3 -m http.server 4173 --bind 127.0.0.1 --directory eq-baseline/frontend/dist >"$RUNNER_TEMP/reference-server.log" 2>&1 &
+          server=$!; trap 'kill "$server" 2>/dev/null || true' EXIT
+          for i in {1..50}; do curl -fsS -o /dev/null http://127.0.0.1:4173/ && break; sleep .1; done
+          node packaging/native/appimage/capture-eq-reference.mjs eq-baseline "$RUNNER_TEMP/eq-parity" http://127.0.0.1:4173/
+          /usr/bin/python3 packaging/native/appimage/compare-eq-renders.py "$RUNNER_TEMP/eq-parity"
+      - name: Upload EQ comparison evidence
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: pre-rust-eq-comparison
+          path: ${{ runner.temp }}/eq-parity
+          if-no-files-found: warn
 
       - name: Upload AppImage artifact
         uses: actions/upload-artifact@v4

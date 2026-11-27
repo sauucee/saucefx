@@ -398,6 +398,15 @@ fn eq_profiles() -> Vec<(&'static str, [f32; BAND_COUNT])> {
                 6.0, 5.0, 3.0, 2.0, 0.0, -2.0, -3.0, -5.0, -6.0, -7.0, -5.0, -3.0, -1.0, 1.0, 1.0,
             ],
         ),
+        (
+            // Preset/session EQ gains are real engine values with fractions,
+            // so the trace must interpolate fractional knots unchanged.
+            "fractional preset",
+            [
+                0.0, 0.6, 1.2, 1.8, 2.0, 2.4, 3.0, 3.6, 4.2, 4.8, 5.4, 6.0, 5.4, 4.8, 4.2, 3.6,
+                3.0, 2.4, 1.8, 1.2, 0.6, 0.0, -0.6, -1.2, -1.8, -2.4, -3.0, -3.6, -4.2, -4.8, -5.4,
+            ],
+        ),
     ]
 }
 
@@ -868,21 +877,21 @@ fn format_gain_never_mutates_preset_or_session_state() {
     captured[4] = 1.15;
     assert!(binding.apply_captured_values(&[0.0; EFFECT_COUNT], &captured));
     let before = binding.eq_gains();
-    assert_eq!(before[17], -1.0, "loaded EQ uses whole decibels");
-    assert_eq!(before[4], 1.0);
+    assert_eq!(before[17], -1.25, "loaded EQ keeps its real engine value");
+    assert_eq!(before[4], 1.15);
 
     binding.set_active_eq_band(Some(17));
-    assert_eq!(binding.eq_readout(), "1 kHz \u{b7} -1 dB");
+    assert_eq!(binding.eq_readout(), "1 kHz \u{b7} -1.2 dB");
     binding.set_active_eq_band(Some(4));
-    assert_eq!(binding.eq_readout(), "50 Hz \u{b7} +1 dB");
+    assert_eq!(binding.eq_readout(), "50 Hz \u{b7} +1.1 dB");
     binding.set_active_eq_band(None);
     assert_eq!(binding.eq_readout(), "");
 
     // Formatting is read-only: neither the live gains nor the applied
     // baseline moved.
     assert_eq!(binding.eq_gains(), before);
-    assert_eq!(binding.state().applied_eq_gain(17), Some(-1.0));
-    assert_eq!(binding.state().applied_eq_gain(4), Some(1.0));
+    assert_eq!(binding.state().applied_eq_gain(17), Some(-1.25));
+    assert_eq!(binding.state().applied_eq_gain(4), Some(1.15));
 }
 
 #[test]
@@ -904,14 +913,15 @@ fn eq_readout_uses_the_31_frequency_band_not_the_compact_caption_list() {
     binding.set_active_eq_band(Some(30));
     assert_eq!(binding.eq_readout(), "20 kHz \u{b7} 0 dB");
 
-    // Loaded presets use the same whole-dB scale as manual edits.
+    // Loaded presets keep their real gain; only the one-decimal readout
+    // rounds, exactly like formatGain.
     let mut music = UiBinding::default();
     let mut captured = [0.0f32; BAND_COUNT];
     captured[17] = 1.2;
     assert!(music.apply_captured_values(&[0.0; EFFECT_COUNT], &captured));
-    assert_eq!(music.eq_gains()[17], 1.0);
+    assert_eq!(music.eq_gains()[17], 1.2);
     music.set_active_eq_band(Some(17));
-    assert_eq!(music.eq_readout(), "1 kHz \u{b7} +1 dB");
+    assert_eq!(music.eq_readout(), "1 kHz \u{b7} +1.2 dB");
 
     music.set_active_eq_band(None);
     assert_eq!(music.eq_readout(), "");
@@ -1011,7 +1021,16 @@ fn engine_sink_forwards_applied_changes_and_real_preset_paths() {
     );
     assert_eq!(binding.preset_name(), "Factsoft 1");
     assert_eq!(binding.effects()[0], 7.5, "engine values mirror the view");
-    assert_eq!(binding.eq_gains()[17], -4.0);
+    assert_eq!(
+        binding.eq_gains()[17],
+        -4.25,
+        "the fractional engine gain is not snapped"
+    );
+    assert_eq!(
+        engine.borrow().eq.last().copied(),
+        Some((17, -4.25)),
+        "the fractional engine gain is forwarded as read"
+    );
     assert!(!binding.edited(), "the loaded preset is the new baseline");
 
     // Synthetic rows (no path) keep applying their fixture values.
@@ -1218,49 +1237,130 @@ fn direct_playback_restore_keeps_the_saved_device_preference() {
 }
 
 #[test]
-fn captured_eq_gains_round_to_whole_decibels_before_becoming_baseline() {
+fn captured_eq_gains_keep_fractional_decibels_before_becoming_baseline() {
     let engine = Rc::new(RefCell::new(MockEngine::default()));
     let mut binding = UiBinding::default();
     binding.set_engine(Rc::clone(&engine) as Rc<RefCell<dyn saucefx_ui::binding::Engine>>);
+    // The original v0.2.4 frontend applied real engine values verbatim: a
+    // fractional preset/session gain is never snapped to the 1 dB slider step.
     let gains = [
         -12.0, -11.6, -11.5, -11.4, -10.2, -9.9, -8.7, -7.5, -6.4, -5.5, -4.49, -3.51, -2.5, -1.2,
         -0.6, -0.5, -0.49, 0.0, 0.49, 0.5, 0.6, 1.2, 1.5, 2.5, 3.49, 4.51, 5.5, 7.2, 8.8, 11.6,
         12.0,
     ];
-    let expected = [
-        -12.0, -12.0, -12.0, -11.0, -10.0, -10.0, -9.0, -8.0, -6.0, -6.0, -4.0, -4.0, -3.0, -1.0,
-        -1.0, -1.0, 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 2.0, 3.0, 3.0, 5.0, 6.0, 7.0, 9.0, 12.0, 12.0,
-    ];
     let effects = [0.25, 1.2, 2.5, 3.75, 10.0];
     assert!(binding.apply_captured_values(&effects, &gains));
-    assert_eq!(
-        binding.eq_gains(),
-        expected,
-        "all preset/session gains use whole dB"
-    );
-    assert_eq!(
-        binding.effects(),
-        effects,
-        "EQ rounding does not alter effects"
-    );
+    assert_eq!(binding.eq_gains(), gains, "preset/session gains are exact");
+    assert_eq!(binding.effects(), effects, "effects are exact too");
     assert!(!binding.edited());
     assert_eq!(
         engine.borrow().eq,
-        expected.into_iter().enumerate().collect::<Vec<_>>()
+        gains.into_iter().enumerate().collect::<Vec<_>>()
     );
-    for (band, gain) in expected.into_iter().enumerate() {
+
+    // The applied baseline is the fractional values, so a manual edit and a
+    // per-band reset round-trip to the exact original gain.
+    for (band, gain) in gains.into_iter().enumerate() {
         assert_eq!(binding.state().applied_eq_gain(band), Some(gain));
         assert_eq!(
             binding.set_eq_gain(band, if gain > 0.0 { -12.0 } else { 12.0 }),
             EditOutcome::Applied
         );
         assert_eq!(binding.reset_eq_band(band), EditOutcome::Applied);
-        assert_eq!(binding.eq_gains()[band], gain);
-        assert!(
-            !binding.edited(),
-            "reset restores the rounded preset baseline"
-        );
+        assert_eq!(binding.eq_gains()[band], gain, "band {band}");
+        assert!(!binding.edited(), "reset restores the exact baseline");
     }
+
+    // Full Reset All restores the same fractional values.
+    binding.set_eq_gain(0, 9.0);
+    binding.set_eq_gain(30, -9.0);
+    assert!(binding.edited());
+    binding.reset_eq();
+    assert_eq!(binding.eq_gains(), gains);
+    assert!(!binding.edited());
+
+    // Manual slider edits still quantise to whole decibels, and forwarding
+    // carries the applied value.
+    assert_eq!(binding.set_eq_gain(1, 2.4), EditOutcome::Applied);
+    assert_eq!(binding.eq_gains()[1], 2.0);
+    assert!(binding.edited());
+    assert_eq!(engine.borrow().eq.last().copied(), Some((1, 2.0)));
+}
+
+#[test]
+fn choosing_a_preset_with_fractional_gains_does_not_snap_them() {
+    // The CI red case: selecting Music applied [0, 0.6, 1.2, 1.8, 2] as
+    // [0, 1, 1, 2, 2]. The view keeps the engine's real values.
+    let mut binding = UiBinding::default();
+    let mut music = PresetFixture::flat("Music", true);
+    music.eq[0] = 0.0;
+    music.eq[1] = 0.6;
+    music.eq[2] = 1.2;
+    music.eq[3] = 1.8;
+    music.eq[4] = 2.0;
+    music.effects[0] = 4.5;
+    binding.install_catalog(
+        vec![PresetFixture::flat("Default", true), music],
+        Vec::new(),
+        Vec::new(),
+        1,
+    );
+    assert!(binding.choose_preset(2));
+    let expected: [f32; BAND_COUNT] = std::array::from_fn(|band| match band {
+        1 => 0.6,
+        2 => 1.2,
+        3 => 1.8,
+        4 => 2.0,
+        _ => 0.0,
+    });
+    assert_eq!(binding.eq_gains(), expected, "Music keeps its real values");
+    assert_eq!(
+        binding.state().applied_eq_gain(2),
+        Some(1.2),
+        "the baseline captures the fractional gain"
+    );
+    assert_eq!(binding.effects()[0], 4.5);
+    assert!(!binding.edited());
+
+    binding.set_active_eq_band(Some(2));
+    assert_eq!(binding.eq_readout(), "31.5 Hz \u{b7} +1.2 dB");
+    binding.set_active_eq_band(None);
+
+    // A right-click reset returns the exact preset gain, not its rounding.
+    binding.set_eq_gain(2, -7.0);
+    assert!(binding.edited());
+    assert_eq!(binding.reset_eq_band(2), EditOutcome::Applied);
+    assert_eq!(binding.eq_gains()[2], 1.2);
+    assert!(!binding.edited());
+
+    // Reset All keeps the fractional preset as the baseline.
+    binding.set_eq_gain(3, 5.0);
+    binding.reset_all();
+    assert_eq!(binding.eq_gains(), expected);
+    assert!(!binding.edited());
+}
+
+#[test]
+fn session_capture_rejects_invalid_gains_and_keeps_fractional_ones() {
+    let mut binding = UiBinding::default();
+    let mut captured = [0.0f32; BAND_COUNT];
+    captured[3] = 0.75;
+
+    // A NaN or out-of-range band rejects the whole capture and never becomes
+    // the applied baseline.
+    captured[9] = f32::NAN;
+    assert!(!binding.apply_captured_values(&[0.0; EFFECT_COUNT], &captured));
+    captured[9] = 12.5;
+    assert!(!binding.apply_captured_values(&[0.0; EFFECT_COUNT], &captured));
+    assert_eq!(binding.state().applied_eq_gain(3), Some(0.0));
+    assert_eq!(binding.state().applied_eq_gain(9), Some(0.0));
+
+    // A finite in-range fractional session is accepted verbatim.
+    captured[9] = 0.75;
+    assert!(binding.apply_captured_values(&[0.0; EFFECT_COUNT], &captured));
+    assert_eq!(binding.eq_gains()[3], 0.75);
+    assert_eq!(binding.eq_gains()[9], 0.75);
+    assert!(!binding.edited());
 }
 
 #[test]
@@ -1299,7 +1399,7 @@ fn first_launch_loads_the_selected_preset_into_the_engine() {
         vec!["/library/Factsoft/Default.fac".to_string()]
     );
     assert_eq!(binding.effects()[0], 7.5, "engine values mirror the view");
-    assert_eq!(binding.eq_gains()[17], -4.0);
+    assert_eq!(binding.eq_gains()[17], -4.25);
     assert!(!binding.edited(), "the loaded preset is the new baseline");
 
     // Power off blocks the fallback without forwarding anything.
