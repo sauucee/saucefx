@@ -258,6 +258,18 @@ fn spectrum_bars_go_idle_after_the_reference_timeout_and_clear_when_off() {
 }
 
 #[test]
+fn resumed_spectrum_starts_with_only_the_new_sample() {
+    let mut binding = UiBinding::default();
+    binding.push_spectrum(&[0.75; SPECTRUM_BANDS], 100);
+    assert!(binding.spectrum_bars().contains(&0.75));
+    binding.clear_spectrum();
+    binding.push_spectrum(&[0.25; SPECTRUM_BANDS], 200);
+    let bars = binding.spectrum_bars();
+    assert!(!bars.contains(&0.75));
+    assert!(bars.contains(&0.25));
+}
+
+#[test]
 fn spectrum_colours_follow_the_source_gradient_maths() {
     let binding = UiBinding::default();
     let (edge, centre) = binding.spectrum_colours();

@@ -8,6 +8,7 @@ mod paths;
 mod presets;
 mod single_instance;
 mod updater;
+mod visualizer;
 
 use std::cell::RefCell;
 use std::path::{Path, PathBuf};
@@ -22,7 +23,6 @@ use saucefx_ui::AppWindow;
 use saucefx_ui::binding::{MenuRow, UiBinding};
 use slint::{ComponentHandle, Timer, TimerMode};
 
-const SPECTRUM_INTERVAL_MS: u64 = 50;
 const OUTPUT_INTERVAL_MS: u64 = 1000;
 const SAVE_INTERVAL_MS: u64 = 2000;
 
@@ -641,27 +641,30 @@ fn main() {
         }
     }
 
-    autostart::show_on_launch(window.window(), auto_start_launch)
-        .expect("set initial SauceFX window visibility");
-
-    // Live spectrum: the engine's analyzer feeds the view's history.
-    let spectrum_timer = Timer::default();
     {
         let binding = Rc::clone(&binding);
         let engine = Rc::clone(&engine);
-        let window = window.as_weak();
-        spectrum_timer.start(
-            TimerMode::Repeated,
-            Duration::from_millis(SPECTRUM_INTERVAL_MS),
-            move || {
-                let bands = engine.borrow().spectrum();
-                let now = now_ms();
-                binding.borrow_mut().push_spectrum(&bands, now);
-                if let Some(window) = window.upgrade() {
-                    binding.borrow().sync(&window);
-                }
-            },
-        );
+        let trace = std::env::var_os("SAUCEFX_TRACE_SPECTRUM").is_some();
+        if trace {
+            eprintln!("saucefx: spectrum trace ready");
+        }
+        visualizer::install(&window, move |window, fresh| {
+            let bands = engine.borrow().spectrum();
+            if trace {
+                eprintln!("saucefx: spectrum sample");
+            }
+            let mut binding = binding.borrow_mut();
+            if fresh {
+                binding.clear_spectrum();
+            }
+            binding.push_spectrum(&bands, now_ms());
+            binding.sync(window);
+        });
+    }
+    autostart::show_on_launch(window.window(), auto_start_launch)
+        .expect("set initial SauceFX window visibility");
+    if !auto_start_launch {
+        visualizer::request_first_frame(&window);
     }
 
     // Keep the device menu current without applying routing again.
@@ -718,6 +721,7 @@ fn main() {
             if single_instance::consume_show_request(&state) {
                 if let Some(window) = window_weak.upgrade() {
                     window.show().expect("show the SauceFX window");
+                    visualizer::request_first_frame(&window);
                     binding.borrow().sync(&window);
                 }
                 eprintln!("saucefx: window restored from background");

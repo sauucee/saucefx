@@ -1402,6 +1402,11 @@ impl UiBinding {
         self.history.push(values, now_ms);
     }
 
+    /// Forget samples recorded before the window went into the background.
+    pub fn clear_spectrum(&mut self) {
+        self.history.clear();
+    }
+
     /// Flat band-major bar heights for the drawn frame.
     pub fn spectrum_bars(&self) -> [f32; SPECTRUM_SLOTS] {
         self.history.bars()
@@ -1721,8 +1726,10 @@ impl UiBinding {
         // window keeps the process alive exactly like the reference app.
         {
             let weak = window.as_weak();
+            let cell = Rc::clone(&binding);
             window.on_minimize_clicked(move || {
                 if let Some(window) = weak.upgrade() {
+                    cell.borrow_mut().clear_spectrum();
                     window.window().with_winit_window(|native| {
                         native.set_minimized(true);
                     });
@@ -1741,8 +1748,10 @@ impl UiBinding {
         }
         {
             let weak = window.as_weak();
+            let cell = Rc::clone(&binding);
             window.on_close_clicked(move || {
                 if let Some(window) = weak.upgrade() {
+                    cell.borrow_mut().clear_spectrum();
                     let _ = window.hide();
                 }
             });
