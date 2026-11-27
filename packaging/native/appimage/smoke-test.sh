@@ -85,7 +85,10 @@ for i, frequency in enumerate(frequencies):
 Path(sys.argv[1]).write_text('\n'.join(lines) + '\n')
 PY
 cd "$WORK"
-APPIMAGE="$IMAGE" "$APPDIR_TEST/AppRun" >"$WORK/app.log" 2>&1 &
+# A real window manager is required for minimize/restore; Xvfb alone cannot do it.
+openbox >"$WORK/wm.log" 2>&1 &
+PIDS+=("$!")
+SAUCEFX_TRACE_SPECTRUM=1 APPIMAGE="$IMAGE" "$APPDIR_TEST/AppRun" --autostart >"$WORK/app.log" 2>&1 &
 APP_PID=$!
 PIDS+=("$APP_PID")
 
@@ -159,6 +162,9 @@ for attempt in 1 2 3; do
     fi
     sleep 2
 done
+
+# The tone above traversed the real DSP while the login window was hidden.
+python3 "$SCRIPT_DIR/test-visualizer.py" "$WORK/app.log" "$APP_STATE_DIR"
 
 # Require the save timer to replace the old mount path and retain the
 # non-default band value, proving the seeded session was actually restored.

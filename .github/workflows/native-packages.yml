@@ -48,7 +48,7 @@ jobs:
             libxkbcommon-dev libxkbcommon-x11-0 \
             desktop-file-utils imagemagick \
             pipewire pipewire-pulse wireplumber pulseaudio-utils \
-            dbus-x11 xvfb xauth python3
+            dbus-x11 xvfb xauth openbox xdotool python3
 
       - name: Build AppImage
         env:

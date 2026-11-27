@@ -650,11 +650,18 @@ fn main() {
         let binding = Rc::clone(&binding);
         let engine = Rc::clone(&engine);
         let window = window.as_weak();
+        let trace = std::env::var_os("SAUCEFX_TRACE_SPECTRUM").is_some();
+        if trace {
+            eprintln!("saucefx: spectrum trace ready");
+        }
         spectrum_timer.start(
             TimerMode::Repeated,
             Duration::from_millis(SPECTRUM_INTERVAL_MS),
             move || {
                 let bands = engine.borrow().spectrum();
+                if trace {
+                    eprintln!("saucefx: spectrum sample");
+                }
                 let now = now_ms();
                 binding.borrow_mut().push_spectrum(&bands, now);
                 if let Some(window) = window.upgrade() {
