@@ -15,11 +15,11 @@ extern "C" int pw_stream_queue_buffer(pw_stream *, pw_buffer *b) { return b == &
 
 int main(int argc, char **argv)
 {
-    if (argc != 2 && argc != 4) return 2;
-    const bool reference = argc == 4 && std::string(argv[2]) == "reference";
-    if (argc == 4 && !reference && std::string(argv[2]) != "candidate") return 2;
-    FILE *waveform = argc == 4 ? std::fopen(argv[3], "wb") : nullptr;
-    if (argc == 4 && !waveform) return 1;
+    if (argc != 2 && argc != 4 && argc != 5) return 2;
+    const bool reference = argc >= 4 && std::string(argv[2]) == "reference";
+    if (argc >= 4 && !reference && std::string(argv[2]) != "candidate") return 2;
+    FILE *waveform = argc >= 4 ? std::fopen(argv[3], "wb") : nullptr;
+    if (argc >= 4 && !waveform) return 1;
     constexpr int rate = 48000, frames = 256, channels = 2;
     DfxDsp dsp;
     FXPW bridge{};
@@ -30,6 +30,14 @@ int main(int argc, char **argv)
     std::array<float, frames * channels> samples{};
     bridge.rate = rate;
     bridge.ch = channels;
+    // Test-only sensitivity sweep; the normal candidate uses production defaults.
+    if (argc == 5) {
+        const int ms = std::stoi(argv[4]);
+        if (reference || ms < 0 || ms > 5000) return 2;
+        bridge.gate_ch = channels; bridge.gate_rate = rate;
+        saucefx_gate_init(&bridge.gate, rate);
+        bridge.gate.in_hold = saucefx_gate_hold(rate, ms);
+    }
     spa_chunk chunk{}; chunk.size = samples.size() * sizeof(float);
     spa_data data{}; data.data = samples.data(); data.chunk = &chunk; data.maxsize = chunk.size;
     spa_buffer storage{}; storage.n_datas = 1; storage.datas = &data;
