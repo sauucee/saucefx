@@ -1026,11 +1026,26 @@ fn engine_sink_forwards_applied_changes_and_real_preset_paths() {
         -4.25,
         "the fractional engine gain is not snapped"
     );
+    // Loading the preset forwards a whole 31-band batch in index order after
+    // the earlier manual write, not just the band that changed. Check the
+    // batch itself (band 17 in particular) instead of the last element.
+    let forwarded = engine.borrow().eq.clone();
     assert_eq!(
-        engine.borrow().eq.last().copied(),
-        Some((17, -4.25)),
-        "the fractional engine gain is forwarded as read"
+        forwarded.len(),
+        1 + BAND_COUNT,
+        "one manual write plus the full preset batch"
     );
+    assert_eq!(forwarded[0], (17, -3.0), "the manual write is preserved");
+    let batch = &forwarded[1..];
+    let expected: Vec<(usize, f32)> = (0..BAND_COUNT)
+        .map(|band| (band, if band == 17 { -4.25 } else { 0.0 }))
+        .collect();
+    assert_eq!(
+        batch,
+        expected.as_slice(),
+        "all 31 bands are forwarded in order"
+    );
+    assert_eq!(batch[17], (17, -4.25), "band 17 keeps the fractional gain");
     assert!(!binding.edited(), "the loaded preset is the new baseline");
 
     // Synthetic rows (no path) keep applying their fixture values.
