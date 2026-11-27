@@ -5,6 +5,7 @@ on:
     paths:
       - src/pwbridge/**
       - src/harness/silencegatetest.cpp
+      - src/harness/silencefloor.cpp
       - src/harness/idle_audio.py
       - .github/workflows/audio-idle.yml
 permissions:
@@ -35,6 +36,10 @@ jobs:
           make -C "$RUNNER_TEMP/control/src" -j2 rt > "$RUNNER_TEMP/control-build.log" || { tail -40 "$RUNNER_TEMP/control-build.log"; exit 1; }
           make -C src -j2 rt > "$RUNNER_TEMP/candidate-build.log" || { tail -40 "$RUNNER_TEMP/candidate-build.log"; exit 1; }
           sha256sum "$RUNNER_TEMP/control/src/build/bin/saucefxrt" src/build/bin/saucefxrt
+      - name: Measure the actual capture callback on zero input
+        run: |
+          make -C src build/bin/silencefloor
+          FXSOUND_REG_FILE="$RUNNER_TEMP/floor-registry" src/build/bin/silencefloor "$PWD/presets/Factsoft/2.fac"
       - name: Compare the real engines sequentially, without hardware
         run: |
           python3 src/harness/idle_audio.py "$RUNNER_TEMP/control/src/build/bin/saucefxrt" src/build/bin/saucefxrt presets/Factsoft/2.fac "$RUNNER_TEMP/audio-results"

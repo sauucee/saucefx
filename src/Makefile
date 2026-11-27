@@ -122,6 +122,10 @@ test-output-routing: $(OUTPUT_ROUTING_TEST)
 	@bash $(SRC_DIR)/harness/outputroutingtest.sh "$(abspath $(OUTPUT_ROUTING_TEST))"; \
 		rc=$$?; [ $$rc -eq 0 ] || [ $$rc -eq 77 ]
 
+$(BIN)/silencefloor: $(SRC_DIR)/harness/silencefloor.cpp $(PWDIR)/fxpw.cpp $(PWDIR)/silence_gate.h $(PWBRIDGE_LIB) | $(BIN)
+	$(CXX) $(CXXFLAGS) $(DEFINES) $(PW_DFLAGS) $(PW_CFLAGS) -o $@ $< \
+		$(PWBRIDGE_LIB) $(LIB) $(PW_LIBS) -lpthread -lm
+
 $(AUDIO_LATENCY_TEST): $(SRC_DIR)/harness/audiolatencytest.cpp $(PWDIR)/fxpw.cpp $(PWDIR)/fxpw.h $(PWBRIDGE_LIB) | $(BIN)
 	$(CXX) $(CXXFLAGS) $(DEFINES) $(PW_DFLAGS) $(PW_CFLAGS) -o $@ $< \
 		$(PWBRIDGE_LIB) $(LIB) $(PW_LIBS) -lpthread -lm
