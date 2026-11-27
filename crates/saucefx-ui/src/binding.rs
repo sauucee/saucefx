@@ -744,14 +744,16 @@ impl UiBinding {
         )
     }
 
-    /// Load preset/session EQ gains on the same whole-dB scale as manual
-    /// edits. Round before capturing the baseline and forwarding to the DSP,
-    /// keeping the readout, resets and saved values consistent.
+    /// Load preset/session values verbatim, exactly as the v0.2.4 frontend
+    /// did. Preset and session EQ gains are real engine values, not slider
+    /// steps, so a finite in-range fractional gain is never snapped: the
+    /// view, the applied baseline, the DSP forward and every reset keep the
+    /// original value. Only manual slider edits quantise to whole dB.
     pub fn apply_captured_values(&mut self, effects: &[f32], eq: &[f32]) -> bool {
         for (band, gain) in eq.iter().take(BAND_COUNT).enumerate() {
             if !gain.is_finite()
                 || !(-12.0..=12.0).contains(gain)
-                || self.state.set_eq_gain(band, gain.round()).is_err()
+                || self.state.set_eq_gain(band, *gain).is_err()
             {
                 return false;
             }
@@ -913,7 +915,9 @@ impl UiBinding {
         let Some(gain) = self.state.applied_eq_gain(index) else {
             return EditOutcome::OutOfRange;
         };
-        match self.state.set_eq_gain(index, gain.round()) {
+        // The baseline may hold a fractional preset/session gain; restore it
+        // exactly rather than snapping it to the manual slider's 1 dB step.
+        match self.state.set_eq_gain(index, gain) {
             Ok(()) => {
                 self.forward_eq_gain(index);
                 EditOutcome::Applied

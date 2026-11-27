@@ -23,8 +23,9 @@ use saucefx_core::settings::ThemeMode;
 use saucefx_core::state::{BAND_COUNT, EFFECT_COUNT};
 use saucefx_core::updates::UpdateStatus;
 use saucefx_ui::AppWindow;
-use saucefx_ui::binding::UiBinding;
+use saucefx_ui::binding::{UiBinding, eq_curve_commands};
 use slint::ComponentHandle;
+use slint::Model;
 use slint::platform::{PointerEventButton, WindowEvent};
 
 /// Absolute x of the drawn EQ chart, taken from the protected reference DOM
@@ -214,7 +215,9 @@ fn scenario_startup(window: &AppWindow, binding: &Rc<RefCell<UiBinding>>, checks
         None,
     );
 
-    // Loaded presets use whole-dB values in both state and the readout.
+    // Preset/session gains are real engine values: the state, the bound
+    // window model and the drawn curve keep the fraction; only the readout
+    // rounds to one decimal, exactly like formatGain.
     let mut captured = [0.0f32; BAND_COUNT];
     captured[17] = -1.25;
     checks.is(
@@ -224,18 +227,44 @@ fn scenario_startup(window: &AppWindow, binding: &Rc<RefCell<UiBinding>>, checks
             .apply_captured_values(&[0.0; EFFECT_COUNT], &captured),
         "apply_captured_values returned false",
     );
+    checks.eq(
+        "captured gain keeps its fraction",
+        binding.borrow().eq_gains()[17],
+        -1.25f32,
+    );
+    sync(window, binding);
+    let bound_gains = window.get_eq_gains();
+    checks.eq(
+        "bound EQ model keeps the fraction",
+        bound_gains.row_data(17),
+        Some(-1.25f32),
+    );
+    let gains = binding.borrow().eq_gains();
+    checks.eq(
+        "drawn curve uses the fractional gain",
+        window.get_eq_curve().to_string(),
+        eq_curve_commands(&gains, 1000.0, 200.0),
+    );
     binding.borrow_mut().set_active_eq_band(Some(17));
     sync(window, binding);
     checks.eq(
-        "rounded negative readout",
+        "fractional negative readout",
         readout(window),
-        "1 kHz \u{b7} -1 dB".to_string(),
+        "1 kHz \u{b7} -1.2 dB".to_string(),
     );
-    checks.eq(
-        "captured gain uses whole decibels",
-        binding.borrow().eq_gains()[17],
-        -1.0f32,
+
+    // Leave a flat baseline so the later scenarios start from the same clean
+    // state as before; the fractional preset above is what this scenario
+    // pins, and the old rounding check left a stale nonzero baseline here.
+    checks.is(
+        "flat baseline restored",
+        binding
+            .borrow_mut()
+            .apply_captured_values(&[0.0; EFFECT_COUNT], &[0.0; BAND_COUNT]),
+        "flat capture returned false",
     );
+    binding.borrow_mut().set_active_eq_band(None);
+    sync(window, binding);
 }
 
 fn scenario_settings_keyboard(

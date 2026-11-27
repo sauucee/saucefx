@@ -84,7 +84,7 @@ lines = ['version=1', 'preset=/tmp/old-AppImage-mount/usr/share/saucefx/presets/
     'factory-preset=Default.fac', 'power=1', 'bands=31']
 lines += [f'effect{i}=0' for i in range(5)]
 for i, frequency in enumerate(frequencies):
-    lines += [f'eq{i}freq={frequency}', f'eq{i}gain={3 if i == 17 else 0}']
+    lines += [f'eq{i}freq={frequency}', f'eq{i}gain={3 if i == 17 else -0.75 if i == 24 else 0}']
 Path(sys.argv[1]).write_text('\n'.join(lines) + '\n')
 PY
 cd "$WORK"
@@ -202,8 +202,14 @@ grep -Fqx "preset=$APPDIR_TEST/usr/share/saucefx/presets/Factsoft/Default.fac" \
     "$APP_STATE_DIR/preset-session.txt"
 grep -qx 'factory-preset=Default.fac' "$APP_STATE_DIR/preset-session.txt"
 grep -qx 'eq17gain=3.000000' "$APP_STATE_DIR/preset-session.txt"
+grep -qx 'eq24gain=-0.750000' "$APP_STATE_DIR/preset-session.txt"
 # Start at login is on by default and re-applied at startup: the portable
 # launch command is registered under the private config dir.
 grep -F "Exec=\"$IMAGE\" --autostart" "$XDG_CONFIG_HOME/autostart/saucefx.desktop"
 kill -0 "$APP_PID"
 echo "PASS: native AppImage starts from a relocated directory, restores its preset session, uses the bundled PipeWire, and processes audio end to end"
+
+if [ -n "${SAUCEFX_EQ_PARITY_OUT:-}" ]; then
+    python3 "$SCRIPT_DIR/capture-eq-parity.py" "$APP_STATE_DIR/preset-session.txt" \
+        "$APPDIR_TEST/usr/share/saucefx/presets/Factsoft" "$SAUCEFX_EQ_PARITY_OUT"
+fi
