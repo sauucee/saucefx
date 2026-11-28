@@ -189,7 +189,7 @@ for attempt in 1 2 3; do
 done
 
 # The tone above traversed the real DSP while the login window was hidden.
-python3 "$SCRIPT_DIR/test-visualizer.py" "$WORK/app.log" "$APP_STATE_DIR"
+python3 "$SCRIPT_DIR/test-visualizer.py" "$WORK/app.log" "$APP_STATE_DIR" "$APPDIR_TEST/AppRun"
 
 # Require the save timer to replace the old mount path and retain the
 # non-default band value, proving the seeded session was actually restored.

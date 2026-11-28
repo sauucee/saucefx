@@ -14,7 +14,8 @@ import { Toast } from "toast.slint";
 export { Layout, Palette, Typography }
 
 export component AppWindow inherits Window {
-    title: "SauceFX Rust UI Preview \u{2014} no audio connection";
+    in property <string> window-caption: "SauceFX";
+    title: root.window-caption;
     no-frame: true;
     in property <length> screen-width: Layout.window-width;
     in property <length> screen-height: Layout.window-height;
