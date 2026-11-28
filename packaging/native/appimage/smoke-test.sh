@@ -210,6 +210,6 @@ kill -0 "$APP_PID"
 echo "PASS: native AppImage starts from a relocated directory, restores its preset session, uses the bundled PipeWire, and processes audio end to end"
 
 if [ -n "${SAUCEFX_EQ_PARITY_OUT:-}" ]; then
-    python3 "$SCRIPT_DIR/capture-eq-parity.py" "$APP_STATE_DIR/preset-session.txt" \
+    /usr/bin/python3 "$SCRIPT_DIR/capture-eq-parity.py" "$APP_STATE_DIR/preset-session.txt" \
         "$APPDIR_TEST/usr/share/saucefx/presets/Factsoft" "$SAUCEFX_EQ_PARITY_OUT"
 fi

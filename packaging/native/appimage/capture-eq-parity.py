@@ -71,9 +71,18 @@ for label, file in [('Music', '2.fac'), ('Movies', '10.fac')]:
     capture(label, select(file))
 flat = select('Default.fac')
 assert flat == [0.0]*31
-# Drag the 1 kHz thumb from the centre to +12 dB; leave the plot before capture.
+# Same band twice, then its neighbor. Check the guide independently of the EQ stroke.
+for name, px, py in [('idle', 3, 3), ('left', 689, 400), ('right', 699, 400),
+                     ('adjacent', 714, 400), ('leave', 3, 3)]:
+    run('xdotool', 'mousemove', '--window', wid, px, py)
+    time.sleep(.3)
+    run('import', '-silent', '-window', 'root', '-crop', f'{width}x{height}+{x}+{y}',
+        '+repage', out/f'native-{name}.png')
+run(sys.executable, pathlib.Path(__file__).with_name('check-eq-hover.py'), out)
+# Drag the 1 kHz thumb to the top of the full slider track (+12 dB),
+# not to the inset top of the SVG trace; leave the plot before capture.
 run('xdotool', 'mousemove', '--window', wid, 694, 434, 'mousedown', 1,
-    'sleep', '.1', 'mousemove', '--window', wid, 694, 344, 'sleep', '.1',
+    'sleep', '.1', 'mousemove', '--window', wid, 694, 338, 'sleep', '.1',
     'mouseup', 1, 'mousemove', '--window', wid, 3, 3)
 flat[17] = 12.0
 capture('Single-band', wait_state('Default.fac', flat))

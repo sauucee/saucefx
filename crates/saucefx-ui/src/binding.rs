@@ -1950,17 +1950,12 @@ fn eq_points(gains: &[f32; BAND_COUNT], width: f32) -> Vec<(f64, f64)> {
         .collect()
 }
 
-/// The reference Equalizer.tsx `smoothPath`, ported exactly: Catmull-Rom
-/// tangents `current +/- (neighbour gap) / 6` through points at band-cell
-/// centres, with the start/end clamps (`previous` clamps to the first point,
-/// `after` to the last). C1 by construction — the curvature jumps at knots
-/// are the bendy character the reference shows; a natural cubic spline
-/// minimises curvature and renders visibly flatter at small preset gains.
-///
-/// This is the gain-control trace, not the combined DSP frequency response.
-/// Catmull-Rom can overshoot between bands. Do not clamp the interpolated
-/// curve: doing so would create flat spots and corners.
+/// Use the playground's cubic handles (`site/src/lib/curve.ts`, called by
+/// EqPlayground with tension 0.8) in the desktop chart's coordinate system.
+/// Only the drawing tangents change. The curve still goes through every
+/// band's gain and has a common tangent on both sides of each interior band.
 fn eq_path(gains: &[f32; BAND_COUNT], width: f32) -> String {
+    const PLAYGROUND_TENSION: f64 = 0.8;
     let points = eq_points(gains, width);
 
     // Six decimals keep serialized control points continuous well below a
@@ -1973,10 +1968,10 @@ fn eq_path(gains: &[f32; BAND_COUNT], width: f32) -> String {
         let after = points.get(index + 2).unwrap_or(&next);
         path.push_str(&format!(
             " C {:.6} {:.6}, {:.6} {:.6}, {:.6} {:.6}",
-            current.0 + (next.0 - previous.0) / 6.0,
-            current.1 + (next.1 - previous.1) / 6.0,
-            next.0 - (after.0 - current.0) / 6.0,
-            next.1 - (after.1 - current.1) / 6.0,
+            current.0 + (next.0 - previous.0) / 6.0 * PLAYGROUND_TENSION,
+            current.1 + (next.1 - previous.1) / 6.0 * PLAYGROUND_TENSION,
+            next.0 - (after.0 - current.0) / 6.0 * PLAYGROUND_TENSION,
+            next.1 - (after.1 - current.1) / 6.0 * PLAYGROUND_TENSION,
             next.0,
             next.1
         ));
