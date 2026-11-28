@@ -30,7 +30,12 @@ pub fn autostart_entry(exec: &str, icon: &str) -> String {
     text.push_str("Version=1.0\n");
     text.push_str("Name=SauceFX\n");
     text.push_str("Comment=SauceFX sound EQ and audio enhancement for Linux\n");
-    text.push_str(&format!("Icon=\"{icon}\"\n"));
+    let icon = icon
+        .replace('\\', "\\\\")
+        .replace('\n', "\\n")
+        .replace('\r', "\\r")
+        .replace('\t', "\\t");
+    text.push_str(&format!("Icon={icon}\n"));
     text.push_str(&format!("Exec={exec}\n"));
     text.push_str("Terminal=false\n");
     text.push_str("X-GNOME-Autostart-enabled=true\n");
@@ -80,7 +85,7 @@ pub fn resolve_launch(
             }
         }
     }
-    let icon = icon.to_string_lossy().replace('"', "\\\"");
+    let icon = icon.to_string_lossy().into_owned();
     (exec, icon)
 }
 

@@ -26,6 +26,7 @@ install -Dm0644 "$ROOT/packaging/linux/io.github.sauucee.SauceFX.metainfo.xml" \
 install -Dm0644 "$ROOT/assets/Images/saucefx-logo-512.png" \
     "$STAGE/usr/share/icons/hicolor/512x512/apps/io.github.sauucee.SauceFX.png"
 install -Dm0644 "$ROOT/LICENSE" "$STAGE/usr/share/doc/saucefx/copyright"
+install -Dm0644 "$ROOT/assets/Fonts/OFL.txt" "$STAGE/usr/share/doc/saucefx/Figtree-OFL.txt"
 
 cat > "$STAGE/DEBIAN/control" <<EOF
 Package: saucefx
@@ -33,7 +34,7 @@ Version: $VERSION
 Section: sound
 Priority: optional
 Architecture: $ARCH
-Depends: pipewire, pipewire-pulse, libpulse0, zenity, fontconfig, libfreetype6, libxkbcommon0, libgl1, libegl1, hicolor-icon-theme
+Depends: pipewire, pipewire-pulse, pulseaudio-utils, libpulse0, zenity, fontconfig, libfreetype6, libxkbcommon0, libgl1, libegl1, hicolor-icon-theme
 Maintainer: SauceFX <sauucee@users.noreply.github.com>
 Description: Sound EQ and audio enhancement for Linux (native UI)
  System-wide equalizer and audio enhancements over PipeWire, with a

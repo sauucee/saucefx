@@ -124,8 +124,11 @@ pub fn validate_fac_structure(text: &str) -> Result<(), &'static str> {
     }
     // No nonzero Reals/Strings section exists in the corpus, so their value
     // lines are consumed as opaque: only the count is enforced.
-    index += reals;
-    index += strings;
+    index = index
+        .checked_add(reals)
+        .and_then(|n| n.checked_add(strings))
+        .filter(|n| *n < lines.len())
+        .ok_or("preset sections exceed the file length")?;
 
     let bands = labeled_int(&lines, &mut index, "Number of EQ Bands")?;
     if lines
@@ -143,14 +146,24 @@ pub fn validate_fac_structure(text: &str) -> Result<(), &'static str> {
         let Some((cf_value, cf_label)) = cf.rsplit_once(':') else {
             return Err("band block is missing a CF line");
         };
-        if cf_label.trim() != "CF" || cf_value.trim().parse::<f64>().is_err() {
+        if cf_label.trim() != "CF"
+            || !cf_value
+                .trim()
+                .parse::<f32>()
+                .is_ok_and(|f| f.is_finite() && f > 0.0)
+        {
             return Err("band block is missing a numeric CF line");
         }
         let gain = lines.get(index + 2).ok_or("band block ends early")?;
         let Some((gain_value, gain_label)) = gain.rsplit_once(':') else {
             return Err("band block is missing a Boost/Cut line");
         };
-        if gain_label.trim() != "Boost/Cut" || gain_value.trim().parse::<i64>().is_err() {
+        if gain_label.trim() != "Boost/Cut"
+            || !gain_value
+                .trim()
+                .parse::<f32>()
+                .is_ok_and(|g| (-12.0..=12.0).contains(&g))
+        {
             return Err("band block is missing a Boost/Cut value");
         }
         index += 3;
@@ -160,6 +173,24 @@ pub fn validate_fac_structure(text: &str) -> Result<(), &'static str> {
         return Err("unexpected lines at the end of the preset");
     }
     Ok(())
+}
+
+pub fn validated_display_name(path: &Path) -> Option<String> {
+    let text = read_preset(path)?;
+    validate_fac_structure(&text).ok()?;
+    Some(text.lines().nth(2)?.trim().to_owned())
+}
+
+fn read_preset(path: &Path) -> Option<String> {
+    use std::io::Read;
+    const MAX: u64 = 1024 * 1024;
+    let mut text = String::new();
+    let file = std::fs::File::open(path).ok()?;
+    if !file.metadata().ok()?.is_file() {
+        return None;
+    }
+    file.take(MAX + 1).read_to_string(&mut text).ok()?;
+    (text.len() as u64 <= MAX).then_some(text)
 }
 
 pub struct ScannedPreset {
@@ -182,8 +213,8 @@ fn scan_dir(dir: &Path, factory: bool) -> Vec<ScannedPreset> {
                 .is_some_and(|extension| extension.eq_ignore_ascii_case("fac"))
             // A structurally invalid file is never offered: the legacy engine
             // parser would misread it (wild gains demonstrated in diagnosis).
-            && std::fs::read_to_string(&path)
-                .is_ok_and(|text| validate_fac_structure(&text).is_ok())
+            && read_preset(&path)
+                .is_some_and(|text| validate_fac_structure(&text).is_ok())
         {
             out.push(ScannedPreset { path, factory });
         }
@@ -310,6 +341,10 @@ pub fn import_preset_files(
         failed: 0,
         last: None,
     };
+    if !entries.is_empty() && std::fs::create_dir_all(user_dir).is_err() {
+        outcome.failed = entries.len();
+        return outcome;
+    }
     for (source, display) in entries {
         let Some(raw) = display else {
             outcome.failed += 1;
@@ -330,7 +365,7 @@ pub fn import_preset_files(
         // legacy engine parser would misread it, so it counts as not readable
         // like an engine-unresolvable file.
         let structurally_valid =
-            std::fs::read_to_string(source).is_ok_and(|text| validate_fac_structure(&text).is_ok());
+            read_preset(source).is_some_and(|text| validate_fac_structure(&text).is_ok());
         if !structurally_valid {
             outcome.failed += 1;
             continue;
@@ -497,7 +532,12 @@ mod tests {
         assert_ne!(text, valid_fac());
         assert_eq!(validate_fac_structure(&text), Ok(()));
         for invalid in ["NaN", "inf", "13"] {
-            assert!(validate_fac_structure(&text.replace("0.6: Boost/Cut", &format!("{invalid}: Boost/Cut"))).is_err());
+            assert!(
+                validate_fac_structure(
+                    &text.replace("0.6: Boost/Cut", &format!("{invalid}: Boost/Cut"))
+                )
+                .is_err()
+            );
         }
     }
 

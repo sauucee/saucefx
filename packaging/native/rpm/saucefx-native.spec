@@ -50,7 +50,7 @@ appstreamcli validate --no-net \
 %{_datadir}/applications/io.github.sauucee.SauceFX.desktop
 %{_datadir}/metainfo/io.github.sauucee.SauceFX.metainfo.xml
 %{_datadir}/icons/hicolor/512x512/apps/io.github.sauucee.SauceFX.png
-%license LICENSE
+%license LICENSE assets/Fonts/OFL.txt
 
 %changelog
 * Sat Nov 28 2026 SauceFX <sauucee@users.noreply.github.com> - 0.3.6-1

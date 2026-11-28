@@ -93,6 +93,7 @@ fi
 install -Dm0644 "$ROOT/assets/Images/saucefx-logo-512.png" \
     "$APPDIR/usr/bin/images/saucefx-logo-512.png"
 install -Dm0644 "$ROOT/LICENSE" "$APPDIR/usr/share/licenses/saucefx/LICENSE"
+install -Dm0644 "$ROOT/assets/Fonts/OFL.txt" "$APPDIR/usr/share/licenses/saucefx/Figtree-OFL.txt"
 install -Dm0644 "$TOOLS/runtime-LICENSE" "$APPDIR/usr/share/licenses/saucefx/AppImage-runtime-LICENSE"
 
 # PipeWire client library + its version-coupled plugins and client config.

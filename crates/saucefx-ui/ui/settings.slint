@@ -338,6 +338,9 @@ export component SettingsDialog inherits Rectangle {
                         commands: "M 18 6 L 6 18 M 6 6 L 18 18";
                     }
                     close-ta := TouchArea {
+                            accessible-role: button;
+                            accessible-label: "Close settings";
+                            accessible-action-default => { if (self.enabled) { self.clicked(); } }
                         mouse-cursor: pointer;
                         clicked => { root.select(0); root.closed(); }
                     }
@@ -658,6 +661,9 @@ export component SettingsDialog inherits Rectangle {
                             }
                         }
                         action-ta := TouchArea {
+                            accessible-role: button;
+                            accessible-label: i == 0 ? "Import presets" : i == 1 ? "Export preset" : "Save preset";
+                            accessible-action-default => { if (self.enabled) { self.clicked(); } }
                             mouse-cursor: pointer;
                             clicked => {
                                 root.select(11 + i);
@@ -791,6 +797,9 @@ export component SettingsDialog inherits Rectangle {
                             vertical-alignment: center;
                         }
                         update-ta := TouchArea {
+                            accessible-role: button;
+                            accessible-label: root.update-action-label;
+                            accessible-action-default => { if (self.enabled) { self.clicked(); } }
                             enabled: root.update-focusable;
                             mouse-cursor: root.update-focusable ? pointer : default;
                             clicked => {
@@ -842,6 +851,9 @@ export component SettingsDialog inherits Rectangle {
                             vertical-alignment: center;
                         }
                         quit-ta := TouchArea {
+                            accessible-role: button;
+                            accessible-label: "Quit SauceFX";
+                            accessible-action-default => { if (self.enabled) { self.clicked(); } }
                             mouse-cursor: pointer;
                             clicked => { root.select(14); root.quit-clicked(); }
                         }

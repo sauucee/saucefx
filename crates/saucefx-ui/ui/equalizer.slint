@@ -225,6 +225,14 @@ export component EqualizerPanel inherits Rectangle {
                 background: transparent;
 
                 focus := FocusScope {
+                    accessible-role: slider;
+                    accessible-label: "EQ band " + (i + 1) + " (dB)";
+                    accessible-value: root.gains[i];
+                    accessible-value-minimum: -12;
+                    accessible-value-maximum: 12;
+                    accessible-value-step: 1;
+                    accessible-action-increment => { if (self.enabled) { root.band-stepped(i, 1); } }
+                    accessible-action-decrement => { if (self.enabled) { root.band-stepped(i, -1); } }
                     // Pointer focus is real focus so arrow keys work after a
                     // click, but the styles.css `:focus-visible` halo/readout
                     // affordance belongs to keyboard-acquired focus only.

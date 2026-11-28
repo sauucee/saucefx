@@ -6,7 +6,7 @@
 
 **[Install SauceFX for Linux](https://sauucee.github.io/saucefx/#install)** · [Download the latest packages](https://github.com/sauucee/saucefx/releases/latest)
 
-**First listen:** Play a song you know, select the **Music** preset, and switch the effects off and on. [Share what you heard on your setup](https://github.com/sauucee/saucefx/issues/27), or tell us where installation stopped.
+**First listen:** In SauceFX, choose **Output → Automatic** to send normal desktop playback through the equalizer. Play a song you know, select **Music**, then switch the effects off and on to compare. Choose **Direct playback** to send sound straight to your device again. [Share what you heard on your setup](https://github.com/sauucee/saucefx/issues/27), or tell us where installation stopped.
 
 ![SauceFX desktop interface with effect sliders and a 31-band equalizer](assets/Screenshots/saucefx-main.png)
 

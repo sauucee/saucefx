@@ -77,6 +77,10 @@ export component SelectorField inherits Rectangle {
                 : (trigger-focus.has-focus ? Palette.accent
                 : (ta.has-hover ? Palette.border-strong : Palette.border));
             trigger-focus := FocusScope {
+                accessible-role: combobox;
+                accessible-label: root.heading;
+                accessible-value: root.value;
+                accessible-action-default => { if (self.enabled) { root.clicked(); } }
                 enabled: root.enabled;
                 width: parent.width;
                 height: parent.height;

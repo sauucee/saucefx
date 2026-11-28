@@ -9,8 +9,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
-  actions: write
+  contents: read
 
 concurrency:
   group: release-publication
@@ -23,12 +22,15 @@ jobs:
     secrets: inherit
 
   publish:
+    permissions:
+      contents: write
+      actions: write
     name: Deploy update source and publish release
     needs: packages
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
 
@@ -43,7 +45,7 @@ jobs:
         run: gh auth setup-git
 
       - name: Download tested packages
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           path: release
           merge-multiple: true
@@ -65,7 +67,7 @@ jobs:
         run: python3 -I packaging/native/flatpak/deploy-repository.py release/flatpak-repository.tar.gz
 
       - name: Publish release downloads
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           files: |
             release/*.AppImage

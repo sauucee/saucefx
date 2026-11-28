@@ -5,6 +5,8 @@ export APPDIR
 
 # The host's GPU drivers and C library must remain in use. The application,
 # PipeWire and PulseAudio libraries are provided by the AppDir.
+# System dialogs must use the host libraries, unlike the bundled audio tools.
+export SAUCEFX_HOST_LD_LIBRARY_PATH="${LD_LIBRARY_PATH-}"
 export LD_LIBRARY_PATH="$APPDIR/usr/lib:$APPDIR/usr/lib/x86_64-linux-gnu:$APPDIR/usr/lib/pulseaudio${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
 export PATH="$APPDIR/usr/bin:$PATH"
 export SAUCEFX_ROOT="$APPDIR/usr/share/saucefx"

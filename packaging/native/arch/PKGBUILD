@@ -36,4 +36,5 @@ package() {
     install -Dm0644 assets/Images/saucefx-logo-512.png \
         "$pkgdir/usr/share/icons/hicolor/512x512/apps/io.github.sauucee.SauceFX.png"
     install -Dm0644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+    install -Dm0644 assets/Fonts/OFL.txt "$pkgdir/usr/share/licenses/$pkgname/Figtree-OFL.txt"
 }

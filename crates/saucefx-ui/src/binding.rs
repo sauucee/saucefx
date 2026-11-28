@@ -750,6 +750,15 @@ impl UiBinding {
     /// view, the applied baseline, the DSP forward and every reset keep the
     /// original value. Only manual slider edits quantise to whole dB.
     pub fn apply_captured_values(&mut self, effects: &[f32], eq: &[f32]) -> bool {
+        if !self.restore_live_values(effects, eq) {
+            return false;
+        }
+        self.state.mark_applied();
+        true
+    }
+
+    /// Replay unsaved session edits without changing what Reset restores.
+    pub fn restore_live_values(&mut self, effects: &[f32], eq: &[f32]) -> bool {
         for (band, gain) in eq.iter().take(BAND_COUNT).enumerate() {
             if !gain.is_finite()
                 || !(-12.0..=12.0).contains(gain)
@@ -763,7 +772,6 @@ impl UiBinding {
                 return false;
             }
         }
-        self.state.mark_applied();
         if let Some(engine) = &self.engine {
             let mut sink = engine.borrow_mut();
             for index in 0..EFFECT_COUNT {
@@ -1601,6 +1609,14 @@ impl UiBinding {
             },
         );
         window.set_output_name(self.output_name().into());
+        window.set_output_detail(
+            if self.output_name() == "Direct playback" {
+                "For effects, choose Automatic"
+            } else {
+                "Audio output"
+            }
+            .into(),
+        );
         // Menu models are pushed only when their content or selection
         // changed: the sync runs on every spectrum tick, and replacing the
         // model instance resets every open dropdown's repeater rows.

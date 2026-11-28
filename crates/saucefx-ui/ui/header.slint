@@ -15,6 +15,9 @@ export component GlyphButton inherits Rectangle {
     background: touch.has-hover ? (danger ? Palette.danger-wash : Palette.surface-hover) : transparent;
 
     focus := FocusScope {
+        accessible-role: button;
+        accessible-label: root.glyph == "gear" ? "Settings" : root.glyph == "minus" ? "Minimize" : "Close window";
+        accessible-action-default => { if (root.keyboard-enabled) { root.clicked(); } }
         enabled: root.keyboard-enabled;
         width: parent.width;
         height: parent.height;
@@ -100,6 +103,11 @@ export component PowerPill inherits Rectangle {
     border-color: pill-focus.has-focus ? Palette.accent : transparent;
 
     pill-focus := FocusScope {
+        accessible-role: switch;
+        accessible-label: "Audio effects";
+        accessible-checkable: true;
+        accessible-checked: root.on;
+        accessible-action-default => { if (root.keyboard-enabled) { root.toggled(); } }
         enabled: root.keyboard-enabled;
         width: parent.width;
         height: parent.height;

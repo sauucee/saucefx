@@ -79,6 +79,14 @@ export component EffectRow inherits Rectangle {
             property <color> wash-color: focus-visible ? Palette.accent-wash-strong : Palette.accent-wash;
 
             focus := FocusScope {
+                accessible-role: slider;
+                accessible-label: root.name;
+                accessible-value: root.value;
+                accessible-value-minimum: 0;
+                accessible-value-maximum: 10;
+                accessible-value-step: 1;
+                accessible-action-increment => { if (self.enabled) { root.stepped(1); } }
+                accessible-action-decrement => { if (self.enabled) { root.stepped(-1); } }
                 enabled: root.keyboard-enabled && root.enabled;
                 width: parent.width;
                 height: parent.height;

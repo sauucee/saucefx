@@ -1,6 +1,7 @@
 // The preview shell. Geometry and colors come from Layout/Palette, which mirror
 // frontend/src/styles.css; nothing here invents a new design.
 import { Layout, Palette, Typography } from "palette.slint";
+import { ScrollView } from "std-widgets.slint";
 import { AppHeader } from "header.slint";
 import { MenuEntry, MenuPopup, SelectorField } from "selectors.slint";
 import { Spectrum } from "spectrum.slint";
@@ -15,8 +16,12 @@ export { Layout, Palette, Typography }
 export component AppWindow inherits Window {
     title: "SauceFX Rust UI Preview \u{2014} no audio connection";
     no-frame: true;
-    width: Layout.window-width;
-    height: Layout.window-height;
+    preferred-width: Layout.window-width;
+    preferred-height: Layout.window-height;
+    min-width: 240px;
+    min-height: 200px;
+    max-width: Layout.window-width;
+    max-height: Layout.window-height;
     background: transparent;
     default-font-family: Typography.family;
 
@@ -137,11 +142,18 @@ export component AppWindow inherits Window {
     callback drag-requested();
     callback menu-dismissed();
 
-    shell := Rectangle {
+    ScrollView {
+      width: root.width;
+      height: root.height;
+      content-width: Layout.window-width;
+      content-height: Layout.window-height;
+      horizontal-scrollbar-policy: root.width < Layout.window-width ? ScrollBarPolicy.as-needed : ScrollBarPolicy.always-off;
+      vertical-scrollbar-policy: root.height < Layout.window-height ? ScrollBarPolicy.as-needed : ScrollBarPolicy.always-off;
+      shell := Rectangle {
         x: 0;
         y: 0;
-        width: min(Layout.window-width, parent.width);
-        height: min(Layout.window-height, parent.height);
+        width: Layout.window-width;
+        height: Layout.window-height;
         border-radius: Layout.shell-radius;
         background: Palette.bg;
         border-width: 1px;
@@ -407,6 +419,6 @@ export component AppWindow inherits Window {
             y: parent.height - 54px;
             x: (parent.width - self.width) / 2;
         }
-
+      }
     }
 }

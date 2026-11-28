@@ -5,6 +5,7 @@
 mod autostart;
 mod fxpw;
 mod paths;
+mod picker;
 mod presets;
 mod single_instance;
 mod updater;
@@ -82,55 +83,6 @@ fn read_file(path: &Path) -> Option<String> {
     std::fs::read_to_string(path).ok()
 }
 
-/// Multiple-file chooser via zenity (the JUCE host used its own chooser;
-/// zenity ships with GNOME and needs no extra build dependency). Cancel
-/// yields an empty list.
-fn zenity_select_files(title: &str, start_dir: &Path) -> Vec<PathBuf> {
-    let output = std::process::Command::new("zenity")
-        .args([
-            "--file-selection",
-            "--multiple",
-            &format!("--title={title}"),
-            "--file-filter=Presets | *.fac *.FAC",
-            &format!("--filename={}/", start_dir.display()),
-        ])
-        .output();
-    let Ok(output) = output else {
-        return Vec::new();
-    };
-    if !output.status.success() {
-        return Vec::new();
-    }
-    String::from_utf8_lossy(&output.stdout)
-        .lines()
-        .filter(|line| !line.is_empty())
-        .map(PathBuf::from)
-        .collect()
-}
-
-/// Save-mode chooser via zenity; cancel yields None.
-fn zenity_save_file(title: &str, start: &Path) -> Option<PathBuf> {
-    let output = std::process::Command::new("zenity")
-        .args([
-            "--file-selection",
-            "--save",
-            "--confirm-overwrite",
-            &format!("--title={title}"),
-            &format!("--filename={}", start.display()),
-        ])
-        .output()
-        .ok()?;
-    if !output.status.success() {
-        return None;
-    }
-    let text = String::from_utf8_lossy(&output.stdout).trim().to_string();
-    if text.is_empty() {
-        None
-    } else {
-        Some(PathBuf::from(text))
-    }
-}
-
 /// Output menu rows from the engine. Row 1 is Automatic; an empty device
 /// name routes automatically. Device and port together identify an output.
 fn output_rows(entries: Vec<fxpw::OutputEntry>) -> Vec<MenuRow> {
@@ -167,7 +119,7 @@ fn output_rows(entries: Vec<fxpw::OutputEntry>) -> Vec<MenuRow> {
     rows.push(MenuRow::group("WITHOUT EFFECTS"));
     rows.push(MenuRow::output(
         "Direct playback",
-        "Use system output without SauceFX",
+        "No effects. Choose Automatic to enable.",
         "direct",
         "",
         true,
@@ -184,9 +136,6 @@ fn restore_session(binding: &Rc<RefCell<UiBinding>>, state_dir: &Path) -> bool {
     let Ok(session) = parse_session(&text) else {
         return false;
     };
-    if session.power != binding.borrow().power() {
-        binding.borrow_mut().toggle_power();
-    }
     let index = binding
         .borrow()
         .find_preset_by_path(&session.preset_path)
@@ -198,9 +147,13 @@ fn restore_session(binding: &Rc<RefCell<UiBinding>>, state_dir: &Path) -> bool {
     if let Some(index) = index {
         binding.borrow_mut().choose_preset(index);
     }
-    binding
-        .borrow_mut()
-        .apply_captured_values(&session.effects, &session.eq_gains);
+    let mut ui = binding.borrow_mut();
+    if !ui.restore_live_values(&session.effects, &session.eq_gains) {
+        return false;
+    }
+    if session.power != ui.power() {
+        ui.toggle_power();
+    }
     true
 }
 
@@ -267,6 +220,21 @@ fn save_state(
     }
 }
 
+/// On compact monitors expose the original layout through its scrollbars.
+fn fit_monitor(window: &slint::Window) {
+    use slint::winit_030::WinitWindowAccessor;
+    if let Some(Some(screen)) = window.with_winit_window(|w| w.current_monitor().map(|m| m.size()))
+    {
+        let size = window.size();
+        if size.width > screen.width || size.height > screen.height {
+            window.set_size(slint::PhysicalSize::new(
+                size.width.min(screen.width),
+                size.height.min(screen.height),
+            ));
+        }
+    }
+}
+
 fn main() {
     let state = state_dir();
     let factory_dir = preset_library_dir();
@@ -309,6 +277,19 @@ fn main() {
     let settings = read_file(&state.join("settings.txt"))
         .map(|text| parse_settings(&text))
         .unwrap_or_default();
+
+    if std::process::Command::new("pactl")
+        .arg("--version")
+        .output()
+        .is_err()
+    {
+        let message = "SauceFX needs pactl to connect to audio. Install your distribution’s PulseAudio command-line tools (pulseaudio-utils on Debian or Fedora).";
+        eprintln!("saucefx: {message}");
+        if !auto_start_launch {
+            let _ = picker::message(message);
+        }
+        std::process::exit(1);
+    }
 
     // The pipeline must exist before the catalog can read preset names.
     // At login the session audio stack can lag the app by seconds, so the
@@ -527,13 +508,19 @@ fn main() {
             } else {
                 home_dir()
             };
-            let files = zenity_select_files("Import presets", &start);
+            let files = match picker::select_files(&start) {
+                Ok(files) => files,
+                Err(err) => {
+                    binding.borrow_mut().show_toast(&err);
+                    return;
+                }
+            };
             if files.is_empty() {
                 return;
             }
             let entries: Vec<(PathBuf, Option<String>)> = files
                 .iter()
-                .map(|file| (file.clone(), engine.borrow().preset_display_name(file)))
+                .map(|file| (file.clone(), presets::validated_display_name(file)))
                 .collect();
             let labels = binding.borrow().preset_labels();
             let outcome = presets::import_preset_files(&entries, &user_preset_dir(), &labels);
@@ -542,9 +529,12 @@ fn main() {
                 let factory = presets::fixtures(&engine.borrow(), &scanned);
                 binding.borrow_mut().install_presets(factory);
                 if let Some(last) = outcome.last.as_deref() {
-                    binding
-                        .borrow_mut()
-                        .select_preset_by_path(&last.to_string_lossy());
+                    let index = binding
+                        .borrow()
+                        .find_preset_by_path(&last.to_string_lossy());
+                    if let Some(index) = index {
+                        binding.borrow_mut().choose_preset(index);
+                    }
                 }
                 save_state(
                     &binding,
@@ -569,25 +559,15 @@ fn main() {
         window.on_export_clicked(move || {
             let label = binding.borrow().selected_preset_label();
             let suggested = presets::export_suggested_file(&label, &home_dir());
-            let Some(target) = zenity_save_file("Export current preset", &suggested) else {
-                return;
-            };
-            let target = match target.extension() {
-                Some(extension) if extension.eq_ignore_ascii_case("fac") => target,
-                _ => target.with_extension("fac"),
-            };
-            let name = target
-                .file_stem()
-                .map(|name| name.to_string_lossy().into_owned())
-                .unwrap_or_default();
-            let dir = target.parent().map(Path::to_path_buf).unwrap_or_default();
-            let mut ok = engine.borrow().save_preset(&name, &dir);
-            if ok {
-                ok = target.is_file();
+            match picker::export(&suggested, |name, dir| {
+                engine.borrow().save_preset(name, dir)
+            }) {
+                Ok(Some(path)) => binding
+                    .borrow_mut()
+                    .show_toast(&presets::export_message(&path, true)),
+                Ok(None) => (),
+                Err(err) => binding.borrow_mut().show_toast(&err),
             }
-            binding
-                .borrow_mut()
-                .show_toast(&presets::export_message(&target, ok));
         });
     }
 
@@ -664,6 +644,7 @@ fn main() {
     autostart::show_on_launch(window.window(), auto_start_launch)
         .expect("set initial SauceFX window visibility");
     if !auto_start_launch {
+        fit_monitor(window.window());
         visualizer::request_first_frame(&window);
     }
 
@@ -721,6 +702,7 @@ fn main() {
             if single_instance::consume_show_request(&state) {
                 if let Some(window) = window_weak.upgrade() {
                     window.show().expect("show the SauceFX window");
+                    fit_monitor(window.window());
                     visualizer::request_first_frame(&window);
                     binding.borrow().sync(&window);
                 }

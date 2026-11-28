@@ -190,6 +190,9 @@ export component SavePresetDialog inherits Rectangle {
                             commands: "M 18 6 L 6 18 M 6 6 L 18 18";
                         }
                         close-focus := FocusScope {
+                            accessible-role: button;
+                            accessible-label: "Close save dialog";
+                            accessible-action-default => { root.cancelled(); }
                             width: parent.width;
                             height: parent.height;
                             changed has-focus => {
@@ -266,6 +269,7 @@ export component SavePresetDialog inherits Rectangle {
                             background: transparent;
                         }
                         field := TextInput {
+                            accessible-label: "Preset name";
                             x: 10px;
                             width: parent.width - 20px;
                             height: parent.height;
@@ -341,6 +345,9 @@ export component SavePresetDialog inherits Rectangle {
                             vertical-alignment: center;
                         }
                         cancel-focus := FocusScope {
+                            accessible-role: button;
+                            accessible-label: "Cancel";
+                            accessible-action-default => { root.cancelled(); }
                             width: parent.width;
                             height: parent.height;
                             changed has-focus => {
@@ -387,6 +394,9 @@ export component SavePresetDialog inherits Rectangle {
                             vertical-alignment: center;
                         }
                         save-focus := FocusScope {
+                            accessible-role: button;
+                            accessible-label: "Save preset";
+                            accessible-action-default => { if (root.valid) { root.confirmed(); } }
                             width: parent.width;
                             height: parent.height;
                             changed has-focus => {
