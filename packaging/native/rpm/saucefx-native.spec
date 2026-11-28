@@ -2,7 +2,7 @@ Name:           saucefx
 Version:        0.3.6
 Release:        1%{?dist}
 Summary:        Sound EQ and audio enhancement for Linux (native Rust/Slint UI)
-License:        AGPL-3.0-only
+License:        AGPL-3.0-or-later
 URL:            https://github.com/sauucee/saucefx
 Source0:        %{name}-%{version}.tar.gz
 

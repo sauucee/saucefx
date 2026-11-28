@@ -7,7 +7,7 @@ members = ["crates/saucefx-core", "crates/saucefx-ui", "crates/saucefx-host"]
 # Settings footer read it from here.
 version = "0.3.6"
 edition = "2024"
-license = "AGPL-3.0-only"
+license = "AGPL-3.0-or-later"
 
 # Vendored copy of i-slint-renderer-skia 1.18.1 with the SauceFX text patch:
 # fractional glyph positions + Slight FreeType hinting + grayscale masks by

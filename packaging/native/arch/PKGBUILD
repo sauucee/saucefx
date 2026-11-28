@@ -9,7 +9,7 @@ pkgrel=1
 pkgdesc="Sound EQ and audio enhancement for Linux (native Rust/Slint UI)"
 arch=('x86_64')
 url="https://github.com/sauucee/saucefx"
-license=('AGPL-3.0-only')
+license=('AGPL-3.0-or-later')
 depends=(pipewire pipewire-pulse libpulse zenity fontconfig freetype2
          libxkbcommon libglvnd hicolor-icon-theme)
 makedepends=(rust clang ninja pkgconf pipewire libpulse libxkbcommon
