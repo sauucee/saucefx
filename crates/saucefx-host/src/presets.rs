@@ -492,6 +492,16 @@ mod tests {
     }
 
     #[test]
+    fn saved_fractional_gains_remain_selectable() {
+        let text = valid_fac().replacen("0: Boost/Cut", "0.6: Boost/Cut", 1);
+        assert_ne!(text, valid_fac());
+        assert_eq!(validate_fac_structure(&text), Ok(()));
+        for invalid in ["NaN", "inf", "13"] {
+            assert!(validate_fac_structure(&text.replace("0.6: Boost/Cut", &format!("{invalid}: Boost/Cut"))).is_err());
+        }
+    }
+
+    #[test]
     fn a_shifted_band_block_is_rejected_as_malformed() {
         // The corruption demonstrated on 2026-11-21: duplicated CF/Boost-Cut
         // lines inside one band block shift every later line; the legacy
@@ -648,7 +658,7 @@ mod tests {
         std::fs::create_dir_all(source.parent().unwrap()).unwrap();
         std::fs::write(&source, valid_fac()).unwrap();
         let user = dir.join("user");
-        std::fs::create_dir_all(&user).unwrap();
+        assert!(!user.exists(), "fresh profiles have no preset directory");
 
         let entries = vec![(source.clone(), Some("Evening listen".to_string()))];
         let outcome = import_preset_files(&entries, &user, &[]);

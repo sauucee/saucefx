@@ -153,7 +153,7 @@ mod tests {
             "Version=1.0\n",
             "Name=SauceFX\n",
             "Comment=SauceFX sound EQ and audio enhancement for Linux\n",
-            "Icon=\"/img/logo.png\"\n",
+            "Icon=/img/logo.png\n",
             "Exec=\"/opt/bin/SauceFX\" --autostart\n",
             "Terminal=false\n",
             "X-GNOME-Autostart-enabled=true\n",
