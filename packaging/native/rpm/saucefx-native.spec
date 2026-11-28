@@ -1,5 +1,5 @@
 Name:           saucefx
-Version:        0.3.5
+Version:        0.3.6
 Release:        1%{?dist}
 Summary:        Sound EQ and audio enhancement for Linux (native Rust/Slint UI)
 License:        AGPL-3.0-only
@@ -53,6 +53,9 @@ appstreamcli validate --no-net \
 %license LICENSE
 
 %changelog
+* Sat Nov 28 2026 SauceFX <sauucee@users.noreply.github.com> - 0.3.6-1
+- Match the website EQ curve and restore the band-centered hover guide.
+
 * Sat Nov 28 2026 SauceFX <sauucee@users.noreply.github.com> - 0.3.5-1
 - Preserve fractional equalizer band levels in presets and saved sessions.
 

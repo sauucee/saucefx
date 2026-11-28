@@ -67,6 +67,13 @@
     <display_length compare="ge">768</display_length>
   </requires>
   <releases>
+    <release version="0.3.6" date="2026-11-28">
+      <description>
+        <p>The equalizer now draws the bend between bands like the SauceFX website.
+        The hover guide stays centered on the selected band as you move the pointer.
+        This changes the display, not the sound or your saved presets.</p>
+      </description>
+    </release>
     <release version="0.3.5" date="2026-11-28">
       <description>
         <p>The equalizer keeps fractional band levels when loading a preset or
