@@ -2,40 +2,26 @@
 
 # SauceFX
 
-**Give Linux the sound it deserves — native PipeWire processing, a 31-band EQ,
-live spectrum, rich effects, presets, and a fully native desktop UI.**
+**SauceFX is a free and open-source FxSound alternative for Linux.** It runs the FxSound audio engine natively and applies a 31-band equalizer and five effects across your desktop. Use it with any audio output device available through PipeWire.
 
-SauceFX runs the open-source FxSound DSP engine (`DfxDsp`) natively on Linux,
-routes system audio through a PipeWire virtual sink, and presents a frameless
-desktop interface built with [Slint](https://slint.dev/) and Rust. There is no
-browser, no WebKit and no JavaScript in the app: the window, controls and text
-are rendered natively (Skia), while the same proven DSP engine, preset library
-and PipeWire bridge from the original release run behind the scenes.
+**[Install SauceFX for Linux](https://sauucee.github.io/saucefx/#install)** · [Download the latest packages](https://github.com/sauucee/saucefx/releases/latest)
 
-SauceFX is an independent Linux application based on the FxSound project. The
-upstream Windows application, installer and build tooling are not included. The
-FxSound DSP engine and interface artwork/design retain their upstream
-attribution.
+**First listen:** Play a song you know, select the **Music** preset, and switch the effects off and on. [Share what you heard on your setup](https://github.com/sauucee/saucefx/issues/27), or tell us where installation stopped.
 
-## Features
+![SauceFX desktop interface with effect sliders and a 31-band equalizer](assets/Screenshots/saucefx-main.png)
 
-- 5-effect rack: Clarity, Ambience, Surround Sound, Dynamic Boost, Bass Boost.
-- 31-band graphic EQ with a live spectrum visualizer fed by the native engine.
-- Factory preset library plus user **Save preset...**, import and export.
-- Dark and soft light themes with six accent presets or a custom colour.
-- Native PipeWire virtual sink with automatic output routing.
-- Session restore for preset, effect values and EQ across restarts.
-- Close-to-background, single-instance restore, and login autostart (on by
-  default; toggle it in Settings).
-- Frameless window with a custom title bar and native window dragging.
-- Crisp native text: fractional glyph positioning with slight hinting,
-  verified against the original interface.
+SauceFX is independent of [FxSound](https://github.com/fxsound2/fxsound-app). The desktop interface uses Rust and [Slint](https://slint.dev/); it does not run the Windows application. The FxSound engine, factory presets, and legacy artwork retain their upstream attribution. See [License and attribution](#license-and-attribution).
+
+## What you can do
+
+- Choose a factory preset like **Music**, **Movies**, or **Voice**, or save your own.
+- Adjust the 31-band EQ and five effects: Clarity, Ambience, Surround Sound, Dynamic Boost, and Bass Boost.
+- Switch outputs without losing your settings. Choose **Direct playback** to listen without effects.
+- Close the window to keep processing audio in the background. To stop the app, choose **Settings → Quit SauceFX**.
 
 ## Download and install
 
-Ready-to-install packages are attached to tagged
-[GitHub Releases](https://github.com/sauucee/saucefx/releases). Every format
-is built and smoke-tested on GitHub CI (`.github/workflows/native-packages.yml`).
+For a 64-bit Intel or AMD Linux desktop with PipeWire and WirePlumber, choose **[Flatpak](#flatpak-any-distro-sandboxed)** for in-app updates or **[AppImage](#appimage-any-distro)** for a standalone file. [Fedora, Debian/Ubuntu, and Arch packages](https://github.com/sauucee/saucefx/releases/latest) are also available. You don’t need to clone the repository or build the app.
 
 ### AppImage (any distro)
 
@@ -55,9 +41,14 @@ enabling login startup.
 
 ### Flatpak (any distro, sandboxed)
 
-Open the release's `.flatpakref` in your Software application to install from
-the SauceFX update source. A single-file `.flatpak` bundle is also available.
-No installer script is needed.
+Open [SauceFX.flatpakref](https://sauucee.github.io/saucefx/flatpak/SauceFX.flatpakref) in your software manager to install from the signed SauceFX update source. Or run:
+
+```sh
+flatpak install --user --from https://sauucee.github.io/saucefx/flatpak/SauceFX.flatpakref
+flatpak run io.github.sauucee.SauceFX
+```
+
+A single-file `.flatpak` bundle is also available on the release page.
 
 In **Settings → Updates**, choose **Check & update**. Flatpak checks the signed
 SauceFX repository and installs available updates for the running installation.
@@ -67,8 +58,7 @@ Updates run only when requested, and audio keeps playing during the download.
 
 If you currently use a release older than the Settings updater, install the
 newer `.flatpakref` or bundle once to gain the feature. Your custom presets and
-settings stay in the same application data directory. The application ID
-remains `io.github.sauucee.SauceFX`.
+settings stay in the same application data directory. The current application ID is `io.github.sauucee.SauceFX`. If you still use the legacy ID `com.saucefx.SauceFX`, export your custom presets before uninstalling the old app.
 
 The bundle uses the `org.gnome.Platform//51` runtime; Flatpak offers to install
 it from Flathub if missing. The sandbox has access to PipeWire, your audio
@@ -103,10 +93,94 @@ sudo pacman -U ./saucefx-<version>-1-x86_64.pkg.tar.zst
 The package is compiled from source against Arch's current libraries. An AUR
 package may follow later.
 
+## Run
+
+Installed packages launch **SauceFX** from the desktop menu. From a source
+build, run `./target/release/saucefx`. The app finds `presets/` and `assets/`
+relative to the executable and the working directory; installed packages place
+them in `/usr/share/saucefx` (RPM/DEB/pacman) or `/app/share/saucefx` (Flatpak).
+Set `SAUCEFX_ROOT` to point at a repository checkout when a copied binary needs
+an override.
+
+Play audio into the `SauceFX` virtual sink, or use the output list in the app to
+route system audio into it.
+
+### Audio outputs
+
+The **Output** menu lists the devices and ports reported by PipeWire, including
+**Speakers**, wired **Headphones**, USB audio interfaces and connected Bluetooth
+headsets. Wired headphones commonly share the built-in sound card's sink and
+appear as a separate port. The menu lists only connected outputs.
+
+- **Automatic** processes system audio and follows physical output changes,
+  including newly connected USB/Bluetooth devices.
+- Selecting a named device processes audio through that output and remembers
+  the choice. If it disconnects, SauceFX temporarily uses another available
+  output and returns to the selected device when it reconnects.
+- **Direct playback**, under **Without effects**, uses the system output
+  without SauceFX effects. The power switch can also bypass the effects while
+  keeping the selected routing.
+
+Device changes refresh the menu without restarting the app or resetting EQ and
+effects. Pair and connect wireless headsets in the desktop's Bluetooth settings
+first; SauceFX lists outputs provided by Linux rather than pairing devices.
+
+## Presets and theme
+
+The gear in the title bar opens Settings: switch between the dark and soft
+light themes, choose an accent swatch or a custom colour, import `.fac` presets
+into `~/.local/share/saucefx/presets`, save the current sound as a named custom
+preset, or export the live settings as a `.fac` file. Imported and saved
+presets appear in the preset list alongside the factory library. The theme and
+accent are saved in `~/.local/state/saucefx/settings.txt`.
+
+**Save preset...** opens a name dialog. It suggests a free `<current name>
+Custom` variant, adding a numeric suffix when that name is already in use.
+Duplicate factory or custom names are rejected inline. Factory `.fac` files are
+never modified. Saving adds the preset to the user library and selects it.
+
+The app remembers the selected preset and the current effect/EQ values across a
+full quit and relaunch (including login/reboot). It loads the saved `.fac`, then
+restores the live session snapshot from
+`~/.local/state/saucefx/preset-session.txt`, so unsaved slider and EQ tweaks
+survive without modifying the factory or imported preset file. A first launch
+with no session loads the **Default** preset, matching the original app.
+
+## Closing and background
+
+Closing the window hides it and keeps the DSP engine and virtual sink running.
+Launch SauceFX again to bring the existing window back (a second launch
+requests the hidden window instead of starting a new instance). Use
+**Settings -> Quit SauceFX** when you want to stop the engine and exit
+completely.
+
+## Autostart
+
+**Settings -> Start at login** controls the XDG autostart entry at
+`~/.config/autostart/saucefx.desktop`. It is **enabled by default**; turning it
+off removes the entry immediately. Login starts SauceFX with `--autostart`,
+hidden in the background, so the engine and virtual sink are ready without
+opening a window. Launching SauceFX normally attaches and shows that same
+instance. The hidden login instance restores the same selected preset and live
+effect/EQ session as a normal launch, and re-applies the remembered output
+routing.
+
+The Flatpak build writes the host autostart entry with
+`flatpak run io.github.sauucee.SauceFX --autostart`; the manifest grants access
+to `~/.config/autostart` for that purpose. The AppImage records its own path, so
+keep the file in a permanent location.
+
+## Contributing
+
+You don’t need to fork the project to use SauceFX or report a bug. If something breaks, [open an issue](https://github.com/sauucee/saucefx/issues) and tell us your Linux distribution, how you installed SauceFX, and what happened.
+
+If you’re planning a feature or a large change, please open an issue first so we can discuss it before you spend time building it. For a small fix, you can go straight to a pull request.
+
+To contribute code, fork the repository (make your own GitHub copy), make your change on a branch, then [open a pull request back to SauceFX](https://github.com/sauucee/saucefx/compare) and say how you tested it. If your change could help other users, we’d love a pull request before you decide to maintain a separate version.
+
 ## Source build requirements
 
-These are only needed when building from source; package users install nothing
-extra.
+Skip this section if you installed a release package. To build SauceFX yourself, you need:
 
 - Linux with PipeWire and WirePlumber, plus the PipeWire Pulse server and
   `pactl` (Fedora: `pulseaudio-utils`) for the virtual sink.
@@ -185,7 +259,7 @@ and on release tags:
 | Format | Job | Script |
 | --- | --- | --- |
 | AppImage | ubuntu-22.04 + LLVM 18 | `packaging/native/appimage/build-appimage.sh` |
-| Flatpak | runner-built host + GNOME 51 sandbox | `packaging/native/flatpak/build-flatpak.sh` |
+| Flatpak | source build in the GNOME 51 SDK | `packaging/native/flatpak/build-flatpak.sh` |
 | Arch | `archlinux:base-devel` container, makepkg | `packaging/native/arch/build-pkg.sh` |
 | RPM | `fedora:42` container, rpmbuild | `packaging/native/rpm/build-rpm.sh` |
 | DEB | ubuntu-22.04, dpkg-deb | `packaging/native/deb/build-deb.sh` |
@@ -196,87 +270,8 @@ through the DSP into the default output; the Flatpak test launches inside the
 sandbox and checks the SauceFX sink appears; the native packages verify
 linkage, the desktop entry and the factory presets.
 
-The Flatpak manifest installs a runner-built host because the GNOME 51 SDK
-ships no clang; zenity is built from source inside the sandbox so the
-import/export choosers work. The legacy JUCE packaging under `packaging/`
+The Flatpak build compiles the host inside the SDK and bundles Zenity for preset import and export. The legacy JUCE packaging under `packaging/`
 (appimage/flatpak/rpm) remains for the 0.2.x release line.
-
-## Run
-
-Installed packages launch **SauceFX** from the desktop menu. From a source
-build, run `./target/release/saucefx`. The app finds `presets/` and `assets/`
-relative to the executable and the working directory; installed packages place
-them in `/usr/share/saucefx` (RPM/DEB/pacman) or `/app/share/saucefx` (Flatpak).
-Set `SAUCEFX_ROOT` to point at a repository checkout when a copied binary needs
-an override.
-
-Play audio into the `SauceFX` virtual sink, or use the output list in the app to
-route system audio into it.
-
-### Audio outputs and headsets
-
-The **Output** menu lists the devices and ports reported by PipeWire, including
-**Speakers**, wired **Headphones**, USB audio interfaces and connected Bluetooth
-headsets. Wired headphones commonly share the built-in sound card's sink and
-appear as a separate port. Unavailable ports are marked **Not connected**.
-
-- **Automatic** processes system audio and follows physical output changes,
-  including newly connected USB/Bluetooth devices.
-- Selecting a named device processes audio through that output and remembers
-  the choice. If it disconnects, SauceFX temporarily uses another available
-  output and returns to the selected device when it reconnects.
-- **Direct playback**, under **Without effects**, uses the system output
-  without SauceFX effects. The power switch can also bypass the effects while
-  keeping the selected routing.
-
-Device changes refresh the menu without restarting the app or resetting EQ and
-effects. Pair and connect wireless headsets in the desktop's Bluetooth settings
-first; SauceFX lists outputs provided by Linux rather than pairing devices.
-
-## Presets and theme
-
-The gear in the title bar opens Settings: switch between the dark and soft
-light themes, choose an accent swatch or a custom colour, import `.fac` presets
-into `~/.local/share/saucefx/presets`, save the current sound as a named custom
-preset, or export the live settings as a `.fac` file. Imported and saved
-presets appear in the preset list alongside the factory library. The theme and
-accent are saved in `~/.local/state/saucefx/settings.txt`.
-
-**Save preset...** opens a name dialog. It suggests a free `<current name>
-Custom` variant, adding a numeric suffix when that name is already in use.
-Duplicate factory or custom names are rejected inline. Factory `.fac` files are
-never modified. Saving adds the preset to the user library and selects it.
-
-The app remembers the selected preset and the current effect/EQ values across a
-full quit and relaunch (including login/reboot). It loads the saved `.fac`, then
-restores the live session snapshot from
-`~/.local/state/saucefx/preset-session.txt`, so unsaved slider and EQ tweaks
-survive without modifying the factory or imported preset file. A first launch
-with no session loads the **Default** preset, matching the original app.
-
-## Closing and background
-
-Closing the window hides it and keeps the DSP engine and virtual sink running.
-Launch SauceFX again to bring the existing window back (a second launch
-requests the hidden window instead of starting a new instance). Use
-**Settings -> Quit SauceFX** when you want to stop the engine and exit
-completely.
-
-## Autostart
-
-**Settings -> Start at login** controls the XDG autostart entry at
-`~/.config/autostart/saucefx.desktop`. It is **enabled by default**; turning it
-off removes the entry immediately. Login starts SauceFX with `--autostart`,
-hidden in the background, so the engine and virtual sink are ready without
-opening a window. Launching SauceFX normally attaches and shows that same
-instance. The hidden login instance restores the same selected preset and live
-effect/EQ session as a normal launch, and re-applies the remembered output
-routing.
-
-The Flatpak build writes the host autostart entry with
-`flatpak run io.github.sauucee.SauceFX --autostart`; the manifest grants access
-to `~/.config/autostart` for that purpose. The AppImage records its own path, so
-keep the file in a permanent location.
 
 ## Layout
 
@@ -309,8 +304,7 @@ assets/            Figtree UI fonts, title-bar mark and application icon
 The Rust host owns the engine and preset model directly: `saucefx-core`
 implements the settings/session/preset logic, `saucefx-ui` binds it to the
 Slint interface, and `saucefx-host` links the same `fxpw` PipeWire bridge and
-DSP archives the released app uses. The audio path is byte-for-byte the
-released 0.2.4 engine — the migration replaces the interface, not the sound.
+DSP archives the released app uses. The native host uses the FxSound engine for audio processing.
 
 ## License and attribution
 
