@@ -452,46 +452,34 @@ fn eq_curve_has_matching_slopes_at_every_band() {
     }
 }
 
-/// The reference Equalizer.tsx `smoothPath`, ported line-for-line: points at
-/// band-cell centres, Catmull-Rom tangents `current +/- (neighbour gap)/6`
-/// with the start/end clamps (`previous` clamps to the first point, `after`
-/// to the last), six-decimal serialization.
-fn reference_smooth_path(gains: &[f32; BAND_COUNT], width: f64) -> String {
-    let points: Vec<(f64, f64)> = (0..BAND_COUNT)
-        .map(|index| {
-            let x = (index as f64 + 0.5) / BAND_COUNT as f64 * width;
-            let y = 12.0 + (12.0 - f64::from(gains[index])) / 24.0 * 176.0;
-            (x, y)
-        })
-        .collect();
-    let mut path = format!("M {:.6} {:.6}", points[0].0, points[0].1);
-    for index in 0..points.len() - 1 {
-        let current = points[index];
-        let next = points[index + 1];
-        let previous = points[index.saturating_sub(1)];
-        let after = points.get(index + 2).unwrap_or(&next);
-        path.push_str(&format!(
-            " C {:.6} {:.6}, {:.6} {:.6}, {:.6} {:.6}",
-            current.0 + (next.0 - previous.0) / 6.0,
-            current.1 + (next.1 - previous.1) / 6.0,
-            next.0 - (after.0 - current.0) / 6.0,
-            next.1 - (after.1 - current.1) / 6.0,
-            next.0,
-            next.1
-        ));
-    }
-    path
-}
-
+/// Recorded SVG `d` from the public playground after a vertical 1 kHz drag.
+/// Compare the actual handles of all cubic segments (including both shoulders),
+/// not Rust's output against a second copy of its own formula. The website
+/// serializes its 100x100 viewBox to two decimals; normalize the desktop's
+/// different dB margins and horizontal units before comparing.
 #[test]
-fn eq_curve_matches_the_reference_smooth_path_exactly() {
-    for (name, gains) in eq_profiles() {
-        for width in [480.0, 1000.0, 1600.0] {
-            assert_eq!(
-                eq_curve_commands(&gains, width, 200.0),
-                reference_smooth_path(&gains, f64::from(width)),
-                "{name} width {width}"
-            );
+fn single_band_bend_matches_the_recorded_playground_curve() {
+    let reference = eq_segments(include_str!(
+        "../../../tests/fixtures/playground-1khz-plus12.path"
+    ));
+    let mut gains = [0.0; BAND_COUNT];
+    gains[17] = 12.0;
+    for width in [480.0, 1000.0, 1600.0] {
+        let actual = eq_segments(&eq_curve_commands(&gains, width, 200.0));
+        for (band, (a, r)) in actual.iter().zip(&reference).enumerate() {
+            for (point, want) in [
+                (a.from, r.from),
+                (a.control1, r.control1),
+                (a.control2, r.control2),
+                (a.to, r.to),
+            ] {
+                let x = point[0] * 100.0 / f64::from(width);
+                let y = 50.0 + (point[1] - 100.0) * (46.0 / 88.0);
+                assert!(
+                    (x - want[0]).abs() <= 0.00501 && (y - want[1]).abs() <= 0.00501,
+                    "playground bend at band {band}: ({x}, {y}) vs {want:?}"
+                );
+            }
         }
     }
 }
