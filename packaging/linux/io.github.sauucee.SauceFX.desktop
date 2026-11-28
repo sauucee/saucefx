@@ -11,3 +11,8 @@ Categories=AudioVideo;Audio;Mixer;
 Keywords=audio;equalizer;eq;pipewire;sound;effects;preset;
 StartupNotify=true
 StartupWMClass=SauceFX
+Actions=ShowWindow;
+
+[Desktop Action ShowWindow]
+Name=Show Window
+Exec=SauceFX

@@ -7,7 +7,7 @@ import subprocess
 import sys
 import time
 
-log, state = map(pathlib.Path, sys.argv[1:])
+log, state, app_run = map(pathlib.Path, sys.argv[1:])
 
 
 def x(*args):
@@ -87,8 +87,15 @@ def quiet(label):
 assert 'saucefx: spectrum trace ready' in log.read_text(), 'host did not enable tracing'
 assert not visible(), 'autostart unexpectedly mapped the window'
 quiet('hidden at login')
-show = state / 'show.request'
-wid = resume('show after login', show.touch)
+def relaunch():
+    # Exercise the second desktop launch, including lock acquisition and IPC,
+    # instead of writing the first instance's private show marker ourselves.
+    result = subprocess.run([str(app_run)], capture_output=True, text=True,
+                            timeout=10, check=True)
+    assert 'asked it to show its window' in result.stderr, result.stderr
+
+
+wid = resume('show after login', relaunch)
 if os.environ.get('SAUCEFX_TEST_WAYLAND') == '1':
     assert sway('workspace visualizer-away')[0]['success']
     wait('workspace switch did not hide native window', lambda: not visible())
@@ -97,6 +104,7 @@ if os.environ.get('SAUCEFX_TEST_WAYLAND') == '1':
     assert not failures, 'Wayland background spectrum still sampled: ' + ', '.join(failures)
     sys.exit(0)
 
+assert x('getwindowname', wid) == 'SauceFX', 'shipping app has a preview or unexpected title'
 x('windowminimize', wid)
 wait('window manager did not minimize', lambda: not visible())
 quiet('minimized')
@@ -109,5 +117,5 @@ width = int(match[1])
 x('mousemove', '--window', wid, width - 26, 25, 'click', '1')
 wait('close-to-background did not hide', lambda: not visible())
 quiet('closed to background')
-resume('reopen from background', show.touch)
+resume('reopen from background', relaunch)
 assert not failures, 'background spectrum still sampled: ' + ', '.join(failures)
