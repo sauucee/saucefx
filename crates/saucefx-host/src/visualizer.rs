@@ -7,21 +7,6 @@ use slint::{ComponentHandle, Timer, TimerMode};
 
 const INTERVAL: Duration = Duration::from_millis(50);
 
-/// A hidden login launch may already have consumed the first redraw event.
-/// Request a frame on the newly mapped native surface, not on a hidden timer.
-pub fn request_first_frame(window: &AppWindow) {
-    let weak = window.as_weak();
-    slint::spawn_local(async move {
-        if let Some(window) = weak.upgrade()
-            && let Ok(native) = window.window().winit_window().await
-            && window.window().is_visible()
-        {
-            native.request_redraw();
-        }
-    })
-    .expect("request initial visualizer frame on the UI thread");
-}
-
 pub fn install(window: &AppWindow, mut sample: impl FnMut(&AppWindow, bool) + 'static) {
     let weak = window.as_weak();
     let wake = Timer::default();

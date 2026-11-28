@@ -994,7 +994,9 @@ impl UiBinding {
         if row.is_group || row.disabled {
             return false;
         }
-        if row.label.starts_with("Save current") {
+        // Group and disabled rows are already rejected. The sole action row
+        // has no fixture; neither its caption nor a user's label is an ID.
+        if matches!(self.catalog.preset_values.get(index), Some(None)) {
             self.save_open = true;
             self.preset_open = false;
             return true;
@@ -1173,13 +1175,7 @@ impl UiBinding {
 
     /// Every preset name the save dialog treats as taken.
     pub fn existing_preset_names(&self) -> Vec<String> {
-        self.catalog
-            .presets
-            .iter()
-            .filter(|row| !row.is_group && !row.disabled)
-            .map(|row| row.label.clone())
-            .filter(|label| !label.starts_with("Save current"))
-            .collect()
+        self.preset_labels()
     }
 
     /// The exact validation text the reference shows under the name field.
@@ -1289,10 +1285,10 @@ impl UiBinding {
     /// unique-name check (the reference compares against the preset box).
     pub fn preset_labels(&self) -> Vec<String> {
         self.catalog
-            .presets
+            .preset_values
             .iter()
-            .filter(|row| !row.is_group)
-            .map(|row| row.label.clone())
+            .flatten()
+            .map(|preset| preset.label.clone())
             .collect()
     }
 

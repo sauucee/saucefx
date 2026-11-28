@@ -220,15 +220,46 @@ fn save_state(
     }
 }
 
-/// On compact monitors expose the original layout through its scrollbars.
-fn fit_monitor(window: &AppWindow) {
+/// Wait for the actual native window: before the event loop starts, Slint's
+/// synchronous accessor returns None even immediately after show().
+fn prepare_visible_window(window: &AppWindow, raise: bool) {
     use slint::winit_030::WinitWindowAccessor;
-    let handle = window.window();
-    if let Some(Some(size)) = handle.with_winit_window(|w| w.current_monitor().map(|m| m.size())) {
-        let scale = handle.scale_factor();
-        window.set_screen_width(size.width as f32 / scale);
-        window.set_screen_height(size.height as f32 / scale);
-    }
+    let weak = window.as_weak();
+    slint::spawn_local(async move {
+        let Some(window) = weak.upgrade() else {
+            return;
+        };
+        let handle = window.window();
+        let Ok(native) = handle.winit_window().await else {
+            return;
+        };
+        if !handle.is_visible() {
+            return;
+        }
+        if let Some(monitor) = native
+            .current_monitor()
+            .or_else(|| native.primary_monitor())
+            .or_else(|| native.available_monitors().next())
+        {
+            let screen = monitor.size().to_logical::<f32>(native.scale_factor());
+            let layout = window.global::<saucefx_ui::Layout>();
+            let size = slint::LogicalSize::new(
+                layout.get_window_width().min(screen.width),
+                layout.get_window_height().min(screen.height),
+            );
+            window.set_screen_width(screen.width);
+            window.set_screen_height(screen.height);
+            if handle.size() != size.to_physical(handle.scale_factor()) {
+                handle.set_size(size);
+            }
+        }
+        if raise {
+            handle.set_minimized(false);
+            native.focus_window();
+        }
+        native.request_redraw();
+    })
+    .expect("prepare the visible SauceFX window on the UI thread");
 }
 
 fn main() {
@@ -640,8 +671,7 @@ fn main() {
     autostart::show_on_launch(window.window(), auto_start_launch)
         .expect("set initial SauceFX window visibility");
     if !auto_start_launch {
-        fit_monitor(&window);
-        visualizer::request_first_frame(&window);
+        prepare_visible_window(&window, false);
     }
 
     // Keep the device menu current without applying routing again.
@@ -698,8 +728,7 @@ fn main() {
             if single_instance::consume_show_request(&state) {
                 if let Some(window) = window_weak.upgrade() {
                     window.show().expect("show the SauceFX window");
-                    fit_monitor(&window);
-                    visualizer::request_first_frame(&window);
+                    prepare_visible_window(&window, true);
                     binding.borrow().sync(&window);
                 }
                 eprintln!("saucefx: window restored from background");

@@ -552,6 +552,40 @@ fn palette_colour_round_trips_between_argb_and_slint() {
 }
 
 #[test]
+fn save_command_is_not_a_reserved_preset_name() {
+    for label in ["Save current mix", "Save current…"] {
+        let mut binding = UiBinding::default();
+        let mut fixtures = factory_fixtures();
+        let mut custom = fixtures[0].clone();
+        custom.label = label.into();
+        custom.path = "/presets/custom.fac".into();
+        custom.factory = false;
+        fixtures.push(custom);
+        binding.install_presets(fixtures);
+        let index = binding.find_preset_by_path("/presets/custom.fac").unwrap();
+        assert!(binding.choose_preset(index));
+        assert_eq!(binding.selected_preset_path(), "/presets/custom.fac");
+        assert!(!binding.save_open());
+        assert_eq!(
+            binding
+                .preset_labels()
+                .iter()
+                .filter(|s| *s == label)
+                .count(),
+            1
+        );
+        let last = binding.preset_rows().len() - 1;
+        assert!(binding.choose_preset(last));
+        assert!(binding.save_open());
+        binding.set_save_name(label);
+        assert_eq!(
+            binding.save_error(),
+            Some("A preset with this name already exists.")
+        );
+    }
+}
+
+#[test]
 fn save_dialog_validates_names_and_suggests_the_reference_title() {
     let mut binding = UiBinding::default();
     assert_eq!(binding.save_suggestion(), "Default Custom");
