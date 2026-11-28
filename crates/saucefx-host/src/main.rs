@@ -221,17 +221,13 @@ fn save_state(
 }
 
 /// On compact monitors expose the original layout through its scrollbars.
-fn fit_monitor(window: &slint::Window) {
+fn fit_monitor(window: &AppWindow) {
     use slint::winit_030::WinitWindowAccessor;
-    if let Some(Some(screen)) = window.with_winit_window(|w| w.current_monitor().map(|m| m.size()))
-    {
-        let size = window.size();
-        if size.width > screen.width || size.height > screen.height {
-            window.set_size(slint::PhysicalSize::new(
-                size.width.min(screen.width),
-                size.height.min(screen.height),
-            ));
-        }
+    let handle = window.window();
+    if let Some(Some(size)) = handle.with_winit_window(|w| w.current_monitor().map(|m| m.size())) {
+        let scale = handle.scale_factor();
+        window.set_screen_width(size.width as f32 / scale);
+        window.set_screen_height(size.height as f32 / scale);
     }
 }
 
@@ -644,7 +640,7 @@ fn main() {
     autostart::show_on_launch(window.window(), auto_start_launch)
         .expect("set initial SauceFX window visibility");
     if !auto_start_launch {
-        fit_monitor(window.window());
+        fit_monitor(&window);
         visualizer::request_first_frame(&window);
     }
 
@@ -702,7 +698,7 @@ fn main() {
             if single_instance::consume_show_request(&state) {
                 if let Some(window) = window_weak.upgrade() {
                     window.show().expect("show the SauceFX window");
-                    fit_monitor(window.window());
+                    fit_monitor(&window);
                     visualizer::request_first_frame(&window);
                     binding.borrow().sync(&window);
                 }

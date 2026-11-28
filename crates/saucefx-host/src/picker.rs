@@ -27,9 +27,7 @@ fn run(cmd: &mut Command) -> Result<Option<Vec<u8>>, String> {
             bytes.pop();
         }
         Ok(Some(bytes))
-    } else if output.status.code() == Some(1)
-        && !String::from_utf8_lossy(&output.stderr).contains("cannot open display")
-    {
+    } else if output.status.code() == Some(1) && output.stderr.iter().all(u8::is_ascii_whitespace) {
         Ok(None)
     } else {
         eprintln!(
@@ -179,6 +177,15 @@ fn export_to(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn cancellation_and_dialog_errors_are_distinct() {
+        assert_eq!(run(&mut Command::new("false")).unwrap(), None);
+        assert!(
+            run(Command::new("sh").args(["-c", "echo 'dialog could not start' >&2; exit 1"]))
+                .is_err()
+        );
+    }
+
     #[test]
     fn multi_select_preserves_whitespace_pipes_and_newlines() {
         assert_eq!(

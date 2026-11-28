@@ -1,7 +1,7 @@
 // The preview shell. Geometry and colors come from Layout/Palette, which mirror
 // frontend/src/styles.css; nothing here invents a new design.
 import { Layout, Palette, Typography } from "palette.slint";
-import { ScrollView } from "std-widgets.slint";
+import { Slider } from "std-widgets.slint";
 import { AppHeader } from "header.slint";
 import { MenuEntry, MenuPopup, SelectorField } from "selectors.slint";
 import { Spectrum } from "spectrum.slint";
@@ -16,12 +16,12 @@ export { Layout, Palette, Typography }
 export component AppWindow inherits Window {
     title: "SauceFX Rust UI Preview \u{2014} no audio connection";
     no-frame: true;
-    preferred-width: Layout.window-width;
-    preferred-height: Layout.window-height;
-    min-width: 240px;
-    min-height: 200px;
-    max-width: Layout.window-width;
-    max-height: Layout.window-height;
+    in property <length> screen-width: Layout.window-width;
+    in property <length> screen-height: Layout.window-height;
+    width: min(Layout.window-width, root.screen-width);
+    height: min(Layout.window-height, root.screen-height);
+    property <float> horizontal-offset: 0;
+    property <float> vertical-offset: 0;
     background: transparent;
     default-font-family: Typography.family;
 
@@ -142,16 +142,9 @@ export component AppWindow inherits Window {
     callback drag-requested();
     callback menu-dismissed();
 
-    ScrollView {
-      width: root.width;
-      height: root.height;
-      content-width: Layout.window-width;
-      content-height: Layout.window-height;
-      horizontal-scrollbar-policy: root.width < Layout.window-width ? ScrollBarPolicy.as-needed : ScrollBarPolicy.always-off;
-      vertical-scrollbar-policy: root.height < Layout.window-height ? ScrollBarPolicy.as-needed : ScrollBarPolicy.always-off;
-      shell := Rectangle {
-        x: 0;
-        y: 0;
+    shell := Rectangle {
+        x: root.width < Layout.window-width ? -root.horizontal-offset * 1px : 0px;
+        y: root.height < Layout.window-height ? -root.vertical-offset * 1px : 0px;
         width: Layout.window-width;
         height: Layout.window-height;
         border-radius: Layout.shell-radius;
@@ -419,6 +412,21 @@ export component AppWindow inherits Window {
             y: parent.height - 54px;
             x: (parent.width - self.width) / 2;
         }
-      }
+    }
+
+    // Only compact screens need navigation. Keep any pointer-intercepting
+    // container out of the EQ and effect sliders' normal input path.
+    if root.width < Layout.window-width : Slider {
+        x: 0px; y: root.height - 20px; width: root.width - 20px; height: 20px;
+        accessible-label: "Scroll controls horizontally";
+        maximum: (Layout.window-width - root.width) / 1px + 20;
+        value <=> root.horizontal-offset;
+    }
+    if root.height < Layout.window-height : Slider {
+        x: root.width - 20px; y: 0px; width: 20px; height: root.height - 20px;
+        orientation: vertical;
+        accessible-label: "Scroll controls vertically";
+        maximum: (Layout.window-height - root.height) / 1px + 20;
+        value <=> root.vertical-offset;
     }
 }

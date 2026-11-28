@@ -185,7 +185,12 @@ fn read_preset(path: &Path) -> Option<String> {
     use std::io::Read;
     const MAX: u64 = 1024 * 1024;
     let mut text = String::new();
-    let file = std::fs::File::open(path).ok()?;
+    use std::os::unix::fs::OpenOptionsExt;
+    let file = std::fs::OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NONBLOCK)
+        .open(path)
+        .ok()?;
     if !file.metadata().ok()?.is_file() {
         return None;
     }
@@ -364,23 +369,36 @@ pub fn import_preset_files(
         // A structurally malformed file must not enter the library: the
         // legacy engine parser would misread it, so it counts as not readable
         // like an engine-unresolvable file.
-        let structurally_valid =
-            read_preset(source).is_some_and(|text| validate_fac_structure(&text).is_ok());
-        if !structurally_valid {
+        let Some(text) = read_preset(source).filter(|text| validate_fac_structure(text).is_ok())
+        else {
             outcome.failed += 1;
             continue;
-        }
+        };
         let mut safe_name = sanitize_filename(&name);
         if safe_name.is_empty() {
             safe_name = "Preset".to_string();
         }
         let mut target = user_dir.join(format!("{safe_name}.fac"));
         let mut n = 2;
-        while target.exists() {
-            target = user_dir.join(format!("{safe_name} {n}.fac"));
-            n += 1;
-        }
-        if std::fs::copy(source, &target).is_err() {
+        // Publish exactly the bytes we validated, and never overwrite an
+        // existing preset, even if another process creates it during import.
+        let written = (|| -> std::io::Result<()> {
+            use std::io::Write;
+            let mut staged = tempfile::NamedTempFile::new_in(user_dir)?;
+            staged.write_all(text.as_bytes())?;
+            loop {
+                match staged.persist_noclobber(&target) {
+                    Ok(_) => return Ok(()),
+                    Err(error) if error.error.kind() == std::io::ErrorKind::AlreadyExists => {
+                        staged = error.file;
+                        target = user_dir.join(format!("{safe_name} {n}.fac"));
+                        n += 1;
+                    }
+                    Err(error) => return Err(error.error),
+                }
+            }
+        })();
+        if written.is_err() {
             outcome.failed += 1;
             continue;
         }

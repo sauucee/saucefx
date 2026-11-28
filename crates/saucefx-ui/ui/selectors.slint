@@ -314,6 +314,9 @@ export component MenuPopup inherits Rectangle {
                     }
 
                     if !entry.is-group && !entry.disabled : TouchArea {
+                        accessible-role: button;
+                        accessible-label: entry.label;
+                        accessible-action-default => { self.clicked(); }
                         mouse-cursor: pointer;
                         // Base UI marks the row under the pointer
                         // data-highlighted exactly like the keyboard highlight,
