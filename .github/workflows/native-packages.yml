@@ -182,7 +182,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y flatpak flatpak-builder ostree appstream desktop-file-utils gnupg \
-            pipewire pipewire-pulse wireplumber pulseaudio-utils dbus-x11 xvfb xauth
+            pipewire pipewire-pulse wireplumber pulseaudio-utils dbus-x11 xvfb xauth xdotool
           flatpak remote-add --user --if-not-exists flathub \
             https://dl.flathub.org/repo/flathub.flatpakrepo
           flatpak install --user -y --noninteractive flathub \

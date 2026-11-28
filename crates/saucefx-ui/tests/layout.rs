@@ -41,11 +41,14 @@ fn shell_uses_the_reference_dimensions_and_spacing() {
     assert!(window.contains("no-frame: true"));
     assert!(window.contains("width: Layout.window-width"));
     assert!(window.contains("height: Layout.window-height"));
-    assert!(
-        window.contains("SauceFX Rust UI Preview"),
-        "the preview must name itself so it cannot be mistaken for the app"
-    );
-    assert!(window.contains("no audio connection"));
+    assert!(window.contains("title: root.window-caption;"));
+    assert!(window.contains("in property <string> window-caption: \"SauceFX\";"));
+    assert!(!window.contains("no audio connection"));
+    let preview =
+        fs::read_to_string(Path::new(env!("CARGO_MANIFEST_DIR")).join("src/bin/preview.rs"))
+            .expect("read preview.rs");
+    assert!(preview.contains("set_window_caption("));
+    assert!(preview.contains("no audio connection"));
 
     let header = ui("header.slint");
     assert!(header.contains("height: Layout.header-height"));

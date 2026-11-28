@@ -102,6 +102,7 @@ fn main() {
         .unwrap_or(4_000);
 
     let window = AppWindow::new().expect("create the Slint window");
+    window.set_window_caption("SauceFX Rust UI Preview — no audio connection".into());
     let binding = UiBinding::install(&window);
     apply_scene(&mut binding.borrow_mut(), &scene);
     binding.borrow().sync(&window);
