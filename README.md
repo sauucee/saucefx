@@ -216,8 +216,6 @@ sudo pacman -S --needed base-devel rust clang ninja pipewire libpulse \
   fontconfig freetype2 libxkbcommon libglvnd
 ```
 
-No JUCE, Node.js, npm or WebKit is required.
-
 ## Build from source
 
 Build the DSP engine archives first, then the Rust host with the Skia
