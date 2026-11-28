@@ -23,6 +23,17 @@ export component AppWindow inherits Window {
     height: min(Layout.window-height, root.screen-height);
     property <float> horizontal-offset: 0;
     property <float> vertical-offset: 0;
+    // Dialogs live in the pannable shell. Center them in the *visible* area,
+    // not in the off-screen workspace. If the card itself cannot fit, keep it
+    // in the scrollable canvas so both ends are still reachable.
+    private property <length> visible-width: root.width - (root.height < Layout.window-height ? 20px : 0px);
+    private property <length> visible-height: root.height - (root.width < Layout.window-width ? 20px : 0px);
+    pure function dialog-x(w: length) -> length {
+        return root.visible-width >= w ? (root.visible-width - w) / 2 - shell.x : (shell.width - w) / 2;
+    }
+    pure function dialog-y(h: length) -> length {
+        return root.visible-height >= h ? (root.visible-height - h) / 2 - shell.y : max(0px, (shell.height - h) / 2);
+    }
     background: transparent;
     default-font-family: Typography.family;
 
@@ -339,8 +350,8 @@ export component AppWindow inherits Window {
 
         settings-dialog := SettingsDialog {
             visible: root.settings-open;
-            x: (parent.width - self.width) / 2;
-            y: max(16px, (parent.height - self.height) / 2);
+            x: root.dialog-x(self.width);
+            y: root.dialog-y(self.height);
             light: root.light;
             autostart: root.autostart;
             custom-accent: root.custom-accent;
@@ -397,8 +408,8 @@ export component AppWindow inherits Window {
 
         save-dialog := SavePresetDialog {
             visible: root.save-open;
-            x: (parent.width - self.width) / 2;
-            y: max(16px, (parent.height - self.height) / 2);
+            x: root.dialog-x(self.width);
+            y: root.dialog-y(self.height);
             name: root.save-name;
             valid: root.save-valid;
             error: root.save-error;
